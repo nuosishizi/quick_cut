@@ -124,6 +124,10 @@ export function looksLikeAsrGlitch(spoken, expected) {
   return false;
 }
 
+const MEANINGLESS_WORDS = new Set(
+  "a an the this that these those it its to of in on for and or so just".split(" "),
+);
+
 export function looksLikeSamePoint(spoken, expected) {
   const spokenWords = phraseWords(spoken);
   const expectedWords = phraseWords(expected);
@@ -134,7 +138,17 @@ export function looksLikeSamePoint(spoken, expected) {
   const expectedSet = new Set(expectedWords);
   const overlap = expectedWords.filter((word) => spokenSet.has(word)).length;
   const coverage = overlap / Math.max(expectedSet.size, 1);
-  return coverage >= 0.66 && spokenWords.length <= expectedWords.length + 6;
+  const spokenCore = spokenWords.filter((word) => !MEANINGLESS_WORDS.has(word));
+  const expectedCore = expectedWords.filter((word) => !MEANINGLESS_WORDS.has(word));
+  const coreOverlap = expectedCore.filter((word) => spokenSet.has(word)).length;
+  const coreCoverage = expectedCore.length
+    ? coreOverlap / expectedCore.length
+    : coverage;
+  return (
+    (coverage >= 0.66 || coreCoverage >= 0.55) &&
+    spokenWords.length <= expectedWords.length + 6 &&
+    spokenCore.length <= expectedCore.length + 3
+  );
 }
 
 function overlappingManuscript(operations = [], issue) {

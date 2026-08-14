@@ -108,6 +108,21 @@ test("strict mode can mark off-script additions for cutting", () => {
   assert.equal(aligned.operations[0].type, "match");
 });
 
+test("This wasn't an accident matches That thought wasn't an accident", () => {
+  assert.equal(
+    looksLikeSamePoint("This wasn't an accident.", "That thought wasn't an accident."),
+    true,
+  );
+  assert.equal(
+    inferKeepable({
+      type: "extra",
+      spokenText: "This wasn't an accident.",
+      expectedText: "That thought wasn't an accident.",
+    }, "natural"),
+    true,
+  );
+});
+
 test("Are you guilty of any is the same point as Are You Guilty", () => {
   assert.equal(looksLikeSamePoint("Are you guilty of any", "Are You Guilty?"), true);
   assert.equal(
