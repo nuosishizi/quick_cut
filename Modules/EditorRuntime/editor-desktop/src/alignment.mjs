@@ -1148,7 +1148,7 @@ export function buildReviewCaptions(
         start: issue.start,
         end: Math.min(outputDuration, Math.max(issue.start + 0.12, issue.end)),
         text: cuttable || acceptable
-          ? spoken || explicit || "待处理"
+          ? spoken || explicit || "未识别出文字"
           : explicit || "需补录",
         expectedText: explicit,
         spokenText: issue.spokenText,

@@ -4583,17 +4583,45 @@
           updateAiReviewButton();
         }, 120);
       }
+      function reviewClipText(item = {}) {
+        const spoken = String(item.spokenText || item.text || "")
+          .replace(/^\s*[—-⌫]\s*$/, "")
+          .replace(/^\s*(?:应为|建议删除)[:：]\s*/, "")
+          .trim();
+        const expected = String(item.expectedText || "")
+          .replace(/^\s*[—-]\s*$/, "")
+          .trim();
+        if (item.type === "missing") return expected ? `需补录：${expected}` : "需补录";
+        if (spoken && spoken !== "待处理") return spoken;
+        if (expected) return expected;
+        return "未识别出文字";
+      }
+      function reviewClipTitle(item = {}) {
+        const spoken = reviewClipText(item);
+        const expected = String(item.expectedText || "").replace(/^\s*[—-]\s*$/, "").trim();
+        const kind =
+          item.type === "missing"
+            ? "漏读，需补录"
+            : item.type === "repeat"
+              ? "重复阅读"
+              : item.type === "extra"
+                ? "多读内容"
+                : "读法有差异";
+        return expected && expected !== spoken
+          ? `${kind}：${spoken}（文稿：${expected}）`
+          : `${kind}：${spoken}`;
+      }
       function repairScriptDifferenceLinks() {
         state.reviewCaptions = (state.reviewCaptions || [])
           .filter((item) =>
             item.action === "cut" ||
             item.type === "missing" ||
-            String(item.expectedText || "").replace(/^\s*[—-]\s*$/, "").trim(),
+            String(item.expectedText || item.spokenText || "").replace(/^\s*[—-⌫]\s*$/, "").trim(),
           )
           .map((item) => ({
             ...item,
-            text: item.type === "missing" ? "需补录" : "⌫",
-            action: item.type === "missing" ? "missing" : "cut",
+            text: reviewClipText(item),
+            action: item.type === "missing" ? "missing" : item.action || "cut",
           }));
         for (const caption of state.captions || [])
           for (const word of caption.words || []) {
@@ -6969,13 +6997,9 @@
       function clipHtml(c, type) {
         const visualType = type === "audioasset" ? "audio" : type;
         const issueClass = type === "review" ? ` ${c.type || "mismatch"}` : "";
-        const displayText = String(
-          type === "review" && c.action !== "missing"
-            ? c.text || c.spokenText || c.expectedText
-            : type === "review" && c.expectedText && !/^\s*[—-]\s*$/.test(c.expectedText)
-              ? c.expectedText
-            : c.text || c.name || type,
-        ).replace(/^\s*(?:应为|建议删除)[:：]\s*/, "");
+        const displayText = type === "review"
+          ? reviewClipText(c)
+          : String(c.text || c.name || type).replace(/^\s*(?:应为|建议删除)[:：]\s*/, "");
         const reviewAction = c.action === "missing"
           ? "missing"
           : ["accept", "insert"].includes(c.action)
@@ -7017,9 +7041,9 @@
                 return `<span class="caption-token ${status}${actionClass}"${actionAttribute}${tokenTitle ? ` title="${escapeHtml(tokenTitle)}"` : ""}>${escapeHtml(word.display)}</span>`;
               })
               .join("")
-          : `<span class="clipname ellipsis"${type === "review" ? reviewAction === "missing" ? ` data-focus-issue="${escapeHtml(c.issueId || c.id)}"` : reviewAction === "insert" ? ` data-insert-review="${escapeHtml(c.id)}" title="不改变原意的口语补充：点击插入正确字幕轨道"` : ` data-cut-review="${escapeHtml(c.id)}" title="读错、重复或原意不符：点击只删除这一处对应的视频和音频"` : ""}>${escapeHtml(displayText)}</span>`;
+          : `<span class="clipname ellipsis"${type === "review" ? reviewAction === "missing" ? ` data-focus-issue="${escapeHtml(c.issueId || c.id)}" title="${escapeHtml(reviewClipTitle(c))}"` : reviewAction === "insert" ? ` data-insert-review="${escapeHtml(c.id)}" title="不改变原意的口语补充：点击插入正确字幕轨道"` : ` data-cut-review="${escapeHtml(c.id)}" title="${escapeHtml(reviewClipTitle(c))}"` : ""}>${escapeHtml(displayText)}</span>`;
         const actionClass = type === "review" ? ` ${reviewAction}` : "";
-        return `<div class="clip ${visualType}${issueClass}${actionClass} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}" title="${escapeHtml(displayText)}" style="left:${c.start * state.zoom}px;width:${Math.max(3, (c.end - c.start) * state.zoom)}px"><i class="trim-handle start" data-trim="start"></i>${captionWords}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
+        return `<div class="clip ${visualType}${issueClass}${actionClass} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}" title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="left:${c.start * state.zoom}px;width:${Math.max(3, (c.end - c.start) * state.zoom)}px"><i class="trim-handle start" data-trim="start"></i>${captionWords}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
       }
       function drawWaveform() {
         const canvas = $("waveform"),

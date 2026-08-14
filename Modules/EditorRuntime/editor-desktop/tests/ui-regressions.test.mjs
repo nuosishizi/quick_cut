@@ -68,7 +68,9 @@ test("manuscript gaps are locally cut and ripple every linked track", () => {
   assert.match(ui, /shiftTracks\(start, end - start\)/);
   assert.match(ui, /rippleSubtitleTimeline\(at, at \+ len\)/);
   assert.doesNotMatch(ui, />⌫<\/button>/);
-  assert.match(ui, /点击只删除这一处对应的视频和音频/);
+  assert.doesNotMatch(ui, /text: item\.type === "missing" \? "需补录" : "⌫"/);
+  assert.match(ui, /function reviewClipText/);
+  assert.match(ui, /未识别出文字/);
 });
 
 test("timeline zoom stays anchored to the playhead", () => {
