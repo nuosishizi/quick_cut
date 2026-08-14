@@ -10,7 +10,7 @@ import {
   alignScript,
   buildCaptions,
   buildReviewCaptions,
-  spokenCaptionWords,
+  manuscriptCaptionWords,
   normalizeWord,
 } from "./alignment.mjs";
 import { mediaBinary, supportRoot } from "./media.mjs";
@@ -318,47 +318,66 @@ export async function ensureWhisperCli() {
   return resolved;
 }
 
+function groqSegmentUsable(row) {
+  const noSpeech = Number(row?.no_speech_prob);
+  const confidence = Number(row?.avg_logprob);
+  if (Number.isFinite(noSpeech) && noSpeech >= 0.45) return false;
+  if (Number.isFinite(confidence) && confidence <= -0.85) return false;
+  return true;
+}
+
+function groqToken(entry) {
+  return {
+    text: String(entry?.word || entry?.text || "").trim(),
+    start: Number(entry?.start || 0),
+    end: Number(entry?.end || entry?.start || 0),
+  };
+}
+
 export function parseGroqTranscription(data, offset = 0) {
   const shift = Math.max(0, Number(offset || 0));
-  const words = Array.isArray(data?.words) ? data.words : [];
-  if (words.length) {
-    return words
-      .map((word) => {
-        const text = String(word.word || word.text || "").trim();
-        const start = shift + Number(word.start || 0);
-        const end = shift + Number(word.end || word.start || 0);
-        if (!text || !Number.isFinite(start)) return null;
-        return {
-          text,
-          start,
-          end: Math.max(start + 0.04, end),
-          timebase: "seconds",
-        };
-      })
-      .filter(Boolean);
+  const toSegment = (text, start, end) => {
+    const clean = String(text || "").trim();
+    if (!clean || !Number.isFinite(start)) return null;
+    return {
+      text: clean,
+      start: shift + start,
+      end: Math.max(shift + start + 0.04, shift + end),
+      timebase: "seconds",
+    };
+  };
+  const rows = Array.isArray(data?.segments) ? data.segments.filter(groqSegmentUsable) : [];
+  const words = Array.isArray(data?.words) ? data.words.map(groqToken).filter((item) => item.text) : [];
+  if (rows.length) {
+    const output = [];
+    for (const row of rows) {
+      const start = Number(row.start || 0);
+      const end = Number(row.end || row.start || 0);
+      const inside = words.filter((word) => {
+        const mid = (word.start + Math.max(word.start, word.end)) / 2;
+        return mid >= start - 0.03 && mid <= end + 0.03;
+      });
+      const averageLength =
+        inside.reduce((sum, word) => sum + word.text.length, 0) / Math.max(1, inside.length);
+      if (inside.length >= 2 && averageLength >= 2) {
+        for (const word of inside) {
+          const item = toSegment(word.text, word.start, word.end);
+          if (item) output.push(item);
+        }
+      } else {
+        const item = toSegment(row.text, start, end);
+        if (item) output.push(item);
+      }
+    }
+    if (output.length) return output;
   }
-  const rows = Array.isArray(data?.segments) ? data.segments : [];
-  return rows
-    .map((row) => {
-      const text = String(row.text || "").trim();
-      const start = shift + Number(row.start || 0);
-      const end = shift + Number(row.end || row.start || 0);
-      if (!text || !Number.isFinite(start)) return null;
-      return {
-        text,
-        start,
-        end: Math.max(start + 0.04, end),
-        timebase: "seconds",
-      };
-    })
+  return words
+    .map((word) => toSegment(word.text, word.start, word.end))
     .filter(Boolean);
 }
 
-function groqPrompt(script) {
-  return String(script || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 800);
+function groqPrompt() {
+  return "This is a clear spoken English Bible teaching.";
 }
 
 function groqHttpError(status, body) {
@@ -433,7 +452,7 @@ async function groqTranscribeFile(filePath, { script, signal } = {}) {
   form.append("temperature", "0");
   form.append("timestamp_granularities[]", "word");
   form.append("timestamp_granularities[]", "segment");
-  const prompt = groqPrompt(script);
+  const prompt = groqPrompt();
   if (prompt) form.append("prompt", prompt);
   const response = await fetch(GROQ_TRANSCRIBE_URL, {
     method: "POST",
@@ -712,7 +731,7 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
     0.04,
     mapSourceTime(Number(duration) || 0.04, cutRanges),
   );
-  const captions = buildCaptions(spokenCaptionWords(aligned.operations), {
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
     maxWords: 10,
     maxChars: 34,
     maxLines: 2,

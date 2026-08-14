@@ -37,6 +37,29 @@ test("Groq word timestamps become alignment segments in seconds", () => {
   assert.equal(segments[0].timebase, "seconds");
 });
 
+test("Groq keeps coherent speech segments and drops no-speech hallucinations", () => {
+  const segments = parseGroqTranscription({
+    segments: [
+      {
+        text: "The Bible doesn't just say God dislikes these sins.",
+        start: 5,
+        end: 8.2,
+        no_speech_prob: 0.01,
+        avg_logprob: -0.12,
+      },
+      {
+        text: "fire. Bop ben that backfivar we see today.",
+        start: 4.2,
+        end: 5.1,
+        no_speech_prob: 0.82,
+        avg_logprob: -1.1,
+      },
+    ],
+  });
+  assert.equal(segments.length, 1);
+  assert.match(segments[0].text, /The Bible doesn't just say/);
+});
+
 test("Groq key is stored locally and never returned in full", () => {
   assert.equal(canTranscribe(), false);
   assert.equal(groqKeyStatus().configured, false);

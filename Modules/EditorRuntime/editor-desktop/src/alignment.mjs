@@ -1158,6 +1158,62 @@ export function buildReviewCaptions(
     .filter(Boolean);
 }
 
+export function manuscriptCaptionWords(aligned = {}) {
+  const words = [];
+  for (const operation of aligned.operations || []) {
+    if (!operation?.expected) continue;
+    const start = Number(operation.expected.start ?? operation.spoken?.start ?? 0);
+    const end = Number(operation.expected.end ?? operation.spoken?.end ?? start);
+    words.push({
+      display: operation.expected.display,
+      start,
+      end,
+      matchType:
+        operation.expected.matchType ||
+        (["match", "near"].includes(operation.type) ? operation.type : "error"),
+      issueType: operation.issueType || "",
+      expectedDisplay: operation.expected.display,
+      issueId: operation.issueId || "",
+      action: operation.action || "",
+      keepWithPrevious: !!operation.expected.keepWithPrevious,
+      scriptureReference: !!operation.expected.scriptureReference,
+    });
+  }
+  interpolateManuscriptTimes(words);
+  return words.filter((word) => Number(word.end) > Number(word.start) + 0.001);
+}
+
+function interpolateManuscriptTimes(words = []) {
+  const anchored = (word) =>
+    ["match", "near"].includes(word.matchType) && Number(word.end) > Number(word.start) + 0.02;
+  let index = 0;
+  while (index < words.length) {
+    if (anchored(words[index])) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < words.length && !anchored(words[index])) index += 1;
+    const previous = start > 0 ? words[start - 1] : null;
+    const next = index < words.length ? words[index] : null;
+    const count = index - start;
+    const from = previous
+      ? Number(previous.end)
+      : next
+        ? Math.max(0, Number(next.start) - Math.max(0.24, count * 0.22))
+        : 0;
+    const to = next
+      ? Number(next.start)
+      : from + Math.max(0.24, count * 0.22);
+    const span = Math.max(0.08 * count, to - from);
+    const base = to >= from ? from : Math.max(0, from);
+    for (let offset = 0; offset < count; offset += 1) {
+      words[start + offset].start = base + (span * offset) / count;
+      words[start + offset].end = base + (span * (offset + 1)) / count;
+    }
+  }
+}
+
 export function spokenCaptionWords(operations = []) {
   return operations
     .filter(

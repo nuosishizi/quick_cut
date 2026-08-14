@@ -4,6 +4,7 @@ import {
   alignScript,
   buildCaptions,
   buildReviewCaptions,
+  manuscriptCaptionWords,
   spokenCaptionWords,
 } from "../src/alignment.mjs";
 import {
@@ -347,6 +348,26 @@ test("caption groups never bridge across a removable spoken error", () => {
   assert.equal(captions[1].text, "Hope returns today.");
   assert.ok(captions[0].end <= 1.01);
   assert.ok(captions[1].start >= 3.19);
+});
+
+test("opening manuscript captions stay whole when ASR hallucinates over the intro", () => {
+  const script = "God Hates These 3 Sins—Are You Guilty? The Bible doesn't just say God dislikes these sins.";
+  const aligned = alignScript({
+    segments: [
+      { text: "fire Bop ben that backfivar we see today", start: 4.2, end: 5.1 },
+      { text: "The Bible doesn't just say God dislikes these sins", start: 5.1, end: 8.4 },
+    ],
+    script,
+    duration: 9,
+  });
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
+    maxWords: 10,
+    maxChars: 80,
+  });
+  const text = captions.map((caption) => caption.text).join(" ");
+  assert.match(text, /The Bible doesn't just say God dislikes these sins/);
+  assert.doesNotMatch(text, /backfivar/);
+  assert.ok(captions.some((caption) => caption.text.split(/\s+/).length >= 6));
 });
 
 test("overlapping recognition windows are stitched without a fake repeated word", () => {
