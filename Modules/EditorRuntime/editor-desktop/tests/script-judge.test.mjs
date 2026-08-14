@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyJudgeDecisions,
+  inferKeepable,
+  looksLikeSamePoint,
   parseJudgeResponse,
 } from "../src/script-judge.mjs";
 
@@ -104,6 +106,55 @@ test("strict mode can mark off-script additions for cutting", () => {
   assert.equal(aligned.issues[0].confirmedCut, true);
   assert.equal(aligned.issues[0].action, "cut");
   assert.equal(aligned.operations[0].type, "match");
+});
+
+test("Are you guilty of any is the same point as Are You Guilty", () => {
+  assert.equal(looksLikeSamePoint("Are you guilty of any", "Are You Guilty?"), true);
+  assert.equal(
+    inferKeepable({
+      type: "extra",
+      spokenText: "Are you guilty of any",
+      expectedText: "Are You Guilty?",
+    }, "natural"),
+    true,
+  );
+});
+
+test("natural mode keeps a spoken title expansion even without an AI id", () => {
+  const aligned = {
+    operations: [
+      {
+        type: "match",
+        expected: { display: "Are", start: 1.0, end: 1.1 },
+        spoken: { display: "Are", start: 1.0, end: 1.1 },
+      },
+      {
+        type: "match",
+        expected: { display: "You", start: 1.1, end: 1.2 },
+        spoken: { display: "You", start: 1.1, end: 1.2 },
+      },
+      {
+        type: "match",
+        expected: { display: "Guilty", start: 1.2, end: 1.4 },
+        spoken: { display: "Guilty", start: 1.2, end: 1.4 },
+      },
+    ],
+    issues: [
+      {
+        id: "expand",
+        type: "extra",
+        spokenText: "Are you guilty of any",
+        expectedText: "—",
+        start: 1.0,
+        end: 1.8,
+        confirmedCut: true,
+        action: "cut",
+      },
+    ],
+  };
+  applyJudgeDecisions(aligned, [], "natural");
+  assert.equal(aligned.issues[0].suppressReview, true);
+  assert.equal(aligned.issues[0].action, "keep");
 });
 
 test("missing model ids leave the original alignment untouched", () => {

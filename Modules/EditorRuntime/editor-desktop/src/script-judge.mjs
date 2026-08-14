@@ -23,8 +23,8 @@ The finished video should follow the manuscript meaning, but short natural speec
 Captions already use the manuscript. You only decide which spoken spans stay.
 
 Choose one decision per item:
-- keep: ASR glitch, same meaning, filler (uh, um, you know), 1–2 word paraphrase, or a short helpful aside.
-- cut: only a clear reread/restart, a long tangent, or a meaning change of 3+ words. Prefer the later clean take.
+- keep: ASR glitch (The/Tthe, dropped leading T), same meaning, filler, a title/question expansion such as "Are You Guilty?" → "Are you guilty of any...", or a short helpful aside.
+- cut: only a clear reread/restart, a long off-topic tangent, or a meaning change of 3+ words. Prefer the later clean take.
 - missing: manuscript phrase was not spoken. Do not cut.
 - unsure: leave the original mark.
 
@@ -99,6 +99,81 @@ export function normalizeReviewMode(mode) {
   return mode === "strict" ? "strict" : "natural";
 }
 
+function cleanPhrase(value) {
+  return String(value || "")
+    .replace(/^\s*[—-]\s*$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phraseWords(value) {
+  return cleanPhrase(value).split(" ").filter(Boolean);
+}
+
+export function looksLikeAsrGlitch(spoken, expected) {
+  const a = cleanPhrase(spoken);
+  const b = cleanPhrase(expected);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length <= 12 && b.length <= 12) {
+    if (a.endsWith(b) || b.endsWith(a) || a.startsWith(b) || b.startsWith(a)) return true;
+    if (a.replace(/the/g, "") === b.replace(/the/g, "") && a.length <= 8) return true;
+  }
+  return false;
+}
+
+export function looksLikeSamePoint(spoken, expected) {
+  const spokenWords = phraseWords(spoken);
+  const expectedWords = phraseWords(expected);
+  if (!spokenWords.length || !expectedWords.length) return false;
+  if (looksLikeAsrGlitch(spoken, expected)) return true;
+  if (spokenWords.length > 12 || expectedWords.length > 12) return false;
+  const spokenSet = new Set(spokenWords);
+  const expectedSet = new Set(expectedWords);
+  const overlap = expectedWords.filter((word) => spokenSet.has(word)).length;
+  const coverage = overlap / Math.max(expectedSet.size, 1);
+  return coverage >= 0.66 && spokenWords.length <= expectedWords.length + 6;
+}
+
+function overlappingManuscript(operations = [], issue) {
+  const start = Number(issue?.start || 0);
+  const end = Math.max(start, Number(issue?.end || start));
+  const words = [];
+  for (const operation of operations) {
+    const expected = operation.expected;
+    if (!expected?.display) continue;
+    const time = Number(expected.start ?? operation.spoken?.start ?? 0);
+    if (time >= start - 1.6 && time <= end + 1.6) words.push(expected.display);
+  }
+  return words.join(" ");
+}
+
+export function inferKeepable(issue, mode = "natural", operations = []) {
+  if (!issue || issue.type === "missing" || issue.type === "repeat") return false;
+  const spoken = String(issue.spokenText || issue.text || "");
+  let expected = String(issue.expectedText || "");
+  if (!cleanPhrase(expected))
+    expected = overlappingManuscript(operations, issue) ||
+      `${nearbyWords(operations, issue, -1)} ${nearbyWords(operations, issue, 1)}`;
+  if (looksLikeAsrGlitch(spoken, expected)) return true;
+  if (normalizeReviewMode(mode) !== "natural") return false;
+  if (["extra", "addition", "mismatch", "near", "semantic"].includes(issue.type))
+    return looksLikeSamePoint(spoken, expected);
+  return false;
+}
+
+function applyKeep(issue, reason = "") {
+  issue.confirmedCut = false;
+  issue.confirmedError = false;
+  issue.suggested = false;
+  issue.severity = "low";
+  issue.action = "keep";
+  issue.suppressReview = true;
+  if (reason && !issue.aiReason) issue.aiReason = reason;
+}
+
 export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
   const reviewMode = normalizeReviewMode(mode);
   const cuttable =
@@ -109,8 +184,19 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
   const summary = { keep: 0, cut: 0, missing: 0, unsure: 0, mode: reviewMode };
   for (const issue of aligned.issues || []) {
     const judged = byId.get(issue.id);
-    if (!judged) continue;
-    const decision = judged.decision;
+    const inferredKeep = inferKeepable(issue, reviewMode, aligned.operations || []);
+    if (!judged) {
+      if (inferredKeep) {
+        summary.keep += 1;
+        issue.aiDecision = "keep";
+        issue.aiMode = reviewMode;
+        applyKeep(issue, "local same-point keep");
+      }
+      continue;
+    }
+    let decision = judged.decision;
+    if ((decision === "unsure" || (decision === "cut" && inferredKeep && reviewMode === "natural")) && inferredKeep)
+      decision = "keep";
     issue.aiDecision = decision;
     issue.aiReason = judged.reason || "";
     issue.aiMode = reviewMode;
