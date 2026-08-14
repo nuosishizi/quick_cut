@@ -3219,7 +3219,7 @@
     <div class="modal" id="reviewSettingsModal">
       <div class="dialog newdialog" style="max-width:560px">
         <h2>Gemini 纠正设置</h2>
-        <p class="small">听写仍用 Groq。纠正只用 Gemini API 或 Vertex。经文自动严审，说错禁止导出。</p>
+        <p class="small">听写仍用 Groq。纠正只用 Gemini API 或 Vertex。经文自动严审，说错禁止导出。Vertex 的项目接口不接受 API Key，只用 Key 请走 Express，项目接口必须导入服务账号。</p>
         <label class="field"><span class="small">接口</span>
           <select class="select" id="reviewProvider">
             <option value="gemini">Gemini API</option>
@@ -3244,14 +3244,14 @@
           <div class="status" id="geminiKeyHint"></div>
         </div>
         <div id="vertexSettings" style="display:none">
-          <label class="field"><span class="small">Vertex 项目 ID</span>
-            <input class="input" id="vertexProject" placeholder="my-gcp-project" />
+          <label class="field"><span class="small">Vertex Key（Express，只用 Key）</span>
+            <input class="input" id="vertexKeyInput" type="password" autocomplete="off" placeholder="Vertex / Express API Key" />
+          </label>
+          <label class="field"><span class="small">Vertex 项目 ID（仅服务账号需要）</span>
+            <input class="input" id="vertexProject" placeholder="只用 Key 时可以留空" />
           </label>
           <label class="field"><span class="small">地区</span>
             <input class="input" id="vertexLocation" placeholder="us-central1" />
-          </label>
-          <label class="field"><span class="small">Vertex Key</span>
-            <input class="input" id="vertexKeyInput" type="password" autocomplete="off" placeholder="Vertex API Key（可选）" />
           </label>
           <div class="row" style="margin-top:7px">
             <button class="btn primary grow" id="saveVertexKey">保存 Vertex</button>
@@ -8517,10 +8517,10 @@
           ? `已保存 ${settings.geminiHint}`
           : "还没有 Gemini API Key";
         $("vertexKeyHint").textContent = settings.vertexServiceAccount
-          ? "已导入服务账号"
+          ? "已导入服务账号，将用 OAuth 访问项目接口。"
           : settings.vertexHint
-            ? `已保存 ${settings.vertexHint}`
-            : "还没有 Vertex Key / 服务账号";
+            ? `已保存 ${settings.vertexHint}。只用 Key 时走 Express，不会打项目接口。`
+            : "还没有 Vertex Key / 服务账号。项目接口不接受 API Key。";
         toggleReviewProviderFields();
       }
       async function refreshGeminiModels() {

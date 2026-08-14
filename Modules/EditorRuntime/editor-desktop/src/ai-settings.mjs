@@ -319,12 +319,18 @@ async function accessTokenFromServiceAccount(sa) {
   return data.access_token;
 }
 
+export function vertexAuthMode() {
+  if (vertexServiceAccount()) return "service-account";
+  if (vertexApiKey()) return "express-key";
+  return "none";
+}
+
 export function reviewReady() {
   const settings = loadReviewSettings();
-  if (settings.provider === "vertex")
-    return Boolean(
-      settings.vertexProject && (vertexApiKey() || vertexServiceAccount()),
-    );
+  if (settings.provider === "vertex") {
+    if (vertexAuthMode() === "express-key") return true;
+    return Boolean(settings.vertexProject && vertexServiceAccount());
+  }
   return Boolean(geminiApiKey());
 }
 
@@ -390,14 +396,37 @@ export function extractGeminiOutputText(data = {}) {
   return collectText(data).join("\n").trim();
 }
 
-function apiErrorMessage(data, raw, status) {
-  return data?.error?.message || raw.slice(0, 180) || `Gemini 纠正失败（${status}）`;
+export function extractApiErrorMessage(data, raw = "", status = 0) {
+  const message =
+    data?.error?.message ||
+    (Array.isArray(data) ? data[0]?.error?.message : "") ||
+    "";
+  if (message) return String(message);
+  return raw.slice(0, 240) || `Gemini 纠正失败（${status}）`;
 }
 
-function shouldFallbackToGenerateContent(status, data, raw) {
+function apiErrorMessage(data, raw, status) {
+  const message = extractApiErrorMessage(data, raw, status);
+  if (/api keys are not supported|expected oauth|assert a principal/i.test(message)) {
+    return "这个接口不接受 API Key，需要 OAuth 服务账号。只用 Key 时请选 Gemini API，或在 Vertex 里走 Express（不要填项目接口）。";
+  }
+  return message;
+}
+
+export function shouldFallbackToGenerateContent(status, data, raw) {
   if (status === 404 || status === 405) return true;
-  const message = String(data?.error?.message || raw || "").toLowerCase();
-  return /not found|unknown (rpc|method)|method not found|unrecognized name|does not exist/.test(message);
+  const message = String(extractApiErrorMessage(data, raw, status) || "").toLowerCase();
+  return /not found|unknown (rpc|method)|method not found|unrecognized name|does not exist|api keys are not supported|expected oauth|assert a principal/.test(
+    message,
+  );
+}
+
+export function buildVertexExpressGenerateContentUrl(model, key) {
+  const url = new URL(
+    `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(normalizeModelId(model))}:generateContent`,
+  );
+  url.searchParams.set("key", key);
+  return url.toString();
 }
 
 async function readJsonResponse(response) {
@@ -436,21 +465,23 @@ async function fetchGeminiApiModels(key) {
 
 async function fetchVertexModels(settings, headers) {
   const location = settings.vertexLocation || "us-central1";
+  const project = settings.vertexProject;
   const url = new URL(
-    `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`,
+    project
+      ? `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models`
+      : `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`,
   );
   url.searchParams.set("pageSize", "200");
   return fetchAllPages(url.toString(), headers, parseListedModels);
 }
 
-async function vertexAuthHeaders(settings) {
-  const headers = { "Content-Type": "application/json" };
+async function vertexOAuthHeaders() {
   const sa = vertexServiceAccount();
-  const key = vertexApiKey();
-  if (sa) headers.Authorization = `Bearer ${await accessTokenFromServiceAccount(sa)}`;
-  else if (key) headers["x-goog-api-key"] = key;
-  else throw new Error("请先保存 Vertex Key 或服务账号 JSON。");
-  return { headers, key };
+  if (!sa) throw new Error("Vertex 项目接口需要服务账号 JSON，不能只用 API Key。");
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${await accessTokenFromServiceAccount(sa)}`,
+  };
 }
 
 export async function listReviewModels({ refresh = false } = {}) {
@@ -474,9 +505,9 @@ export async function listReviewModels({ refresh = false } = {}) {
   try {
     let live = [];
     if (settings.provider === "vertex") {
+      if (vertexAuthMode() !== "service-account") throw new Error("vertex-express-has-no-model-list");
       if (!reviewReady()) throw new Error("no-vertex-auth");
-      const { headers } = await vertexAuthHeaders(settings);
-      live = await fetchVertexModels(settings, headers);
+      live = await fetchVertexModels(settings, await vertexOAuthHeaders());
     } else {
       const key = geminiApiKey();
       if (!key) throw new Error("no-gemini-key");
@@ -507,12 +538,18 @@ async function completeViaInteractions({ settings, model, system, user, signal }
   const headers = { "Content-Type": "application/json" };
   let url = "";
   if (settings.provider === "vertex") {
-    if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID。");
+    if (vertexAuthMode() !== "service-account") {
+      return {
+        ok: false,
+        status: 401,
+        data: { error: { message: "API keys are not supported by this API." } },
+        raw: "",
+      };
+    }
+    if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID，或导入带 project_id 的服务账号。");
     const location = settings.vertexLocation || "us-central1";
     url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/interactions`;
-    const auth = await vertexAuthHeaders(settings);
-    Object.assign(headers, auth.headers);
-    if (auth.key && !headers.Authorization) url += `?key=${encodeURIComponent(auth.key)}`;
+    Object.assign(headers, await vertexOAuthHeaders());
   } else {
     const key = geminiApiKey();
     if (!key) throw new Error("请先保存 Gemini API Key。");
@@ -534,14 +571,17 @@ async function completeViaGenerateContent({ settings, model, system, user, signa
   const headers = { "Content-Type": "application/json" };
   let url = "";
   if (settings.provider === "vertex") {
-    if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID。");
-    const location = settings.vertexLocation || "us-central1";
-    url = `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
-    const sa = vertexServiceAccount();
-    const key = vertexApiKey();
-    if (sa) headers.Authorization = `Bearer ${await accessTokenFromServiceAccount(sa)}`;
-    else if (key) url += `?key=${encodeURIComponent(key)}`;
-    else throw new Error("请先保存 Vertex Key 或服务账号 JSON。");
+    const mode = vertexAuthMode();
+    if (mode === "express-key") {
+      url = buildVertexExpressGenerateContentUrl(model, vertexApiKey());
+    } else if (mode === "service-account") {
+      if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID，或导入带 project_id 的服务账号。");
+      const location = settings.vertexLocation || "us-central1";
+      url = `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
+      Object.assign(headers, await vertexOAuthHeaders());
+    } else {
+      throw new Error("请先保存 Vertex Key，或导入服务账号 JSON。");
+    }
   } else {
     const key = geminiApiKey();
     if (!key) throw new Error("请先保存 Gemini API Key。");
@@ -555,7 +595,12 @@ async function completeViaGenerateContent({ settings, model, system, user, signa
     signal,
   });
   const { data, raw } = await readJsonResponse(response);
-  return { ok: response.ok, status: response.status, data, raw };
+  return { ok: response.ok, status: response.status, data, raw, url };
+}
+
+function textFromResult(result) {
+  if (!result.ok) return "";
+  return extractGeminiOutputText(result.data);
 }
 
 export async function completeGeminiReview({
@@ -565,18 +610,20 @@ export async function completeGeminiReview({
 } = {}) {
   const settings = loadReviewSettings();
   const model = settings.model || DEFAULTS.model;
-  const interaction = await completeViaInteractions({ settings, model, system, user, signal });
-  if (interaction.ok) {
-    const text = extractGeminiOutputText(interaction.data);
+  if (settings.provider === "vertex" && vertexAuthMode() === "express-key") {
+    const express = await completeViaGenerateContent({ settings, model, system, user, signal });
+    const text = textFromResult(express);
     if (text) return text;
-    throw new Error("Gemini 没有返回纠正结果。");
+    throw new Error(apiErrorMessage(express.data, express.raw, express.status));
   }
+  const interaction = await completeViaInteractions({ settings, model, system, user, signal });
+  const interactionText = textFromResult(interaction);
+  if (interactionText) return interactionText;
   if (!shouldFallbackToGenerateContent(interaction.status, interaction.data, interaction.raw)) {
     throw new Error(apiErrorMessage(interaction.data, interaction.raw, interaction.status));
   }
   const legacy = await completeViaGenerateContent({ settings, model, system, user, signal });
-  if (!legacy.ok) throw new Error(apiErrorMessage(legacy.data, legacy.raw, legacy.status));
-  const text = extractGeminiOutputText(legacy.data);
-  if (!text) throw new Error("Gemini 没有返回纠正结果。");
+  const text = textFromResult(legacy);
+  if (!text) throw new Error(apiErrorMessage(legacy.data, legacy.raw, legacy.status));
   return text;
 }

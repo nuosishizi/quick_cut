@@ -13,7 +13,9 @@ const {
   GEMINI_MODELS,
   buildGeminiGenerateContentBody,
   buildGeminiInteractionBody,
+  buildVertexExpressGenerateContentUrl,
   completeGeminiReview,
+  extractApiErrorMessage,
   extractGeminiOutputText,
   isTextReviewModel,
   listReviewModels,
@@ -22,6 +24,8 @@ const {
   parseListedModels,
   reviewReady,
   saveReviewSettings,
+  shouldFallbackToGenerateContent,
+  vertexAuthMode,
 } = await import("../src/ai-settings.mjs");
 
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -162,7 +166,78 @@ test("review calls the Interactions API first", async () => {
   }
 });
 
+test("Vertex API keys are treated as Express and do not need a project", () => {
+  const saved = saveReviewSettings({
+    provider: "vertex",
+    vertexProject: "",
+    vertexKey: "AIzaSyTestQuickCutVertexKey12345",
+  });
+  assert.equal(saved.provider, "vertex");
+  assert.equal(vertexAuthMode(), "express-key");
+  assert.equal(reviewReady(), true);
+  assert.match(
+    buildVertexExpressGenerateContentUrl("gemini-3.7-flash", "AIzaSyTestQuickCutVertexKey12345"),
+    /^https:\/\/aiplatform\.googleapis\.com\/v1\/publishers\/google\/models\/gemini-3\.7-flash:generateContent\?key=/,
+  );
+});
+
+test("Vertex API keys call Express generateContent and never hit project Interactions", async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{"keep":[8]}' }] } }],
+        }),
+    };
+  };
+  try {
+    const text = await completeGeminiReview({ system: "Be strict.", user: "u" });
+    assert.equal(text, '{"keep":[8]}');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /aiplatform\.googleapis\.com\/v1\/publishers\/google\/models\/gemini-3\.1-pro-preview:generateContent/);
+    assert.doesNotMatch(calls[0].url, /interactions/);
+    assert.doesNotMatch(calls[0].url, /projects\//);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("Vertex Express does not query OAuth-only model list endpoints", async () => {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    throw new Error("should not fetch Vertex publisher models with an API key");
+  };
+  try {
+    const listed = await listReviewModels({ refresh: true });
+    assert.equal(calls.length, 0);
+    assert.ok(listed.models.some((item) => item.id === "gemini-3.7-flash"));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("API-key-rejected Vertex errors are parsed and can fall back", () => {
+  const payload = [
+    {
+      error: {
+        code: 401,
+        message: "API keys are not supported by this API. Expected OAuth2 access token or other authentication credentials that assert a principal.",
+      },
+    },
+  ];
+  assert.match(extractApiErrorMessage(payload, JSON.stringify(payload), 401), /API keys are not supported/);
+  assert.equal(shouldFallbackToGenerateContent(401, payload, JSON.stringify(payload)), true);
+});
+
 test("review falls back to generateContent if Interactions is unavailable", async () => {
+  saveReviewSettings({ provider: "gemini" });
   const original = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {

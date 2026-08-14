@@ -359,6 +359,7 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /id="refreshGeminiModels"/);
   assert.match(ui, /refreshGeminiModels/);
   assert.match(ui, /gemini-3\.7-flash/);
+  assert.match(ui, /项目接口不接受 API Key/);
   assert.match(main, /refreshGeminiModels: safe\(\(\) => listReviewModels\(\{ refresh: true \}\)/);
   assert.match(ui, /blockingScriptureOnTimeline/);
   assert.match(ui, /id="aiReviewNatural"/);
