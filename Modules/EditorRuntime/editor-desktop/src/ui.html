@@ -2439,8 +2439,11 @@
                 </button>
               </div>
               <div class="row" style="margin-top: 7px">
-                <button class="btn grow" id="aiReviewScript" disabled>
-                  AI纠正
+                <button class="btn grow" id="aiReviewStrict" disabled title="尽量只留能对应文稿的内容，多说、重读、跑题标红">
+                  严格对照
+                </button>
+                <button class="btn grow" id="aiReviewNatural" disabled title="意思对就可以，短口语和补充可保留">
+                  自然流畅
                 </button>
               </div>
               <div class="sectiontitle" style="margin-top: 12px">Groq 云端识别</div>
@@ -3313,6 +3316,7 @@
         captions: [],
         reviewCaptions: [],
         issues: [],
+        matchIssues: [],
         alignmentOperations: [],
         alignmentDuration: 0,
         removals: [],
@@ -4315,6 +4319,7 @@
           captions: [],
           reviewCaptions: [],
           issues: [],
+          matchIssues: [],
           alignmentOperations: [],
           alignmentDuration: 0,
           removals: [],
@@ -4457,6 +4462,7 @@
           captions: data.captions || [],
           reviewCaptions: data.reviewCaptions || [],
           issues: data.issues || [],
+          matchIssues: data.matchIssues || data.issues || [],
           alignmentOperations: data.alignmentOperations || [],
           alignmentDuration: Number(data.alignmentDuration || 0),
           removals: data.removals || [],
@@ -8366,7 +8372,7 @@
           const hint = s.groq?.hint ? `（${s.groq.hint}）` : "";
           if (s.engine === "groq") {
             $("modelBox").className = "status good";
-            $("modelBox").textContent = `已使用 Groq 听写。先点“匹配文案”，再按需点“AI纠正”去掉误标红条。${hint}`;
+            $("modelBox").textContent = `已使用 Groq 听写。先匹配文案，再选“严格对照”或“自然流畅”。两者都不改绿字幕。${hint}`;
           } else if (s.localInstalled) {
             $("modelBox").className = "status good";
             $("modelBox").textContent = "本地 Whisper Turbo 已安装，可离线匹配。";
@@ -8459,6 +8465,7 @@
             if (s.state === "completed") {
               snapshot();
               state.issues = s.result.issues || [];
+              state.matchIssues = (s.result.issues || []).map((issue) => ({ ...issue }));
               state.alignmentOperations = s.result.operations || [];
               state.alignmentDuration = Number(s.result.outputDuration || state.sourceDuration || 0);
               state.captions = s.result.captions;
@@ -8471,7 +8478,7 @@
               renderAll();
               toast(
                 hasDifference
-                  ? `匹配完成：共 ${state.issues.length} 处差异。字幕来自识别对齐；要用 AI 去掉误标红条，再点“AI纠正”。`
+                  ? `匹配完成：共 ${state.issues.length} 处差异。绿字幕按文稿。再选“严格对照”或“自然流畅”。`
                   : "匹配完成：口播与正确文案一致",
               );
               break;
@@ -8487,25 +8494,34 @@
         }
       }
       function updateAiReviewButton() {
-        const button = $("aiReviewScript");
-        if (!button) return;
-        button.disabled = !state.issues.length;
+        const ready = (state.matchIssues || state.issues || []).length > 0;
+        for (const id of ["aiReviewStrict", "aiReviewNatural"]) {
+          const button = $(id);
+          if (button) button.disabled = !ready;
+        }
       }
-      async function reviewScriptWithAi() {
-        if (!state.issues.length) {
+      async function reviewScriptWithAi(mode) {
+        const sourceIssues = state.matchIssues?.length ? state.matchIssues : state.issues;
+        if (!sourceIssues.length) {
           toast("请先匹配文案");
           return;
         }
-        const button = $("aiReviewScript");
+        const strict = mode === "strict";
+        const button = $(strict ? "aiReviewStrict" : "aiReviewNatural");
+        const label = strict ? "严格对照" : "自然流畅";
         try {
-          button.disabled = true;
-          button.textContent = "纠正中…";
+          updateAiReviewButton();
+          if (button) {
+            button.disabled = true;
+            button.textContent = "纠正中…";
+          }
           $("modelProgress").style.display = "block";
           $("modelProgress").firstElementChild.style.width = "55%";
           const result = unwrap(
             await window.native.reviewScriptIssues({
+              mode: strict ? "strict" : "natural",
               script: $("scriptText").value,
-              issues: state.issues,
+              issues: sourceIssues.map((issue) => ({ ...issue })),
               operations: state.alignmentOperations || [],
               outputDuration: state.alignmentDuration || state.sourceDuration || state.duration,
             }),
@@ -8521,13 +8537,15 @@
           const judged = result.judgeSummary || {};
           toast(
             judged.error
-              ? `AI 纠正失败：${judged.error}`
-              : `AI 纠正完成：去掉 ${judged.keep || 0} 处误标，保留 ${judged.cut || 0} 处建议剪掉`,
+              ? `${label}失败：${judged.error}`
+              : strict
+                ? `严格对照完成：${judged.cut || 0} 处建议剪掉，${judged.keep || 0} 处识别误差已忽略，漏读仍为紫色`
+                : `自然流畅完成：保留 ${judged.keep || 0} 处近义/口语，${judged.cut || 0} 处仍建议剪掉`,
           );
         } catch (error) {
           toast(error.message);
         } finally {
-          button.textContent = "AI纠正";
+          if (button) button.textContent = label;
           updateAiReviewButton();
           $("modelProgress").style.display = "none";
         }
@@ -9122,6 +9140,7 @@
           captions: state.captions,
           reviewCaptions: state.reviewCaptions,
           issues: state.issues,
+          matchIssues: state.matchIssues,
           alignmentOperations: state.alignmentOperations,
           alignmentDuration: state.alignmentDuration,
           removals: state.removals,
@@ -11273,7 +11292,8 @@
         toast("正确文案已清空");
       };
       $("matchScript").onclick = matchScript;
-      $("aiReviewScript").onclick = reviewScriptWithAi;
+      $("aiReviewStrict").onclick = () => reviewScriptWithAi("strict");
+      $("aiReviewNatural").onclick = () => reviewScriptWithAi("natural");
       $("saveGroqKey").onclick = saveGroqKey;
       $("clearGroqKey").onclick = clearGroqKey;
       $("groqKeyInput").addEventListener("keydown", (event) => {

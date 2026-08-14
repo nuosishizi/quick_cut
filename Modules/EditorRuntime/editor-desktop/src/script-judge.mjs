@@ -5,17 +5,32 @@ const GROQ_JUDGE_MODELS = [
 ];
 const MAX_BATCH = 24;
 
-const SYSTEM_PROMPT = `You review English voiceover differences. You do not edit the timeline.
-ASR often misspells, doubles letters, or splits one spoken word (The→Tthe, Bible→Byble).
+const MODE_PROMPTS = {
+  strict: `You review English voiceover against a manuscript. Mode: STRICT manuscript cut.
+The finished video should sound like the manuscript was read cleanly, in order.
+Captions already use the manuscript. You only decide which spoken spans stay.
 
 Choose one decision per item:
-- keep: ASR glitch, same meaning, filler, or 1–2 word paraphrase. Hide the red mark.
-- cut: only a clear reread, restart, off-script tangent, or meaning change of 3+ words.
+- keep: only ASR glitches or the same word misspelled (The/Tthe, Bible/Byble).
+- cut: extra talk, restarts, rereads, self-corrections (keep the later take), off-script asides, or meaning changes.
 - missing: manuscript phrase was not spoken. Do not cut.
-- unsure: leave the original software mark unchanged.
+- unsure: leave the original mark.
+
+Prefer cut for anything that does not serve the manuscript. Keep is rare.
+Return JSON only: {"decisions":[{"id":"...","decision":"cut","reason":"..."}]}`,
+  natural: `You review English voiceover against a manuscript. Mode: NATURAL fluency.
+The finished video should follow the manuscript meaning, but short natural speech may stay.
+Captions already use the manuscript. You only decide which spoken spans stay.
+
+Choose one decision per item:
+- keep: ASR glitch, same meaning, filler (uh, um, you know), 1–2 word paraphrase, or a short helpful aside.
+- cut: only a clear reread/restart, a long tangent, or a meaning change of 3+ words. Prefer the later clean take.
+- missing: manuscript phrase was not spoken. Do not cut.
+- unsure: leave the original mark.
 
 Default to keep or unsure. Use cut rarely.
-Return JSON only: {"decisions":[{"id":"...","decision":"keep","reason":"..."}]}`;
+Return JSON only: {"decisions":[{"id":"...","decision":"keep","reason":"..."}]}`,
+};
 
 export function parseJudgeResponse(text) {
   const raw = String(text || "").trim();
@@ -80,17 +95,25 @@ export function issueJudgePayload(issue, operations = []) {
   };
 }
 
-const CUTTABLE = new Set(["extra", "repeat", "mismatch"]);
+export function normalizeReviewMode(mode) {
+  return mode === "strict" ? "strict" : "natural";
+}
 
-export function applyJudgeDecisions(aligned, decisions = []) {
+export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
+  const reviewMode = normalizeReviewMode(mode);
+  const cuttable =
+    reviewMode === "strict"
+      ? new Set(["extra", "repeat", "mismatch", "addition"])
+      : new Set(["extra", "repeat", "mismatch"]);
   const byId = new Map(decisions.map((item) => [item.id, item]));
-  const summary = { keep: 0, cut: 0, missing: 0, unsure: 0 };
+  const summary = { keep: 0, cut: 0, missing: 0, unsure: 0, mode: reviewMode };
   for (const issue of aligned.issues || []) {
     const judged = byId.get(issue.id);
     if (!judged) continue;
     const decision = judged.decision;
     issue.aiDecision = decision;
     issue.aiReason = judged.reason || "";
+    issue.aiMode = reviewMode;
     summary[decision] = (summary[decision] || 0) + 1;
     if (decision === "keep") {
       issue.confirmedCut = false;
@@ -101,7 +124,7 @@ export function applyJudgeDecisions(aligned, decisions = []) {
       issue.suppressReview = true;
       continue;
     }
-    if (decision === "cut" && CUTTABLE.has(issue.type)) {
+    if (decision === "cut" && cuttable.has(issue.type)) {
       issue.confirmedCut = true;
       issue.suggested = true;
       issue.action = "cut";
@@ -130,8 +153,9 @@ function judgeHttpError(status, body) {
   return new Error(message || `Groq 校对失败（${status}）。`);
 }
 
-async function completeJudge(key, userPrompt, signal) {
+async function completeJudge(key, userPrompt, signal, mode = "natural") {
   let lastError = new Error("没有可用的 Groq 校对模型。");
+  const system = MODE_PROMPTS[normalizeReviewMode(mode)];
   for (const model of GROQ_JUDGE_MODELS) {
     const response = await fetch(GROQ_CHAT_URL, {
       method: "POST",
@@ -144,7 +168,7 @@ async function completeJudge(key, userPrompt, signal) {
         temperature: 0,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: system },
           { role: "user", content: userPrompt },
         ],
       }),
@@ -168,22 +192,25 @@ export async function judgeAlignmentIssues({
   issues = [],
   operations = [],
   signal = null,
+  mode = "natural",
 } = {}) {
   const key = String(apiKey || "").trim();
   if (!key || !issues.length) return [];
+  const reviewMode = normalizeReviewMode(mode);
   const decisions = [];
   for (let offset = 0; offset < issues.length; offset += MAX_BATCH) {
     if (signal?.aborted) throw new Error("cancelled");
     const batch = issues.slice(offset, offset + MAX_BATCH);
     const payload = batch.map((issue) => issueJudgePayload(issue, operations));
     const userPrompt = [
+      `Mode: ${reviewMode}`,
       "Manuscript:",
       String(script || "").trim().slice(0, 6000),
       "",
       "Differences:",
       JSON.stringify(payload, null, 2),
     ].join("\n");
-    decisions.push(...(await completeJudge(key, userPrompt, signal)));
+    decisions.push(...(await completeJudge(key, userPrompt, signal, reviewMode)));
   }
   return decisions;
 }

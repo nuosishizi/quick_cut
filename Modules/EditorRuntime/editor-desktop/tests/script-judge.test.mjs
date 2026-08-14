@@ -78,11 +78,31 @@ test("cut can only confirm an already cuttable issue", () => {
   applyJudgeDecisions(aligned, [
     { id: "b", decision: "cut", reason: "restart" },
     { id: "c", decision: "cut", reason: "should not upgrade a keepable addition" },
-  ]);
+  ], "natural");
   assert.equal(aligned.issues[0].confirmedCut, true);
   assert.equal(aligned.issues[0].action, "cut");
   assert.equal(aligned.issues[1].confirmedCut, false);
   assert.equal(aligned.issues[1].action, "insert");
+  assert.equal(aligned.operations[0].type, "match");
+});
+
+test("strict mode can mark off-script additions for cutting", () => {
+  const aligned = {
+    operations: [{ type: "match" }],
+    issues: [
+      {
+        id: "c",
+        type: "addition",
+        spokenText: "anyway let me tell you a long story",
+        expectedText: "—",
+        confirmedCut: false,
+        action: "insert",
+      },
+    ],
+  };
+  applyJudgeDecisions(aligned, [{ id: "c", decision: "cut", reason: "tangent" }], "strict");
+  assert.equal(aligned.issues[0].confirmedCut, true);
+  assert.equal(aligned.issues[0].action, "cut");
   assert.equal(aligned.operations[0].type, "match");
 });
 

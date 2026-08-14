@@ -19,6 +19,7 @@ import { extractArchive, isWindows } from "./platform.mjs";
 import {
   applyJudgeDecisions,
   judgeAlignmentIssues,
+  normalizeReviewMode,
 } from "./script-judge.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -761,6 +762,7 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
 export async function reviewScriptIssues(input = {}) {
   const key = getGroqApiKey();
   if (!key) throw new Error("请先保存 Groq API Key。");
+  const mode = normalizeReviewMode(input.mode);
   const issues = Array.isArray(input.issues) ? input.issues.map((issue) => ({ ...issue })) : [];
   if (!issues.length) throw new Error("请先匹配文案，再使用 AI 纠正。");
   const operations = Array.isArray(input.operations) ? input.operations : [];
@@ -769,9 +771,10 @@ export async function reviewScriptIssues(input = {}) {
     script: input.script || "",
     issues,
     operations,
+    mode,
   });
   const aligned = { issues, operations };
-  const summary = applyJudgeDecisions(aligned, decisions);
+  const summary = applyJudgeDecisions(aligned, decisions, mode);
   const visibleIssues = issues.filter((issue) => !issue.suppressReview);
   const outputDuration = Math.max(
     0.04,
@@ -779,6 +782,7 @@ export async function reviewScriptIssues(input = {}) {
     ...issues.map((issue) => Number(issue.end || 0)),
   );
   return {
+    mode,
     issues: visibleIssues,
     reviewCaptions: buildReviewCaptions(visibleIssues, [], outputDuration),
     judgeSummary: summary,
