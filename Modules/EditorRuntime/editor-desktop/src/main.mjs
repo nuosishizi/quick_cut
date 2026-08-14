@@ -50,6 +50,7 @@ import {
 import {
   clearGeminiKey,
   clearVertexSecrets,
+  listReviewModels,
   loadReviewSettings,
   saveReviewSettings,
 } from "./ai-settings.mjs";
@@ -1397,7 +1398,8 @@ nativeMethods = {
   scriptAnalysisStatus: safe((jobId) => scriptAnalysisStatus(jobId)),
   cancelScriptAnalysis: safe((jobId) => cancelScriptAnalysis(jobId)),
   reviewScriptIssues: safe((input) => reviewScriptIssues(input || {})),
-  reviewSettings: safe(() => loadReviewSettings()),
+  reviewSettings: safe(() => listReviewModels()),
+  refreshGeminiModels: safe(() => listReviewModels({ refresh: true })),
   saveReviewSettings: safe((input) => saveReviewSettings(input || {})),
   importVertexServiceAccount: safe(() => {
     const selected = chooseFile("project");

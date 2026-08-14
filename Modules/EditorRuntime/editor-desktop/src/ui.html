@@ -3227,8 +3227,12 @@
           </select>
         </label>
         <label class="field"><span class="small">模型</span>
-          <select class="select" id="reviewModel"></select>
+          <div class="row">
+            <select class="select grow" id="reviewModel"></select>
+            <button class="btn" id="refreshGeminiModels">拉取最新</button>
+          </div>
         </label>
+        <div class="status" id="geminiModelHint"></div>
         <div id="geminiSettings">
           <label class="field"><span class="small">Gemini API Key</span>
             <input class="input" id="geminiKeyInput" type="password" autocomplete="off" placeholder="粘贴 AIza… Key" />
@@ -8478,14 +8482,33 @@
         $("vertexSettings").style.display = vertex ? "block" : "none";
         $("geminiSettings").style.display = vertex ? "none" : "block";
       }
+      function applyReviewModelList(settings) {
+        $("reviewModel").innerHTML = (settings.models || [])
+          .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
+          .join("");
+        const selected = settings.model || "gemini-3.7-flash";
+        $("reviewModel").value = selected;
+        if ($("reviewModel").value !== selected && selected) {
+          const option = document.createElement("option");
+          option.value = selected;
+          option.textContent = selected;
+          $("reviewModel").appendChild(option);
+          $("reviewModel").value = selected;
+        }
+        const source = settings.modelSource || "fallback";
+        if (source === "live") {
+          $("geminiModelHint").textContent = "已从 Google 拉取当前账号可用的文本模型。";
+        } else if (source === "cache") {
+          $("geminiModelHint").textContent = "使用最近拉取的模型缓存。保存 Key 后可再点「拉取最新」。";
+        } else {
+          $("geminiModelHint").textContent = "当前是 2026-08 官方内置清单。保存 Key 后可拉取你账号里的最新模型。";
+        }
+      }
       async function fillReviewSettings() {
         const settings = unwrap(await window.native.reviewSettings());
         const defaults = unwrap(await window.native.defaultReviewPrompts());
         $("reviewProvider").value = settings.provider || "gemini";
-        $("reviewModel").innerHTML = (settings.models || [])
-          .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
-          .join("");
-        $("reviewModel").value = settings.model || "gemini-2.5-flash";
+        applyReviewModelList(settings);
         $("vertexProject").value = settings.vertexProject || "";
         $("vertexLocation").value = settings.vertexLocation || "us-central1";
         $("promptStrict").value = settings.promptStrict || defaults.strict || "";
@@ -8499,6 +8522,12 @@
             ? `已保存 ${settings.vertexHint}`
             : "还没有 Vertex Key / 服务账号";
         toggleReviewProviderFields();
+      }
+      async function refreshGeminiModels() {
+        $("geminiModelHint").textContent = "正在从 Google 拉取最新模型…";
+        const settings = unwrap(await window.native.refreshGeminiModels());
+        applyReviewModelList(settings);
+        toast(settings.modelSource === "live" ? "已拉取最新 Gemini 模型" : "拉取失败，仍用内置清单");
       }
       async function openReviewSettings() {
         await fillReviewSettings();
@@ -11466,7 +11495,12 @@
       $("aiReviewStrict").onclick = () => reviewScriptWithAi("strict");
       $("aiReviewNatural").onclick = () => reviewScriptWithAi("natural");
       $("openReviewSettings").onclick = openReviewSettings;
-      $("reviewProvider").onchange = toggleReviewProviderFields;
+      $("reviewProvider").onchange = async () => {
+        toggleReviewProviderFields();
+        await persistReviewSettings();
+        await refreshGeminiModels();
+      };
+      $("refreshGeminiModels").onclick = refreshGeminiModels;
       $("saveGeminiKey").onclick = saveGeminiKey;
       $("clearGeminiKey").onclick = async () => {
         unwrap(await window.native.clearGeminiKey());

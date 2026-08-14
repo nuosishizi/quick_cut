@@ -356,6 +356,10 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /id="aiReviewStrict"/);
   assert.match(ui, /id="openReviewSettings"/);
   assert.match(ui, /id="reviewSettingsModal"/);
+  assert.match(ui, /id="refreshGeminiModels"/);
+  assert.match(ui, /refreshGeminiModels/);
+  assert.match(ui, /gemini-3\.7-flash/);
+  assert.match(main, /refreshGeminiModels: safe\(\(\) => listReviewModels\(\{ refresh: true \}\)/);
   assert.match(ui, /blockingScriptureOnTimeline/);
   assert.match(ui, /id="aiReviewNatural"/);
   assert.match(ui, /async function reviewScriptWithAi/);
