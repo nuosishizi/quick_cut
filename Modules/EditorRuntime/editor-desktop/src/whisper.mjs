@@ -16,8 +16,10 @@ import {
 import { mediaBinary, supportRoot } from "./media.mjs";
 import { mapSourceTime, mergeRanges } from "./pausecut.mjs";
 import { extractArchive, isWindows } from "./platform.mjs";
+import { reviewReady } from "./ai-settings.mjs";
 import {
   applyJudgeDecisions,
+  blockingScriptureIssues,
   judgeAlignmentIssues,
   normalizeReviewMode,
 } from "./script-judge.mjs";
@@ -760,14 +762,13 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
 }
 
 export async function reviewScriptIssues(input = {}) {
-  const key = getGroqApiKey();
-  if (!key) throw new Error("请先保存 Groq API Key。");
+  if (!reviewReady())
+    throw new Error("请先在纠正设置里保存 Gemini API Key，或填好 Vertex 项目和 Key。");
   const mode = normalizeReviewMode(input.mode);
   const issues = Array.isArray(input.issues) ? input.issues.map((issue) => ({ ...issue })) : [];
   if (!issues.length) throw new Error("请先匹配文案，再使用 AI 纠正。");
   const operations = Array.isArray(input.operations) ? input.operations : [];
   const decisions = await judgeAlignmentIssues({
-    apiKey: key,
     script: input.script || "",
     issues,
     operations,

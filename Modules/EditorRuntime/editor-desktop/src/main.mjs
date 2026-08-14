@@ -47,6 +47,13 @@ import {
   startModelDownload,
   startScriptAnalysis,
 } from "./whisper.mjs";
+import {
+  clearGeminiKey,
+  clearVertexSecrets,
+  loadReviewSettings,
+  saveReviewSettings,
+} from "./ai-settings.mjs";
+import { blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
 import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
 import { buildCaptions, spokenCaptionWords } from "./alignment.mjs";
 import {
@@ -1390,6 +1397,19 @@ nativeMethods = {
   scriptAnalysisStatus: safe((jobId) => scriptAnalysisStatus(jobId)),
   cancelScriptAnalysis: safe((jobId) => cancelScriptAnalysis(jobId)),
   reviewScriptIssues: safe((input) => reviewScriptIssues(input || {})),
+  reviewSettings: safe(() => loadReviewSettings()),
+  saveReviewSettings: safe((input) => saveReviewSettings(input || {})),
+  importVertexServiceAccount: safe(() => {
+    const selected = chooseFile("project");
+    if (!selected) return loadReviewSettings();
+    return saveReviewSettings({
+      vertexServiceAccountJson: fs.readFileSync(selected, "utf8"),
+    });
+  }),
+  clearGeminiKey: safe(() => clearGeminiKey()),
+  clearVertexSecrets: safe(() => clearVertexSecrets()),
+  defaultReviewPrompts: safe(() => DEFAULT_REVIEW_PROMPTS),
+  blockingScriptureIssues: safe((issues) => blockingScriptureIssues(issues || [])),
   localFonts: safe(() => {
     const localRoot = path.join(supportRoot(), "fonts") + path.sep;
     return localFonts().map((font) => ({

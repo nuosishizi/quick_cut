@@ -1534,6 +1534,10 @@
         background: #b72d4e;
         border-color: #ff668a;
       }
+      .clip.review.scripture {
+        background: #8a6418;
+        border-color: #f5c542;
+      }
       .review-replace {
         position: absolute;
         right: 5px;
@@ -2446,6 +2450,7 @@
                   自然流畅
                 </button>
               </div>
+              <button class="btn wide" id="openReviewSettings" style="margin-top:7px">纠正设置</button>
               <div class="sectiontitle" style="margin-top: 12px">Groq 云端识别</div>
               <input
                 class="input"
@@ -3208,6 +3213,61 @@
           ><button class="btn primary" id="exportSettingsConfirm">
             选择路径并导出
           </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="reviewSettingsModal">
+      <div class="dialog newdialog" style="max-width:560px">
+        <h2>Gemini 纠正设置</h2>
+        <p class="small">听写仍用 Groq。纠正只用 Gemini API 或 Vertex。经文自动严审，说错禁止导出。</p>
+        <label class="field"><span class="small">接口</span>
+          <select class="select" id="reviewProvider">
+            <option value="gemini">Gemini API</option>
+            <option value="vertex">Vertex AI</option>
+          </select>
+        </label>
+        <label class="field"><span class="small">模型</span>
+          <select class="select" id="reviewModel"></select>
+        </label>
+        <div id="geminiSettings">
+          <label class="field"><span class="small">Gemini API Key</span>
+            <input class="input" id="geminiKeyInput" type="password" autocomplete="off" placeholder="粘贴 AIza… Key" />
+          </label>
+          <div class="row" style="margin-top:7px">
+            <button class="btn primary grow" id="saveGeminiKey">保存 Gemini Key</button>
+            <button class="btn" id="clearGeminiKey">清除</button>
+          </div>
+          <div class="status" id="geminiKeyHint"></div>
+        </div>
+        <div id="vertexSettings" style="display:none">
+          <label class="field"><span class="small">Vertex 项目 ID</span>
+            <input class="input" id="vertexProject" placeholder="my-gcp-project" />
+          </label>
+          <label class="field"><span class="small">地区</span>
+            <input class="input" id="vertexLocation" placeholder="us-central1" />
+          </label>
+          <label class="field"><span class="small">Vertex Key</span>
+            <input class="input" id="vertexKeyInput" type="password" autocomplete="off" placeholder="Vertex API Key（可选）" />
+          </label>
+          <div class="row" style="margin-top:7px">
+            <button class="btn primary grow" id="saveVertexKey">保存 Vertex</button>
+            <button class="btn" id="importVertexSa">导入服务账号 JSON</button>
+            <button class="btn" id="clearVertexSecrets">清除</button>
+          </div>
+          <div class="status" id="vertexKeyHint"></div>
+        </div>
+        <label class="field" style="margin-top:10px"><span class="small">严格对照提示词</span>
+          <textarea class="textarea" id="promptStrict" style="height:88px"></textarea>
+        </label>
+        <label class="field"><span class="small">自然流畅提示词</span>
+          <textarea class="textarea" id="promptNatural" style="height:88px"></textarea>
+        </label>
+        <div class="row" style="margin-top:7px">
+          <button class="btn grow" id="resetReviewPrompts">恢复默认提示词</button>
+        </div>
+        <div class="dialogactions">
+          <button class="btn" id="reviewSettingsCancel">关闭</button>
+          <button class="btn primary" id="reviewSettingsSave">保存设置</button>
         </div>
       </div>
     </div>
@@ -4591,7 +4651,9 @@
         const expected = String(item.expectedText || "")
           .replace(/^\s*[—-]\s*$/, "")
           .trim();
+        if (item.scripture && item.type === "missing") return expected ? `经文需补录：${expected}` : "经文需补录";
         if (item.type === "missing") return expected ? `需补录：${expected}` : "需补录";
+        if (item.scripture && expected) return `经文不符：${spoken && spoken !== "未识别出文字" ? spoken : expected}`;
         if (spoken && spoken !== "待处理") return spoken;
         if (expected) return expected;
         return "未识别出文字";
@@ -4600,7 +4662,9 @@
         const spoken = reviewClipText(item);
         const expected = String(item.expectedText || "").replace(/^\s*[—-]\s*$/, "").trim();
         const kind =
-          item.type === "missing"
+          item.scripture
+            ? "经文必须按原文，说错需重录"
+            : item.type === "missing"
             ? "漏读，需补录"
             : item.type === "repeat"
               ? "重复阅读"
@@ -6996,7 +7060,7 @@
       }
       function clipHtml(c, type) {
         const visualType = type === "audioasset" ? "audio" : type;
-        const issueClass = type === "review" ? ` ${c.type || "mismatch"}` : "";
+        const issueClass = type === "review" ? ` ${c.type || "mismatch"}${c.scripture ? " scripture" : ""}` : "";
         const displayText = type === "review"
           ? reviewClipText(c)
           : String(c.text || c.name || type).replace(/^\s*(?:应为|建议删除)[:：]\s*/, "");
@@ -8396,7 +8460,7 @@
           const hint = s.groq?.hint ? `（${s.groq.hint}）` : "";
           if (s.engine === "groq") {
             $("modelBox").className = "status good";
-            $("modelBox").textContent = `已使用 Groq 听写。先匹配文案，再选“严格对照”或“自然流畅”。两者都不改绿字幕。${hint}`;
+            $("modelBox").textContent = `听写：Groq。纠正：Gemini（纠正设置里选接口和模型）。经文说错会禁止导出。${hint}`;
           } else if (s.localInstalled) {
             $("modelBox").className = "status good";
             $("modelBox").textContent = "本地 Whisper Turbo 已安装，可离线匹配。";
@@ -8408,6 +8472,73 @@
           $("modelBox").className = "status error";
           $("modelBox").textContent = e.message;
         }
+      }
+      function toggleReviewProviderFields() {
+        const vertex = $("reviewProvider").value === "vertex";
+        $("vertexSettings").style.display = vertex ? "block" : "none";
+        $("geminiSettings").style.display = vertex ? "none" : "block";
+      }
+      async function fillReviewSettings() {
+        const settings = unwrap(await window.native.reviewSettings());
+        const defaults = unwrap(await window.native.defaultReviewPrompts());
+        $("reviewProvider").value = settings.provider || "gemini";
+        $("reviewModel").innerHTML = (settings.models || [])
+          .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
+          .join("");
+        $("reviewModel").value = settings.model || "gemini-2.5-flash";
+        $("vertexProject").value = settings.vertexProject || "";
+        $("vertexLocation").value = settings.vertexLocation || "us-central1";
+        $("promptStrict").value = settings.promptStrict || defaults.strict || "";
+        $("promptNatural").value = settings.promptNatural || defaults.natural || "";
+        $("geminiKeyHint").textContent = settings.geminiHint
+          ? `已保存 ${settings.geminiHint}`
+          : "还没有 Gemini API Key";
+        $("vertexKeyHint").textContent = settings.vertexServiceAccount
+          ? "已导入服务账号"
+          : settings.vertexHint
+            ? `已保存 ${settings.vertexHint}`
+            : "还没有 Vertex Key / 服务账号";
+        toggleReviewProviderFields();
+      }
+      async function openReviewSettings() {
+        await fillReviewSettings();
+        $("reviewSettingsModal").classList.add("on");
+      }
+      async function persistReviewSettings() {
+        unwrap(
+          await window.native.saveReviewSettings({
+            provider: $("reviewProvider").value,
+            model: $("reviewModel").value,
+            vertexProject: $("vertexProject").value,
+            vertexLocation: $("vertexLocation").value,
+            promptStrict: $("promptStrict").value,
+            promptNatural: $("promptNatural").value,
+          }),
+        );
+      }
+      async function saveGeminiKey() {
+        unwrap(
+          await window.native.saveReviewSettings({
+            provider: "gemini",
+            geminiKey: $("geminiKeyInput").value,
+          }),
+        );
+        $("geminiKeyInput").value = "";
+        await fillReviewSettings();
+        toast("Gemini API Key 已保存");
+      }
+      async function saveVertexSettings() {
+        unwrap(
+          await window.native.saveReviewSettings({
+            provider: "vertex",
+            vertexProject: $("vertexProject").value,
+            vertexLocation: $("vertexLocation").value,
+            vertexKey: $("vertexKeyInput").value,
+          }),
+        );
+        $("vertexKeyInput").value = "";
+        await fillReviewSettings();
+        toast("Vertex 设置已保存");
       }
       async function saveGroqKey() {
         try {
@@ -9389,7 +9520,23 @@
         );
         return `${Math.max(8, Math.min(100, Math.ceil(base * multiplier)))}M`;
       }
+      function blockingScriptureOnTimeline() {
+        return (state.issues || []).filter((issue) => {
+          if (!(issue.scripture || issue.strict)) return false;
+          if (issue.suppressReview) return false;
+          return (
+            issue.confirmedError === true ||
+            issue.type === "missing" ||
+            issue.type === "mismatch"
+          );
+        });
+      }
       async function exportVideo() {
+        const blocked = blockingScriptureOnTimeline();
+        if (blocked.length) {
+          toast(`有 ${blocked.length} 处经文不符或漏读，禁止导出。请按原文重录后再导出。`);
+          return;
+        }
         const chooseButton = $("exportSettingsConfirm"),
           originalChooseText = chooseButton.textContent;
         try {
@@ -11318,6 +11465,36 @@
       $("matchScript").onclick = matchScript;
       $("aiReviewStrict").onclick = () => reviewScriptWithAi("strict");
       $("aiReviewNatural").onclick = () => reviewScriptWithAi("natural");
+      $("openReviewSettings").onclick = openReviewSettings;
+      $("reviewProvider").onchange = toggleReviewProviderFields;
+      $("saveGeminiKey").onclick = saveGeminiKey;
+      $("clearGeminiKey").onclick = async () => {
+        unwrap(await window.native.clearGeminiKey());
+        await fillReviewSettings();
+        toast("已清除 Gemini Key");
+      };
+      $("saveVertexKey").onclick = saveVertexSettings;
+      $("importVertexSa").onclick = async () => {
+        unwrap(await window.native.importVertexServiceAccount());
+        await fillReviewSettings();
+        toast("服务账号已导入");
+      };
+      $("clearVertexSecrets").onclick = async () => {
+        unwrap(await window.native.clearVertexSecrets());
+        await fillReviewSettings();
+        toast("已清除 Vertex 凭证");
+      };
+      $("resetReviewPrompts").onclick = async () => {
+        const defaults = unwrap(await window.native.defaultReviewPrompts());
+        $("promptStrict").value = defaults.strict || "";
+        $("promptNatural").value = defaults.natural || "";
+      };
+      $("reviewSettingsSave").onclick = async () => {
+        await persistReviewSettings();
+        $("reviewSettingsModal").classList.remove("on");
+        toast("纠正设置已保存");
+      };
+      $("reviewSettingsCancel").onclick = () => $("reviewSettingsModal").classList.remove("on");
       $("saveGroqKey").onclick = saveGroqKey;
       $("clearGroqKey").onclick = clearGroqKey;
       $("groqKeyInput").addEventListener("keydown", (event) => {

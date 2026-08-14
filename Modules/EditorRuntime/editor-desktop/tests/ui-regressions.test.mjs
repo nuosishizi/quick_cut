@@ -354,6 +354,9 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /id="groqKeyInput"/);
   assert.match(ui, /saveGroqApiKey/);
   assert.match(ui, /id="aiReviewStrict"/);
+  assert.match(ui, /id="openReviewSettings"/);
+  assert.match(ui, /id="reviewSettingsModal"/);
+  assert.match(ui, /blockingScriptureOnTimeline/);
   assert.match(ui, /id="aiReviewNatural"/);
   assert.match(ui, /async function reviewScriptWithAi/);
   assert.match(ui, /mode: strict \? "strict" : "natural"/);

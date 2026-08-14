@@ -1,8 +1,5 @@
-const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_JUDGE_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-];
+import { completeGeminiReview, loadReviewSettings } from "./ai-settings.mjs";
+
 const MAX_BATCH = 24;
 
 const MODE_PROMPTS = {
@@ -31,6 +28,8 @@ Choose one decision per item:
 Default to keep or unsure. Use cut rarely.
 Return JSON only: {"decisions":[{"id":"...","decision":"keep","reason":"..."}]}`,
 };
+
+export const DEFAULT_REVIEW_PROMPTS = MODE_PROMPTS;
 
 export function parseJudgeResponse(text) {
   const raw = String(text || "").trim();
@@ -88,6 +87,7 @@ export function issueJudgePayload(issue, operations = []) {
   return {
     id: issue.id,
     type: issue.type,
+    scripture: !!(issue.scripture || issue.strict),
     spoken: String(issue.spokenText || "").replace(/^\s*[—-]\s*$/, "").trim(),
     expected: String(issue.expectedText || "").replace(/^\s*[—-]\s*$/, "").trim(),
     before: nearbyWords(operations, issue, -1),
@@ -165,6 +165,9 @@ function overlappingManuscript(operations = [], issue) {
 }
 
 export function inferKeepable(issue, mode = "natural", operations = []) {
+  if (issue?.scripture || issue?.strict) {
+    return looksLikeAsrGlitch(issue.spokenText, issue.expectedText);
+  }
   if (!issue || issue.type === "missing" || issue.type === "repeat") return false;
   const spoken = String(issue.spokenText || issue.text || "");
   let expected = String(issue.expectedText || "");
@@ -198,7 +201,22 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
   const summary = { keep: 0, cut: 0, missing: 0, unsure: 0, mode: reviewMode };
   for (const issue of aligned.issues || []) {
     const judged = byId.get(issue.id);
+    const scripture = !!(issue.scripture || issue.strict);
+    if (scripture) issue.scripture = true;
     const inferredKeep = inferKeepable(issue, reviewMode, aligned.operations || []);
+    if (scripture && !looksLikeAsrGlitch(issue.spokenText, issue.expectedText)) {
+      issue.confirmedError = issue.type === "mismatch" || issue.type === "missing";
+      issue.suppressReview = false;
+      if (issue.type === "missing") issue.action = "missing";
+      else if (issue.type !== "repeat") {
+        issue.action = "cut";
+        issue.label = "经文不符，需重录";
+      }
+      issue.aiDecision = judged?.decision || "scripture";
+      issue.aiMode = reviewMode;
+      if (issue.confirmedError) summary.missing += issue.type === "missing" ? 1 : 0;
+      continue;
+    }
     if (!judged) {
       if (inferredKeep) {
         summary.keep += 1;
@@ -240,62 +258,35 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
   return summary;
 }
 
-function judgeHttpError(status, body) {
-  let message = "";
-  try {
-    message = String(JSON.parse(body)?.error?.message || "").trim();
-  } catch {
-    message = String(body || "").replace(/\s+/g, " ").trim().slice(0, 160);
-  }
-  if (status === 401 || status === 403)
-    return new Error("Groq API Key 无效，无法做 AI 校对。");
-  if (status === 429) return new Error("Groq 请求过于频繁，已跳过 AI 校对。");
-  return new Error(message || `Groq 校对失败（${status}）。`);
+function systemPromptFor(mode) {
+  const reviewMode = normalizeReviewMode(mode);
+  const settings = loadReviewSettings();
+  const custom = reviewMode === "strict" ? settings.promptStrict : settings.promptNatural;
+  const base = MODE_PROMPTS[reviewMode];
+  const scriptureRule = `
+Scripture and quoted Word of God (items with scripture=true) are NEVER optional.
+Do not mark them keep unless the spoken text is clearly the same words with only an ASR typo.
+Wrong, missing, or paraphrased scripture must be missing or cut and must block export.`;
+  return `${custom.trim() || base}\n${scriptureRule}`;
 }
 
-async function completeJudge(key, userPrompt, signal, mode = "natural") {
-  let lastError = new Error("没有可用的 Groq 校对模型。");
-  const system = MODE_PROMPTS[normalizeReviewMode(mode)];
-  for (const model of GROQ_JUDGE_MODELS) {
-    const response = await fetch(GROQ_CHAT_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-      signal,
-    });
-    const body = await response.text();
-    if (response.ok) {
-      const data = JSON.parse(body);
-      const text = data?.choices?.[0]?.message?.content || "";
-      return parseJudgeResponse(text);
-    }
-    lastError = judgeHttpError(response.status, body);
-    if (response.status !== 400 && response.status !== 404) throw lastError;
-  }
-  throw lastError;
+async function completeJudge(userPrompt, signal, mode = "natural") {
+  const text = await completeGeminiReview({
+    system: systemPromptFor(mode),
+    user: userPrompt,
+    signal,
+  });
+  return parseJudgeResponse(text);
 }
 
 export async function judgeAlignmentIssues({
-  apiKey,
   script,
   issues = [],
   operations = [],
   signal = null,
   mode = "natural",
 } = {}) {
-  const key = String(apiKey || "").trim();
-  if (!key || !issues.length) return [];
+  if (!issues.length) return [];
   const reviewMode = normalizeReviewMode(mode);
   const decisions = [];
   for (let offset = 0; offset < issues.length; offset += MAX_BATCH) {
@@ -310,7 +301,20 @@ export async function judgeAlignmentIssues({
       "Differences:",
       JSON.stringify(payload, null, 2),
     ].join("\n");
-    decisions.push(...(await completeJudge(key, userPrompt, signal, reviewMode)));
+    decisions.push(...(await completeJudge(userPrompt, signal, reviewMode)));
   }
   return decisions;
+}
+
+export function blockingScriptureIssues(issues = []) {
+  return (issues || []).filter((issue) => {
+    if (!(issue.scripture || issue.strict)) return false;
+    if (issue.suppressReview && looksLikeAsrGlitch(issue.spokenText, issue.expectedText))
+      return false;
+    return (
+      issue.confirmedError === true ||
+      issue.type === "missing" ||
+      issue.type === "mismatch"
+    );
+  });
 }

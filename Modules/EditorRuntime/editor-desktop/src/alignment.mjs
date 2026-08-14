@@ -277,7 +277,10 @@ function markStrictScriptWords(words = []) {
     if (!inStrictQuote && (pendingGodQuote || pendingScriptureQuote) && (opens || straight > 0)) {
       inStrictQuote = true; quoteStartedAt = index; pendingGodQuote = false; pendingScriptureQuote = false;
     }
-    if (inStrictQuote) word.strict = true;
+    if (inStrictQuote) {
+      word.strict = true;
+      word.scripture = true;
+    }
     const closesCurly = hasCloseQuote(word.display);
     const closesStraight = inStrictQuote && straight >= 2;
     if (inStrictQuote && (closesCurly || closesStraight)) { inStrictQuote = false; quoteStartedAt = -1; }
@@ -988,6 +991,7 @@ export function alignScript({ segments, script, duration = 0 }) {
             ? "high"
             : "medium",
       strict: strictGroup,
+      scripture: strictGroup,
       confirmedCut,
       confirmedError,
       repeatKeepLater,
@@ -1145,6 +1149,7 @@ export function buildReviewCaptions(
         id: issue.id,
         issueId: issue.id,
         type: issue.type,
+        scripture: !!issue.scripture,
         start: issue.start,
         end: Math.min(outputDuration, Math.max(issue.start + 0.12, issue.end)),
         text: cuttable || acceptable

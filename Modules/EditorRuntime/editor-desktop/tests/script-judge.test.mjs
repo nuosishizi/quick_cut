@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyJudgeDecisions,
+  blockingScriptureIssues,
   inferKeepable,
   looksLikeSamePoint,
   parseJudgeResponse,
@@ -170,6 +171,27 @@ test("natural mode keeps a spoken title expansion even without an AI id", () => 
   applyJudgeDecisions(aligned, [], "natural");
   assert.equal(aligned.issues[0].suppressReview, true);
   assert.equal(aligned.issues[0].action, "keep");
+});
+
+test("wrong scripture stays blocking and cannot be kept as a paraphrase", () => {
+  const aligned = {
+    operations: [],
+    issues: [
+      {
+        id: "verse",
+        type: "mismatch",
+        scripture: true,
+        strict: true,
+        spokenText: "God kinda dislikes this",
+        expectedText: "Lying lips are abomination to the LORD",
+        confirmedError: false,
+      },
+    ],
+  };
+  applyJudgeDecisions(aligned, [{ id: "verse", decision: "keep", reason: "close enough" }], "natural");
+  assert.equal(aligned.issues[0].suppressReview, false);
+  assert.equal(aligned.issues[0].confirmedError, true);
+  assert.equal(blockingScriptureIssues(aligned.issues).length, 1);
 });
 
 test("missing model ids leave the original alignment untouched", () => {
