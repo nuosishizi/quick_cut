@@ -1,0 +1,378 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  alignScript,
+  buildCaptions,
+  buildReviewCaptions,
+  spokenCaptionWords,
+} from "../src/alignment.mjs";
+import {
+  normalizeTranscriptTimebase,
+  recoverIncompleteSegments,
+  stitchTranscriptSegments,
+} from "../src/whisper.mjs";
+
+const textOf = (operations) =>
+  spokenCaptionWords(operations)
+    .map((word) => word.display)
+    .join(" ")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .replace(/([\-–—])\s+(?=\d)/g, "$1");
+
+test("main captions use the exact manuscript and harmless connectors do not create gaps", () => {
+  const script = "Not every prayer gets a yes from God, because His answer can be wait.";
+  const aligned = alignScript({
+    segments: [{
+      text: "Not every prayer but gets a yes from God because his answer can be wait",
+      start: 0,
+      end: 6,
+    }],
+    script,
+    duration: 6,
+  });
+  assert.equal(aligned.issues.length, 0);
+  assert.equal(buildReviewCaptions(aligned.issues, aligned.expected, 6).length, 0);
+  assert.equal(textOf(aligned.operations), script);
+  assert.ok(!textOf(aligned.operations).includes("but"));
+});
+
+test("one wrong phrase becomes one exact delete gap and later words re-anchor", () => {
+  const script =
+    "Two signs you stop and you do not brush them aside. The Lord welcomes every honest prayer and gives wisdom.";
+  const aligned = alignScript({
+    segments: [{
+      text: "Two signs you stop completely wrong repeated phrase and you do not brush them aside the Lord welcomes every honest prayer and gives wisdom",
+      start: 0,
+      end: 12,
+    }],
+    script,
+    duration: 12,
+  });
+  const later = spokenCaptionWords(aligned.operations)
+    .filter((word) => word.start > 5)
+    .map((word) => word.display)
+    .join(" ");
+  assert.match(later, /The Lord welcomes every honest prayer and gives wisdom\./);
+  assert.equal(aligned.issues.length, 1);
+  assert.match(aligned.issues[0].spokenText, /completely wrong repeated phrase/i);
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 12);
+  assert.equal(review.length, 1);
+  assert.match(review[0].text, /completely wrong repeated phrase/i);
+  assert.equal(review[0].action, "cut");
+  assert.ok(review[0].end - review[0].start < 4);
+});
+
+test("a repeated phrase is removable without turning the rest of the manuscript red", () => {
+  const aligned = alignScript({
+    segments: [{
+      text: "Blessed are they blessed are they which do hunger and thirst after righteousness for they shall be filled",
+      start: 0,
+      end: 8,
+    }],
+    script: "Blessed are they which do hunger and thirst after righteousness, for they shall be filled.",
+    duration: 8,
+  });
+  assert.equal(aligned.issues.length, 1);
+  assert.equal(aligned.issues[0].type, "repeat");
+  assert.match(textOf(aligned.operations), /^Blessed are they which do hunger/);
+  assert.match(textOf(aligned.operations), /they shall be filled\.$/);
+});
+
+test("isolated ordinary ASR omissions are recovered from the manuscript instead of being treated as proof of a missing spoken word", () => {
+  const aligned = alignScript({
+    segments: [{ text: "This is the final sentence", start: 0, end: 2 }],
+    script: "This is the important final sentence.",
+    duration: 2,
+  });
+  assert.equal(aligned.issues.some((issue) => issue.type === "missing" && issue.expectedText === "important"), false);
+  assert.match(textOf(aligned.operations), /important final sentence/);
+});
+
+test("Bible chapter and verse, punctuation and sentence breaks stay correct", () => {
+  const script =
+    "Jesus says in Matthew 24:36 that no one knows the day or hour. Are you ready?";
+  const aligned = alignScript({
+    segments: [{
+      text: "Jesus says in Matthew 24 36 that no one knows the day or hour are you ready",
+      start: 0,
+      end: 6,
+    }],
+    script,
+    duration: 6,
+  });
+  assert.equal(aligned.issues.length, 0);
+  const captions = buildCaptions(spokenCaptionWords(aligned.operations), {
+    maxWords: 4,
+    maxChars: 22,
+  });
+  assert.ok(captions.some((caption) => /Matthew\s+24:36/i.test(caption.text)));
+  assert.ok(!captions.some((caption) => /^[:;,.)!?]/.test(caption.text)));
+  assert.equal(captions.map((caption) => caption.text).join(" "), script);
+});
+
+test("sentence punctuation stays behind and no final word is orphaned into the next sentence", () => {
+  const words = [
+    ["Something", 0, 0.4],
+    ["important", 0.4, 0.8],
+    ["is", 0.8, 1.0],
+    ["missing.", 1.0, 1.35],
+    ["And", 1.42, 1.65],
+    ["number", 1.65, 1.95],
+    ["three", 1.95, 2.25],
+    ["is", 2.25, 2.45],
+    ["terrifying.", 2.45, 2.9],
+  ].map(([display, start, end]) => ({ display, start, end }));
+  const captions = buildCaptions(words, { maxWords: 3, maxChars: 14, maxLines: 2 });
+  assert.deepEqual(
+    captions.map((caption) => caption.text),
+    ["Something important is missing.", "And number three", "is terrifying."],
+  );
+  assert.ok(!captions.some((caption) => /^\s*[.,!?;:]/.test(caption.text)));
+  assert.ok(!captions.some((caption) => caption.words.length === 1));
+});
+
+test("an interrupted realtime transcript recovers later speech instead of losing all captions", () => {
+  const recovered = recoverIncompleteSegments(
+    [{ text: "The beginning remains correct and then", start: 0, end: 2.6 }],
+    "The beginning remains correct and then one word is mistaken but every later sentence still has accurate timing and remains available for alignment.",
+    9,
+  );
+  assert.ok(recovered.length > 1);
+  assert.match(
+    recovered.map((segment) => segment.text).join(" "),
+    /every later sentence still has accurate timing/i,
+  );
+  assert.ok(recovered.at(-1).end <= 9.001);
+  assert.ok(recovered.at(-1).end > 8.8);
+});
+
+test("native Whisper centisecond timestamps cannot stretch the first sentence across the video", () => {
+  const normalized = normalizeTranscriptTimebase(
+    [
+      {
+        text: "Three end time signs",
+        start: 0,
+        end: 320,
+        chunkIndex: 0,
+        chunkOffset: 0,
+        timebase: "whisper-centiseconds",
+      },
+      {
+        text: "Everyone is watching wars and disasters",
+        start: 320,
+        end: 790,
+        chunkIndex: 0,
+        chunkOffset: 0,
+        timebase: "whisper-centiseconds",
+      },
+    ],
+    12,
+  );
+  assert.deepEqual(
+    normalized.map((segment) => [segment.start, segment.end]),
+    [[0, 3.2], [3.2, 7.9]],
+  );
+  const captions = buildCaptions(
+    spokenCaptionWords(
+      alignScript({
+        segments: normalized,
+        script:
+          "Three End-Time Signs. Everyone is watching wars and disasters.",
+        duration: 12,
+      }).operations,
+    ),
+    { maxWords: 8, maxChars: 32 },
+  );
+  assert.ok(captions.length >= 2);
+  assert.ok(captions[0].end < 4);
+  assert.match(captions.at(-1).text, /wars and disasters\./);
+});
+
+test("timestamp guard repairs raw centiseconds from later overlapping windows", () => {
+  const normalized = normalizeTranscriptTimebase(
+    [
+      {
+        text: "The later paragraph remains available",
+        start: 43.9 + 120,
+        end: 43.9 + 680,
+        chunkIndex: 1,
+        chunkOffset: 43.9,
+      },
+    ],
+    90,
+  );
+  assert.ok(Math.abs(normalized[0].start - 45.1) < 0.0001);
+  assert.ok(Math.abs(normalized[0].end - 50.7) < 0.0001);
+});
+
+test("several distant reading errors stay local and the final paragraph always re-anchors", () => {
+  const script = [
+    "Hebrews 10:26-27 says: For if we sin willfully after that we have received the knowledge of the truth, there remains no more sacrifice for sins.",
+    "But a certain fearful expectation of judgment remains for those who deliberately turn away.",
+    "The Lord is merciful and gracious, slow to anger, and abundant in goodness and truth.",
+    "He welcomes every honest prayer and gives wisdom to all who ask.",
+    "Therefore do not turn away from His voice today, because every final word still matters.",
+  ].join(" ");
+  const segments = [
+    {
+      text: "Hebrews ten twenty six twenty seven says for if we sin willfully after that we have received the knowledge of the truth there remains no more sacrifice for sins",
+      start: 0,
+      end: 13,
+    },
+    {
+      text: "completely unrelated repeated words that were read by mistake",
+      start: 13,
+      end: 16,
+    },
+    {
+      text: "The Lord is merciful and gracious slow to anger and abundant in goodness and truth",
+      start: 16,
+      end: 24,
+    },
+    {
+      text: "The Lord is merciful and gracious slow to anger and abundant in goodness and truth He welcomes every honest prayer and gives wisdom to all who ask",
+      start: 24,
+      end: 35,
+    },
+    {
+      text: "Therefore do not turn away from his voice today because every final word still matters",
+      start: 35,
+      end: 43,
+    },
+  ];
+  const aligned = alignScript({ segments, script, duration: 43 });
+  const output = textOf(aligned.operations);
+  assert.match(output, /Hebrews 10:26-27 says:/);
+  assert.match(output, /He welcomes every honest prayer and gives wisdom to all who ask\./);
+  assert.match(output, /Therefore do not turn away from His voice today, because every final word still matters\.$/);
+  assert.ok(aligned.issues.some((issue) => issue.suggested));
+  assert.ok(aligned.issues.every((issue) => issue.end - issue.start < 9));
+  assert.ok(aligned.issues.every((issue) => issue.end <= 43));
+});
+
+test("a wrong phrase cannot turn all later near-ASR words into one red tail", () => {
+  const script =
+    "The Lord is good. The Lord is gracious. The Lord is faithful. The Lord is merciful. The Lord is powerful. The Lord is holy. Finally every listener receives the complete closing sentence without losing a single word.";
+  const aligned = alignScript({
+    segments: [{
+      text: "The Lord is good totally unrelated mistaken words repeated here The Lord was graciously The Lord was faithfull The Lord was mercifull The Lord was powerfull The Lord was holy Finally every listeners receives the complete closing sentences without losing one single word",
+      start: 0,
+      end: 25,
+    }],
+    script,
+    duration: 25,
+  });
+  const finalWords = spokenCaptionWords(aligned.operations)
+    .filter((word) => word.start >= 17)
+    .map((word) => word.display)
+    .join(" ");
+  assert.match(finalWords, /Finally every listener receives the complete closing sentence/);
+  assert.ok(!aligned.issues.some((issue) => issue.start < 8 && issue.end > 20));
+  assert.ok(aligned.issues.every((issue) => issue.end <= 25));
+});
+
+test("small spoken connectors are ignored while exact manuscript punctuation remains", () => {
+  const script =
+    "Jesus said in Matthew 24:36: No one knows the day or the hour. Therefore, stay ready.";
+  const aligned = alignScript({
+    segments: [{
+      text: "Jesus said in Matthew twenty four thirty six and no one knows the day or the hour but therefore stay ready",
+      start: 0,
+      end: 8,
+    }],
+    script,
+    duration: 8,
+  });
+  assert.equal(aligned.issues.length, 0);
+  assert.equal(buildReviewCaptions(aligned.issues, aligned.expected, 8).length, 0);
+  assert.equal(textOf(aligned.operations), script);
+});
+
+test("spoken clock shorthand maps to the exact manuscript time", () => {
+  const script = "Join us from 8:00 PM to 10:00 PM and learn together.";
+  const aligned = alignScript({
+    segments: [{ text: "Join us from 8 to 10 and learn together", start: 0, end: 5 }],
+    script,
+    duration: 5,
+  });
+  assert.equal(textOf(aligned.operations), script);
+  assert.equal(aligned.issues.length, 0);
+});
+
+test("meaning-preserving conversational additions become green insert decisions", () => {
+  const aligned = alignScript({
+    segments: [{ text: "Faith my friends brings hope", start: 0, end: 3 }],
+    script: "Faith brings hope.",
+    duration: 3,
+  });
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 3);
+  assert.equal(review.length, 1);
+  assert.equal(review[0].action, "insert");
+  assert.match(review[0].text, /my friends/i);
+});
+
+test("a short bounded colloquial addition is green while a later wrong reading stays red and local", () => {
+  const aligned = alignScript({
+    segments: [{
+      text: "God gives us you guys courage today completely mistaken repeated line Hope returns after the error",
+      start: 0,
+      end: 9,
+    }],
+    script: "God gives us courage today. Hope returns after the error.",
+    duration: 9,
+  });
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 9);
+  assert.ok(review.some((item) => item.action === "insert" && /you guys/i.test(item.text)));
+  assert.ok(review.some((item) => item.action === "cut" && /mistaken repeated/i.test(item.text)));
+  assert.match(textOf(aligned.operations), /Hope returns after the error\.$/);
+  assert.ok(review.every((item) => item.end - item.start < 5));
+});
+
+test("caption groups never bridge across a removable spoken error", () => {
+  const aligned = alignScript({
+    segments: [
+      { text: "Faith remains", start: 0, end: 1 },
+      { text: "wrong repeated phrase", start: 1, end: 3.2 },
+      { text: "hope returns today", start: 3.2, end: 5 },
+    ],
+    script: "Faith remains. Hope returns today.",
+    duration: 5,
+  });
+  const captions = buildCaptions(spokenCaptionWords(aligned.operations), {
+    maxWords: 10,
+    maxChars: 80,
+  });
+  assert.equal(captions.length, 2);
+  assert.equal(captions[0].text, "Faith remains.");
+  assert.equal(captions[1].text, "Hope returns today.");
+  assert.ok(captions[0].end <= 1.01);
+  assert.ok(captions[1].start >= 3.19);
+});
+
+test("overlapping recognition windows are stitched without a fake repeated word", () => {
+  const stitched = stitchTranscriptSegments([
+    {
+      text: "The Lord is merciful and",
+      start: 40,
+      end: 45,
+      chunkIndex: 0,
+    },
+    {
+      text: "and gracious slow to anger",
+      start: 43.9,
+      end: 48.5,
+      chunkIndex: 1,
+    },
+    {
+      text: "anger and abundant in goodness",
+      start: 47.4,
+      end: 52,
+      chunkIndex: 2,
+    },
+  ]);
+  assert.equal(
+    stitched.map((segment) => segment.text).join(" "),
+    "The Lord is merciful and gracious slow to anger and abundant in goodness",
+  );
+  assert.ok(stitched.every((segment, index) => index === 0 || segment.start >= stitched[index - 1].end));
+});
