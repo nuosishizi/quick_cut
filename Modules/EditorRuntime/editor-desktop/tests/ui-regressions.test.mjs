@@ -84,7 +84,10 @@ test("timeline follows the playhead, stacks overlaps, and keeps clip names visib
   assert.match(ui, /function keepPlayheadInView/);
   assert.match(ui, /function assignOverlapLanes/);
   assert.match(ui, /id="followPlayhead"/);
-  assert.match(ui, /startPlaybackAnimationLoop[\s\S]*keepPlayheadInView\("edge"\)/);
+  assert.match(ui, /startPlaybackAnimationLoop[\s\S]*keepPlayheadInView\("play"\)/);
+  assert.match(ui, /scroll\.scrollLeft = next/);
+  assert.match(ui, /function skipDeadSource/);
+  assert.match(ui, /function jumpPlaybackSource/);
   assert.match(ui, /clip-sticky/);
   assert.match(ui, /laneCount > 1/);
 });

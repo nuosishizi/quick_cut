@@ -3118,7 +3118,7 @@
             max="180"
             data-button-step="5"
             value="60"
-          /><button class="btn" id="followPlayhead" title="播放时时间线跟随播放头，类似 Premiere">跟随</button><span class="small" id="durationLabel">00:00</span>
+          /><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button><span class="small" id="durationLabel">00:00</span>
         </div>
         <div class="timelinebody">
           <div class="tracklabels" id="trackLabels"></div>
@@ -5173,6 +5173,30 @@
         );
         recomputeContentDuration();
       }
+      function skipDeadSource(source) {
+        let time = Number(source || 0);
+        const lookahead = 0.05;
+        for (let step = 0; step < 24; step += 1) {
+          const inside = (state.removals || []).find(
+            (range) => time >= range.start && time < range.end - 0.0008,
+          );
+          if (inside) {
+            time = inside.end;
+            continue;
+          }
+          const soon = (state.removals || []).find(
+            (range) => range.start >= time && range.start - time <= lookahead,
+          );
+          if (soon) {
+            time = soon.end;
+            continue;
+          }
+          break;
+        }
+        const duration = Number($("video")?.duration || state.sourceDuration || 0);
+        if (duration > 0) time = Math.min(time, Math.max(0, duration - 0.02));
+        return time;
+      }
       function mapSourceTime(time) {
         const speed = Math.max(0.05, Number(state.audio.speed || 1));
         const clips = mainClips();
@@ -7114,21 +7138,29 @@
         const layered = laneCount > 1 ? `top:${3 + lane * 27}px;height:24px;` : "";
         return `left:${start * state.zoom}px;width:${Math.max(4, (end - start) * state.zoom)}px;${layered}`;
       }
+      function playheadPinX(scroll) {
+        const width = Math.max(1, scroll.clientWidth);
+        return Math.max(72, Math.min(width * 0.3, width - 72));
+      }
       function keepPlayheadInView(mode = "edge") {
         if (state.followPlayhead === false) return;
         const scroll = $("timelineScroll");
         if (!scroll || timelineDrag) return;
         const x = Number(state.currentTime || 0) * Number(state.zoom || 60);
-        const viewLeft = scroll.scrollLeft;
         const viewWidth = Math.max(1, scroll.clientWidth);
+        const viewLeft = scroll.scrollLeft;
         const viewRight = viewLeft + viewWidth;
+        if (mode === "play") {
+          const next = Math.max(0, x - playheadPinX(scroll));
+          if (Math.abs(scroll.scrollLeft - next) > 0.4) scroll.scrollLeft = next;
+          return;
+        }
         if (mode === "center") {
           scroll.scrollLeft = Math.max(0, x - viewWidth / 2);
           return;
         }
-        const rightMargin = Math.max(36, viewWidth * 0.14);
-        if (x > viewRight - rightMargin || x < viewLeft + 8)
-          scroll.scrollLeft = Math.max(0, x - viewWidth * 0.18);
+        if (x < viewLeft + 8 || x > viewRight - 36)
+          scroll.scrollLeft = Math.max(0, x - playheadPinX(scroll));
       }
       function syncFollowPlayheadButton() {
         const button = $("followPlayhead");
@@ -7936,9 +7968,24 @@
         $("playhead").style.left = `${state.currentTime * state.zoom}px`;
         $("timecode").textContent =
           `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
-        keepPlayheadInView("edge");
+        keepPlayheadInView(state.playing ? "play" : "edge");
       }
       let playbackAnimationFrame = 0;
+      let sourceSeekGeneration = 0;
+      function jumpPlaybackSource(fromSource) {
+        const video = $("video");
+        const target = skipDeadSource(fromSource);
+        if (target <= fromSource + 0.012) return fromSource;
+        if (video.seeking) return target;
+        const token = ++sourceSeekGeneration;
+        const resume = () => {
+          if (token !== sourceSeekGeneration) return;
+          if (state.playing && video.paused) video.play().catch(() => {});
+        };
+        video.addEventListener("seeked", resume, { once: true });
+        video.currentTime = target;
+        return target;
+      }
       function startPlaybackAnimationLoop() {
         if (playbackAnimationFrame) return;
         const tick = () => {
@@ -7946,15 +7993,22 @@
             playbackAnimationFrame = 0;
             return;
           }
-          const source = Number($("video").currentTime || 0),
-            removed = state.removals.find((range) => source >= range.start && source < range.end);
-          if (removed) $("video").currentTime = removed.end;
-          else state.currentTime = mapSourceTime(source);
+          const video = $("video");
+          const source = Number(video.currentTime || 0);
+          const live = video.seeking ? skipDeadSource(source) : jumpPlaybackSource(source);
+          state.currentTime = mapSourceTime(live);
+          if (state.currentTime >= state.duration - 0.03) {
+            state.playing = false;
+            video.pause();
+            $("play").textContent = "▶";
+            playbackAnimationFrame = 0;
+            return;
+          }
           schedulePreviewRender(false);
           $("playhead").style.left = `${state.currentTime * state.zoom}px`;
           $("timecode").textContent =
             `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
-          keepPlayheadInView("edge");
+          keepPlayheadInView("play");
           playbackAnimationFrame = requestAnimationFrame(tick);
         };
         playbackAnimationFrame = requestAnimationFrame(tick);
@@ -7979,7 +8033,7 @@
         }
         state.playing = true;
         await $("video").play();
-        keepPlayheadInView("edge");
+        keepPlayheadInView("play");
         updateBeautyPreviewState();
         startPlaybackAnimationLoop();
         syncPreviewAudio();
@@ -7999,6 +8053,7 @@
         renderAll();
       };
       $("video").onseeked = () => {
+        if (state.playing && $("video").paused) $("video").play().catch(() => {});
         if (beautyIsActive() && !beautyFrameRequest)
           beautyFrameRequest = requestAnimationFrame(drawBeautyPreview);
       };
@@ -8007,17 +8062,15 @@
           beautyFrameRequest = requestAnimationFrame(drawBeautyPreview);
       };
       $("video").ontimeupdate = () => {
-        if (!state.playing) return;
-        const source = $("video").currentTime,
-          r = state.removals.find((x) => source >= x.start && source < x.end);
-        if (r) {
-          $("video").currentTime = r.end;
+        if (!state.playing || $("video").seeking) return;
+        const source = Number($("video").currentTime || 0);
+        if ((state.removals || []).some((range) => source >= range.start && source < range.end))
           return;
-        }
         state.currentTime = mapSourceTime(source);
         if (state.currentTime >= state.duration - 0.03) {
           state.playing = false;
           $("video").pause();
+          $("play").textContent = "▶";
         }
         syncPreviewAudio();
       };
