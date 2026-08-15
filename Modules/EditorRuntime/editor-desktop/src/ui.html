@@ -864,7 +864,7 @@
       }
       .clip {
         position: absolute;
-        contain: layout style;
+        contain: none;
         backface-visibility: hidden;
         top: 4px;
         height: 32px;
@@ -7096,8 +7096,14 @@
           const end = Math.max(start + 0.01, Number(item.end || start));
           let lane = 0;
           while (lane < laneEnds.length && start < laneEnds[lane] - 0.02) lane += 1;
-          if (lane === laneEnds.length) laneEnds.push(end);
-          else laneEnds[lane] = end;
+          if (lane === laneEnds.length) {
+            if (laneEnds.length >= 2) {
+              lane = laneEnds.length - 1;
+              laneEnds[lane] = Math.max(laneEnds[lane], end);
+            } else {
+              laneEnds.push(end);
+            }
+          } else laneEnds[lane] = end;
           lanes.set(item.id || `i${index}`, lane);
         }
         return { lanes, laneCount: Math.max(1, laneEnds.length) };
