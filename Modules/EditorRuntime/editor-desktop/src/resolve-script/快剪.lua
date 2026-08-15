@@ -580,7 +580,7 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
     local start_idx = tonumber(word.startIndex)
     local end_idx = tonumber(word.endIndex)
 
-    if start_idx == nil or end_idx == nil then
+    if not start_idx or not end_idx then
       local token_chars = {}
       for uchar in token:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
         table.insert(token_chars, uchar)
@@ -617,28 +617,13 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
 
     local w_start = tonumber(word.start) or segmentStart
     local w_end = tonumber(word["end"] or word.endFrame) or (w_start + 0.2)
-    local s_frame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5))
-    local e_frame = math.max(s_frame + 1, math.floor((w_end - segmentStart) * frameRate + 0.5))
-
     table.insert(result, {
       startIndex = start_idx,
       endIndex   = end_idx,
-      startFrame = s_frame,
-      endFrame   = e_frame,
+      startFrame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5)),
+      endFrame   = math.max(1, math.floor((w_end - segmentStart) * frameRate + 0.5)),
     })
   end
-
-  local prevStart = -1
-  for _, w in ipairs(result) do
-    if w.startFrame <= prevStart then
-      w.startFrame = prevStart + 1
-    end
-    if w.endFrame <= w.startFrame then
-      w.endFrame = w.startFrame + 1
-    end
-    prevStart = w.startFrame
-  end
-
   return result
 end
 
@@ -684,8 +669,8 @@ local function apply_style(comp, tool, item, style)
     tool:SetInput("Color1Blue", textB)
   end)
 
-  -- Background Box / Pill (Element 4)
   if style.backgroundEnabled then
+    -- Background Box / Pill (Element 4 & Element 2)
     local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
     local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
     local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
@@ -696,11 +681,11 @@ local function apply_style(comp, tool, item, style)
 
     set_number(tool, "SelectElement", 4)
     set_number(tool, "Enabled4", 1)
-    set_number(tool, "Element4", 2) -- 2 = Border
-    set_number(tool, "ElementShape4", 2) -- 2 = Rounded Rectangle
-    set_number(tool, "Type4", 0) -- 0 = Solid fill
+    set_number(tool, "Element4", 2)
+    set_number(tool, "ElementShape4", 2)
+    set_number(tool, "Type4", 0)
     set_number(tool, "Thickness4", 1.0)
-    set_number(tool, "Level4", 0) -- 0 = Line level
+    set_number(tool, "Level4", 0)
     set_number(tool, "Red4", bgR)
     set_number(tool, "Green4", bgG)
     set_number(tool, "Blue4", bgB)
@@ -712,93 +697,71 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "ExtendY4", extY)
     set_number(tool, "Round4", round)
     set_number(tool, "Softness4", 0)
-    pcall(function()
-      tool:SetInput("Color4Red", bgR)
-      tool:SetInput("Color4Green", bgG)
-      tool:SetInput("Color4Blue", bgB)
-    end)
-  else
-    set_number(tool, "SelectElement", 4)
-    set_number(tool, "Enabled4", 0)
-  end
-
-  -- Text Stroke / Outline (Element 2)
-  local hasStroke = (style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0)) and not style.backgroundEnabled
-  if hasStroke then
-    local strokeThick = math.max(0.035, tonumber(style.stroke) or 0.08)
-    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
-    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
-    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
 
     set_number(tool, "SelectElement", 2)
     set_number(tool, "Enabled2", 1)
-    set_number(tool, "Element2", 1) -- 1 = Text Outline
-    set_number(tool, "Type2", 0) -- 0 = Solid Color
-    set_number(tool, "Red2", sR)
-    set_number(tool, "Green2", sG)
-    set_number(tool, "Blue2", sB)
-    set_number(tool, "Alpha2", 1.0)
-    set_number(tool, "Opacity2", 1.0)
-    set_number(tool, "Thickness2", strokeThick)
-    set_number(tool, "JoinStyle2", 1) -- 1 = Round Join
-    set_number(tool, "LineStyle2", 0) -- 0 = Solid Line
+    set_number(tool, "Type2", 1) -- 1 = Text Border Box
+    set_number(tool, "Level2", 0) -- 0 = Line level
+    set_number(tool, "Red2", bgR)
+    set_number(tool, "Green2", bgG)
+    set_number(tool, "Blue2", bgB)
+    set_number(tool, "Alpha2", bgA)
+    set_number(tool, "Opacity2", bgA)
+    set_number(tool, "Extends2X", extX)
+    set_number(tool, "Extends2Y", extY)
+    set_number(tool, "ExtendHorizontal2", extX)
+    set_number(tool, "ExtendVertical2", extY)
+    set_number(tool, "Round2X", round)
+    set_number(tool, "Round2Y", round)
+    set_number(tool, "Round2", round)
     set_number(tool, "Softness2", 0)
-    set_number(tool, "SoftnessOn2", 0)
-    pcall(function()
-      tool:SetInput("Color2Red", sR)
-      tool:SetInput("Color2Green", sG)
-      tool:SetInput("Color2Blue", sB)
-      tool:SetInput("OutlineEnabled", 1)
-      tool:SetInput("OutlineThickness", strokeThick)
-      tool:SetInput("OutlineColorRed", sR)
-      tool:SetInput("OutlineColorGreen", sG)
-      tool:SetInput("OutlineColorBlue", sB)
-    end)
-  else
-    set_number(tool, "SelectElement", 2)
-    set_number(tool, "Enabled2", 0)
-    pcall(function()
-      tool:SetInput("OutlineEnabled", 0)
-    end)
-  end
 
-  -- Text Shadow (Element 3)
-  local hasShadow = style.shadowEnabled and not style.backgroundEnabled
-  if hasShadow then
-    local shR = tonumber(style.shadowColor and style.shadowColor[1]) or 0.0
-    local shG = tonumber(style.shadowColor and style.shadowColor[2]) or 0.0
-    local shB = tonumber(style.shadowColor and style.shadowColor[3]) or 0.0
+    set_number(tool, "Enabled3", 0)
+  elseif style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0) then
+    -- Text Stroke / Outline (Element 3)
+    local strokeThick = math.max(0.015, (tonumber(style.stroke) or 0.025))
+    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.08
+    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.08
+    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.08
 
     set_number(tool, "SelectElement", 3)
     set_number(tool, "Enabled3", 1)
-    set_number(tool, "Element3", 0) -- 0 = Text Fill Offset
-    set_number(tool, "Type3", 0) -- 0 = Solid Color
-    set_number(tool, "Red3", shR)
-    set_number(tool, "Green3", shG)
-    set_number(tool, "Blue3", shB)
-    set_number(tool, "Alpha3", 0.85)
-    set_number(tool, "Opacity3", 0.85)
-    set_number(tool, "Softness3", 0.02)
-    set_number(tool, "SoftnessOn3", 1)
-    set_number(tool, "OffsetX3", 0.005)
-    set_number(tool, "OffsetY3", -0.005)
-    set_number(tool, "Position3X", 0.005)
-    set_number(tool, "Position3Y", -0.005)
-    pcall(function()
-      tool:SetInput("Color3Red", shR)
-      tool:SetInput("Color3Green", shG)
-      tool:SetInput("Color3Blue", shB)
-      tool:SetInput("ShadowEnabled", 1)
-      tool:SetInput("ShadowColorRed", shR)
-      tool:SetInput("ShadowColorGreen", shG)
-      tool:SetInput("ShadowColorBlue", shB)
-    end)
-  else
-    set_number(tool, "SelectElement", 3)
+    set_number(tool, "Type3", 1) -- 1 = Outline / Border
+    set_number(tool, "Red3", sR)
+    set_number(tool, "Green3", sG)
+    set_number(tool, "Blue3", sB)
+    set_number(tool, "Alpha3", 1.0)
+    set_number(tool, "Opacity3", 1.0)
+    set_number(tool, "Thickness3", strokeThick)
+    set_number(tool, "JoinStyle3", 1) -- 1 = Round Join
+    set_number(tool, "Softness3", 0)
+
+    set_number(tool, "Enabled4", 0)
+    set_number(tool, "Enabled2", 0)
+  elseif style.shadowEnabled then
+    -- Text Shadow (Element 4)
+    local shR = tonumber(style.shadowColor and style.shadowColor[1]) or 0.0
+    local shG = tonumber(style.shadowColor and style.shadowColor[2]) or 0.0
+    local shB = tonumber(style.shadowColor and style.shadowColor[3]) or 0.0
+    set_number(tool, "SelectElement", 4)
+    set_number(tool, "Enabled4", 1)
+    set_number(tool, "Element4", 1) -- 1 = Shadow
+    set_number(tool, "Type4", 0)
+    set_number(tool, "Red4", shR)
+    set_number(tool, "Green4", shG)
+    set_number(tool, "Blue4", shB)
+    set_number(tool, "Alpha4", 0.85)
+    set_number(tool, "Opacity4", 0.85)
+    set_number(tool, "Softness4", 0.02)
+    set_number(tool, "OffsetX4", 0.005)
+    set_number(tool, "OffsetY4", -0.005)
+
     set_number(tool, "Enabled3", 0)
-    pcall(function()
-      tool:SetInput("ShadowEnabled", 0)
-    end)
+    set_number(tool, "Enabled2", 0)
+  else
+    set_number(tool, "Enabled4", 0)
+    set_number(tool, "Enabled3", 0)
+    set_number(tool, "Enabled2", 0)
   end
 
   local plain = tostring(item.text or "")
@@ -811,48 +774,27 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
-local function apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
-  if not templateTool then return end
-
-  local conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
-  local cls = conn and conn:GetTool()
-  if not cls then
-    pcall(function() templateTool.StyledText:AddModifier("CharacterLevelStyling", "CharacterLevelStyling") end)
-    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
-    cls = conn and conn:GetTool()
-  end
-  if not cls then
-    pcall(function() templateTool:AddModifier("StyledText", "CharacterLevelStyling") end)
-    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
-    cls = conn and conn:GetTool()
-  end
+local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+  local cls = clsTool or (comp and comp:FindTool("CharacterLevelStyling1"))
   if not cls then return end
 
   pcall(function() cls:SetInput("Text", plainText) end)
   pcall(function() cls:SetInput("StyledText", plainText) end)
 
-  local splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-  local spline = splineConn and splineConn:GetTool()
-  if not spline then
-    pcall(function() cls:AddModifier("CharacterLevelStyling", "BezierSpline") end)
-    splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-    spline = splineConn and splineConn:GetTool()
-  end
+  local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+  local spline = conn and conn:GetTool()
+  if not spline then return end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
   local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
   if not wordTiming or #wordTiming == 0 then return end
 
-  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 0.33
-  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.85
-  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 1.0
+  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
+  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
+  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
 
-  local keyframes = {}
-
-  -- If speech doesn't start at frame 0, initialize frame 0 to empty (base color)
-  local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
-  if firstStart > 0 then
-    keyframes[0] = {
+  local keyframes = {
+    [0] = {
       0,
       Value = {
         __ctor = "StyledText",
@@ -860,11 +802,9 @@ local function apply_native_cls_keyframes(comp, templateTool, caption, plainText
         Flags = { StepIn = true, LockedY = true, __flags = 256 }
       }
     }
-  end
+  }
 
-  local totalWords = #wordTiming
-  for i = 1, totalWords do
-    local word = wordTiming[i]
+  for i, word in ipairs(wordTiming) do
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
     local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 5))
 
@@ -884,38 +824,17 @@ local function apply_native_cls_keyframes(comp, templateTool, caption, plainText
       }
     }
 
-    if i < totalWords then
-      local nextWord = wordTiming[i + 1]
-      local nextStart = math.max(sFrame + 1, tonumber(nextWord.startFrame) or (sFrame + 1))
-      -- If there is a distinct pause between words (> 2 frames), turn off highlight during pause
-      if nextStart - eFrame > 2 then
-        keyframes[eFrame] = {
-          eFrame,
-          Value = {
-            __ctor = "StyledText",
-            Array = {},
-            Flags = { StepIn = true, LockedY = true, __flags = 256 }
-          }
-        }
-      end
-    else
-      -- Last word: turn off highlight when the last word finishes
-      keyframes[eFrame] = {
-        eFrame,
-        Value = {
-          __ctor = "StyledText",
-          Array = {},
-          Flags = { StepIn = true, LockedY = true, __flags = 256 }
-        }
+    keyframes[eFrame] = {
+      eFrame,
+      Value = {
+        __ctor = "StyledText",
+        Array = {},
+        Flags = { StepIn = true, LockedY = true, __flags = 256 }
       }
-    end
+    }
   end
 
-  if spline then
-    pcall(function() spline:SetKeyFrames(keyframes, true) end)
-  else
-    pcall(function() cls:SetKeyFrames(keyframes) end)
-  end
+  pcall(function() spline:SetKeyFrames(keyframes) end)
 end
 
 local function set_clip_span(item, start_frame, end_frame, root)
@@ -1259,9 +1178,6 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
   local placed = 0
   local hasPreset = presetSettings ~= nil and type(presetSettings) == "table"
 
-  local fnSetInputValues = nil
-  local fnApplyWordTiming = nil
-
   for index, item in ipairs(timelineItems) do
     local caption = captions[index] or {}
     local plainText = tostring(caption.text or "")
@@ -1271,34 +1187,28 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          -- 1. Remove AutoSubs Macro if present to ensure 100% pure native TextPlus
-          local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
-          if autosubsTool then
-            pcall(function() autosubsTool:Delete() end)
-          end
-
-          -- 2. Find or add native TextPlus
-          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
-          if not templateTool then
-            pcall(function() templateTool = comp:AddTool("TextPlus") end)
-          end
-
+          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
+          local clsTool = comp:FindTool("CharacterLevelStyling1")
           local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+          local autosubsTool = comp:FindTool("AutoSubs")
 
-          -- 3. Direct connect TextPlus -> MediaOut1
+          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText
+          if clsTool and templateTool then
+            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          end
+
+          -- 2. Direct connect Template output to MediaOut1 so MediaOut always renders pristine Text+
           if mediaOut and templateTool then
             pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
           end
 
-          -- 4. Apply full pristine styling (Yellow text, Thick black stroke, shadow)
+          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
 
-          -- 5. Directly attach CharacterLevelStyling and inject frame-accurate, word-by-word highlight keyframes
-          if templateTool then
-            apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
-          end
+          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
+          apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
         end
       end
       pcall(function() item:SetName(string.format("快剪字幕 %03d", index)) end)
