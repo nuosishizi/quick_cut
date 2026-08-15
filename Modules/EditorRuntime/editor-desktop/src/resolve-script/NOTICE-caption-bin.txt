@@ -1,0 +1,5 @@
+caption-bin.drb is the DaVinci Resolve Fusion Title media-pool bin
+from AutoSubs (https://github.com/tmoroney/auto-subs).
+
+MIT License
+Copyright (c) 2023 Tom Moroney

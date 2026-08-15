@@ -2454,7 +2454,8 @@
         <span class="autosave" id="autosaveState">已自动保存</span>
         <button class="btn" id="clearProjectCache">清理缓存</button>
         <button class="btn danger" id="resetProject">重置工程</button>
-        <button class="btn" id="exportResolve" title="导出达芬奇时间线和带颜色、字号、描边、换行、逐字高亮的字幕">导出达芬奇</button>
+        <button class="btn" id="sendResolve" title="把当前字幕铺到达芬奇当前时间线。需先在达芬奇点 工作区 → 脚本 → 快剪">发送到达芬奇</button>
+        <button class="btn" id="exportResolve" title="导出达芬奇时间线文件和带颜色、字号、描边、换行、逐字高亮的字幕">导出达芬奇文件</button>
         <button class="btn primary" id="exportVideo">导出视频</button>
       </header>
       <section class="workspace">
@@ -3195,7 +3196,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.2</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.3</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -3354,6 +3355,21 @@
         <div class="dialogactions">
           <button class="btn" id="captionPresetCancel">取消</button>
           <button class="btn primary" id="captionPresetConfirm">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="sendResolveModal">
+      <div class="dialog">
+        <h2>发送到达芬奇</h2>
+        <p id="sendResolveSummary">正在准备字幕任务…</p>
+        <div class="progress exportprogress" id="sendResolveProgressWrap">
+          <span id="sendResolveBar"></span>
+        </div>
+        <div class="status" id="sendResolveStatus">准备发送……</div>
+        <pre id="sendResolveLog" style="display:none;max-height:140px;overflow:auto;margin:10px 0 0;padding:8px;border-radius:8px;background:#111;color:#d8d8d8;font-size:11px;white-space:pre-wrap"></pre>
+        <div class="dialogactions">
+          <button class="btn" id="openResolveLog" type="button">打开日志</button>
+          <button class="btn" id="closeSendResolve" type="button">关闭</button>
         </div>
       </div>
     </div>
@@ -9998,6 +10014,135 @@
           );
         });
       }
+      function resolveCaptionPayload() {
+        return {
+          projectName: state.projectName || "快剪导出",
+          width: state.width,
+          height: state.height,
+          fps: state.video?.frameRate || 30,
+          captions: (state.captions || []).map((caption) => ({
+            text: caption.text,
+            start: caption.start,
+            end: caption.end,
+            words: Array.isArray(caption.words) ? caption.words : [],
+            width: caption.width || state.captionTransform?.width,
+            scale: caption.scale || state.captionTransform?.scale,
+            x: state.captionTransform?.x,
+            y: state.captionTransform?.y,
+            style: caption.style,
+          })),
+          captionStyle: state.captionStyle,
+          captionTransform: state.captionTransform,
+        };
+      }
+      function setSendResolveProgress(percent, summary, status, waiting = false, logTail = "") {
+        $("sendResolveBar").style.width = `${Math.max(0, Math.min(100, Number(percent) || 0))}%`;
+        if (summary) $("sendResolveSummary").textContent = summary;
+        if (status) $("sendResolveStatus").textContent = status;
+        $("sendResolveProgressWrap").classList.toggle("waiting", !!waiting);
+        const logBox = $("sendResolveLog");
+        if (logTail) {
+          logBox.style.display = "block";
+          logBox.textContent = logTail;
+          logBox.scrollTop = logBox.scrollHeight;
+        }
+      }
+      async function sendCaptionsToResolve() {
+        if (!(state.captions || []).some((caption) => String(caption.text || "").trim())) {
+          toast("请先做好字幕再发送到达芬奇");
+          return;
+        }
+        const button = $("sendResolve");
+        const closeButton = $("closeSendResolve");
+        const original = button.textContent;
+        const total = (state.captions || []).filter((caption) => String(caption.text || "").trim()).length;
+        let pollTimer = 0;
+        button.disabled = true;
+        closeButton.disabled = true;
+        button.textContent = "正在发送…";
+        $("sendResolveModal").classList.add("on");
+        setSendResolveProgress(8, `准备发送 ${total} 条字幕`, "正在写入任务…", true);
+        try {
+          await nativeCall("installResolveLink");
+          const refreshProgress = async () => {
+            try {
+              const progress = await nativeCall("resolveSendProgress");
+              if (!progress) return;
+              if (!progress.listening && progress.phase !== "writing" && progress.phase !== "done") {
+                setSendResolveProgress(
+                  Math.max(8, Number(progress.percent) || 8),
+                  "达芬奇还没开始接收",
+                  "请打开工程和时间线，点「工作区 → 脚本 → 快剪」。点过一次后进度会继续走。",
+                  true,
+                );
+                return;
+              }
+              if (progress.phase === "writing") {
+                setSendResolveProgress(
+                  Math.max(12, Number(progress.percent) || 12),
+                  progress.total
+                    ? `已成功 ${progress.done || 0} / ${progress.total}`
+                    : "达芬奇正在写入字幕",
+                  progress.message || "正在把 Text+ 铺到时间线…",
+                  false,
+                  progress.logTail,
+                );
+                return;
+              }
+              if (progress.phase === "done") {
+                setSendResolveProgress(
+                  100,
+                  `已发送 ${progress.done || total} 条`,
+                  progress.message || "达芬奇写入完成",
+                  false,
+                  progress.logTail,
+                );
+                return;
+              }
+              if (progress.phase === "error") {
+                setSendResolveProgress(
+                  100,
+                  "发送失败",
+                  progress.message || progress.error || "达芬奇写入失败",
+                  false,
+                  progress.logTail,
+                );
+                return;
+              }
+              setSendResolveProgress(
+                Math.max(16, Number(progress.percent) || 16),
+                progress.listening ? "达芬奇已连接" : "等待达芬奇",
+                progress.message || "等待写入…",
+                progress.phase === "waiting" || progress.phase === "idle",
+              );
+            } catch {
+              /* keep last status */
+            }
+          };
+          await refreshProgress();
+          pollTimer = window.setInterval(refreshProgress, 250);
+          const result = await nativeCall("sendToResolve", resolveCaptionPayload());
+          window.clearInterval(pollTimer);
+          pollTimer = 0;
+          await refreshProgress();
+          const extra = result.warning ? `，${result.warning}` : "";
+          setSendResolveProgress(100, `已发送 ${result.count} 条字幕`, `已铺到达芬奇当前时间线${extra}`);
+          toast(`已发送 ${result.count} 条字幕到达芬奇`);
+        } catch (error) {
+          if (pollTimer) window.clearInterval(pollTimer);
+          let tail = "";
+          try {
+            tail = (await nativeCall("resolveSendProgress"))?.logTail || "";
+          } catch {}
+          setSendResolveProgress(100, "发送失败", error.message, false, tail);
+          toast(error.message);
+        } finally {
+          if (pollTimer) window.clearInterval(pollTimer);
+          button.disabled = false;
+          closeButton.disabled = false;
+          button.textContent = original;
+        }
+      }
       async function exportResolveTimeline() {
         if (!state.video?.path) {
           toast("请先导入视频");
@@ -10597,6 +10742,13 @@
         );
       };
       $("exportVideo").onclick = openExportSettings;
+      $("sendResolve").onclick = sendCaptionsToResolve;
+      $("openResolveLog").onclick = () => nativeCall("revealResolveLog").catch((error) => toast(error.message));
+      $("closeSendResolve").onclick = () => $("sendResolveModal").classList.remove("on");
+      $("sendResolveModal").onclick = (event) => {
+        if (event.target === $("sendResolveModal") && !$("closeSendResolve").disabled)
+          $("sendResolveModal").classList.remove("on");
+      };
       $("exportResolve").onclick = exportResolveTimeline;
       $("exportSettingsCancel").onclick = () =>
         $("exportSettingsModal").classList.remove("on");

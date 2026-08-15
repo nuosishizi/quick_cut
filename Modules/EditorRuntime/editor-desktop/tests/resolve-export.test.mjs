@@ -17,6 +17,9 @@ import {
   resolveTimebase,
   wrapCaptionText,
   writeResolveTimeline,
+  buildResolveCaptionCues,
+  applyCaptionTextCase,
+  isCaptionWordMotion,
 } from "../src/resolve-export.mjs";
 
 test("kept source segments skip removed rereads", () => {
@@ -310,4 +313,55 @@ test("drop-frame rates stay on a Resolve-friendly timebase", () => {
   assert.equal(fcpxTime(1, timebase), "30030/30000s");
   assert.match(fileUrl("/tmp/a b.mp4"), /a%20b\.mp4/);
   assert.equal(normalizeTimelineClips({ clips: [] , sourceDuration: 0 }).length, 0);
+});
+
+test("Resolve send cues match preview highlight, wrap, and word motion", () => {
+  assert.equal(isCaptionWordMotion("word-pop"), true);
+  assert.equal(applyCaptionTextCase("why I", "title"), "Why I");
+  const wrapped = buildResolveCaptionCues(
+    {
+      text: "doesn't it feel like",
+      start: 0,
+      end: 2,
+      words: [
+        { display: "doesn't", start: 0, end: 0.4 },
+        { display: "it", start: 0.4, end: 0.7 },
+        { display: "feel", start: 0.7, end: 1.2 },
+        { display: "like", start: 1.2, end: 2 },
+      ],
+    },
+    {
+      width: 1080,
+      height: 1920,
+      captionStyle: { fontSize: 58, highlightEnabled: true, animation: "word-pop" },
+      captionTransform: { width: 280, y: 538 },
+    },
+  );
+  assert.ok(wrapped.length >= 3);
+  assert.ok(wrapped.some((cue) => cue.text.includes("\n") || cue.runs.some((run) => run.text.includes("\n"))));
+  const active = wrapped[2];
+  assert.equal(active.runs.some((run) => run.grow && run.highlight), true);
+  const linePulse = buildResolveCaptionCues(
+    {
+      text: "doesn't it feel like",
+      start: 0,
+      end: 2,
+      words: [
+        { display: "doesn't", start: 0, end: 0.4 },
+        { display: "it", start: 0.4, end: 0.7 },
+        { display: "feel", start: 0.7, end: 1.2 },
+        { display: "like", start: 1.2, end: 2 },
+      ],
+    },
+    {
+      width: 1080,
+      height: 1920,
+      captionStyle: { fontSize: 58, highlightEnabled: true, animation: "line-pulse" },
+      captionTransform: { width: 860, y: 538 },
+    },
+  );
+  const second = linePulse[1];
+  const hotWords = second.runs.filter((run) => run.highlight).map((run) => run.text).join("");
+  assert.match(hotWords, /doesn't/);
+  assert.match(hotWords, /it/);
 });

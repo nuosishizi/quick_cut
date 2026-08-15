@@ -135,12 +135,28 @@ export function normalizeCaptionStyle(style = {}, transform = {}, canvas = {}) {
     fontSize,
     fontWeight: Number(style.fontWeight || 800),
     fontItalic: !!style.fontItalic,
+    fontUnderline: !!style.fontUnderline,
+    textCase: String(style.textCase || "none"),
     color: String(style.color || "#ffffff"),
+    highlight: String(style.highlight || "#ffd21f"),
+    highlightEnabled: style.highlightEnabled !== false,
+    animation: String(style.animation || "fade"),
     stroke: Math.max(0, Number(style.stroke || 0)),
     strokeColor: String(style.strokeColor || "#000000"),
     shadow: Math.max(0, Number(style.shadow || 0)),
     shadowColor: String(style.shadowColor || "#000000"),
+    shadowOpacity: Number(style.shadowOpacity ?? 0.8),
+    shadowBlur: Number(style.shadowBlur || 0),
+    shadowDistance: Number(style.shadowDistance ?? style.shadow ?? 0),
+    shadowAngle: Number(style.shadowAngle ?? 45),
+    glow: Math.max(0, Number(style.glow || 0)),
+    glowColor: String(style.glowColor || style.color || "#ffffff"),
+    backgroundEnabled: !!style.backgroundEnabled,
+    background: String(style.background || "#000000"),
+    backgroundOpacity: Number(style.backgroundOpacity ?? 0.7),
+    backgroundMode: String(style.backgroundMode || "block"),
     textAlign: String(style.textAlign || "center"),
+    verticalAlign: String(style.verticalAlign || "middle"),
     lineHeight: Number(style.lineHeight || 1.15),
     letterSpacing: Number(style.letterSpacing || 0),
     wordSpacing: Number(style.wordSpacing || 0),
@@ -304,7 +320,7 @@ function wordsWithWrap(caption, styled) {
   return marked.length ? marked : words;
 }
 
-function captionHighlightEnabled(caption, input) {
+export function captionHighlightEnabled(caption, input) {
   return (input.captionStyle?.highlightEnabled ?? caption.style?.highlightEnabled) !== false;
 }
 
@@ -350,6 +366,238 @@ export function captionCueWindows(caption, input = {}) {
       return { start, end, styled, highlight, activeIndex: index, words, animation };
     })
     .filter(Boolean);
+}
+
+export function applyCaptionTextCase(text, textCase) {
+  const value = String(text ?? "");
+  const mode = String(textCase || "none");
+  if (mode === "upper") return value.toUpperCase();
+  if (mode === "lower") return value.toLowerCase();
+  if (mode === "title") {
+    return value.replace(/(\S+)/g, (word) => {
+      const chars = [...word];
+      if (!chars.length) return word;
+      return chars[0].toLocaleUpperCase() + chars.slice(1).join("").toLocaleLowerCase();
+    });
+  }
+  return value;
+}
+
+export function isCaptionWordMotion(animation) {
+  const name = String(animation || "");
+  return (
+    name === "karaoke" ||
+    name === "typewriter" ||
+    name.startsWith("word-") ||
+    name === "underline" ||
+    name === "outline-active" ||
+    name === "line-pulse"
+  );
+}
+
+export function captionWordGap(left, right) {
+  if (!right) return "";
+  if (
+    /[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]$/.test(left) ||
+    /^[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(right)
+  ) {
+    return "";
+  }
+  return " ";
+}
+
+function activeLineIndices(words, activeIndex) {
+  const hot = new Set();
+  if (activeIndex < 0 || !words[activeIndex]) return hot;
+  let start = activeIndex;
+  while (start > 0 && !words[start - 1]?.breakAfter) start -= 1;
+  for (let index = start; index < words.length; index += 1) {
+    hot.add(index);
+    if (words[index].breakAfter) break;
+  }
+  return hot;
+}
+
+function pushCaptionRun(runs, text, flags) {
+  if (!text) return;
+  const last = runs[runs.length - 1];
+  if (
+    last &&
+    last.highlight === flags.highlight &&
+    last.grow === flags.grow &&
+    last.underline === flags.underline
+  ) {
+    last.text += text;
+    return;
+  }
+  runs.push({
+    text,
+    highlight: !!flags.highlight,
+    grow: !!flags.grow,
+    underline: !!flags.underline,
+  });
+}
+
+export function utf8Length(text) {
+  return [...String(text ?? "")].length;
+}
+
+export function resolveCaptionEffect(animation, options = {}) {
+  const name = String(animation || "fade");
+  const highlightOn = options.highlightEnabled !== false;
+  const effect = {
+    highlightStyle: 0,
+    keepPast: name === "karaoke",
+    hideFuture: name === "typewriter",
+    motion: "none",
+    wordLevel: false,
+  };
+  if (name === "outline-active") effect.highlightStyle = 1;
+  else if (name === "underline") effect.highlightStyle = 1;
+  else if (name === "word-pill" || name === "word-box" || name === "word-ring") effect.highlightStyle = 3;
+  else if (name === "glow" || name === "neon-pulse" || name === "word-gradient") effect.highlightStyle = 2;
+  if (
+    name === "word-pop" ||
+    name === "pop" ||
+    name === "zoom" ||
+    name === "word-bounce" ||
+    name === "word-squash"
+  ) {
+    effect.motion = "pop";
+    effect.wordLevel = true;
+  } else if (
+    name === "word-lift" ||
+    name === "word-rise" ||
+    name === "rise" ||
+    name === "word-wave"
+  ) {
+    effect.motion = "slide";
+    effect.wordLevel = true;
+  } else if (name === "fade" || name === "typewriter") {
+    effect.motion = "fade";
+    effect.wordLevel = name === "typewriter";
+  }
+  if (name.startsWith("word-") || name === "karaoke" || name === "typewriter" || name === "line-pulse") {
+    effect.wordLevel = true;
+  }
+  effect.highlightEnabled = highlightOn && (name !== "none");
+  return effect;
+}
+
+export function buildResolveCaptionItem(caption, input = {}) {
+  const styled = styledCaption(caption, input);
+  if (!styled.lines.length) return null;
+  const textCase = caption.style?.textCase || input.captionStyle?.textCase || "none";
+  const animation = captionAnimationName(caption, input);
+  const words = wordsWithWrap(caption, styled);
+  const parts = [];
+  const timing = [];
+  let charIndex = 0;
+  words.forEach((word, index) => {
+    const display = applyCaptionTextCase(word.display, textCase);
+    const startIndex = charIndex;
+    parts.push(display);
+    charIndex += utf8Length(display);
+    timing.push({
+      display,
+      startIndex,
+      endIndex: Math.max(startIndex, charIndex - 1),
+      start: Math.max(0, Number(word.start ?? styled.start) - styled.start),
+      end: Math.max(0, Number(word.end ?? styled.end) - styled.start),
+    });
+    if (word.breakAfter) {
+      parts.push("\n");
+      charIndex += 1;
+      return;
+    }
+    const next = words[index + 1];
+    if (!next) return;
+    const gap = captionWordGap(display, applyCaptionTextCase(next.display, textCase));
+    if (gap) {
+      parts.push(gap);
+      charIndex += utf8Length(gap);
+    }
+  });
+  const text = parts.join("") || applyCaptionTextCase(styled.lines.join("\n"), textCase);
+  const start = Math.max(0, Number(styled.start || 0));
+  const end = Math.max(start + 0.04, Number(styled.end || start));
+  const effect = resolveCaptionEffect(animation, {
+    highlightEnabled: captionHighlightEnabled(caption, input),
+  });
+  return {
+    text,
+    start,
+    end,
+    animation,
+    words: timing,
+    ...effect,
+  };
+}
+
+export function buildResolveCaptionCues(caption, input = {}) {
+  const windows = captionCueWindows(caption, input);
+  const textCase = caption.style?.textCase || input.captionStyle?.textCase || "none";
+  return windows
+    .map((cue) => {
+      const animation = cue.animation || "fade";
+      const highlightOn = captionHighlightEnabled(caption, input);
+      const words = cue.words || [];
+      const active = cue.activeIndex;
+      if (active < 0 || words.length < 2) {
+        const text = applyCaptionTextCase((cue.styled.lines || []).join("\n"), textCase);
+        return {
+          start: cue.start,
+          end: cue.end,
+          text,
+          runs: [{ text, highlight: false, grow: false, underline: false }],
+          animation,
+          highlight: cue.highlight,
+        };
+      }
+      const lineHot = animation === "line-pulse" ? activeLineIndices(words, active) : null;
+      const runs = [];
+      words.forEach((word, index) => {
+        if (animation === "typewriter" && index > active) return;
+        const display = applyCaptionTextCase(word.display, textCase);
+        const isActive = index === active;
+        const isPast = index < active;
+        let highlight = false;
+        if (highlightOn) {
+          if (animation === "karaoke") highlight = isActive || isPast;
+          else if (animation === "line-pulse") highlight = lineHot.has(index);
+          else highlight = isActive;
+        }
+        pushCaptionRun(runs, display, {
+          highlight,
+          grow: isActive && String(animation).startsWith("word-"),
+          underline: isActive && animation === "underline",
+        });
+        if (word.breakAfter) {
+          pushCaptionRun(runs, "\n", { highlight: false, grow: false, underline: false });
+          return;
+        }
+        const next = words[index + 1];
+        if (!next || (animation === "typewriter" && index + 1 > active)) return;
+        const gap = captionWordGap(display, applyCaptionTextCase(next.display, textCase));
+        if (gap) {
+          pushCaptionRun(runs, gap, {
+            highlight: animation === "karaoke" && highlightOn && (isActive || isPast),
+            grow: false,
+            underline: false,
+          });
+        }
+      });
+      const text = runs.map((run) => run.text).join("");
+      return {
+        start: cue.start,
+        end: cue.end,
+        text,
+        runs: runs.length ? runs : [{ text, highlight: false, grow: false, underline: false }],
+        animation,
+        highlight: cue.highlight,
+      };
+    })
+    .filter((cue) => String(cue.text || "").trim());
 }
 
 function cueWordLines(cue) {

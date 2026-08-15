@@ -164,6 +164,25 @@ test("DaVinci Resolve timeline export is wired", () => {
   assert.match(main, /writeResolveTimeline/);
 });
 
+test("DaVinci Resolve live send is wired", () => {
+  assert.match(ui, /id="sendResolve"/);
+  assert.match(ui, /function sendCaptionsToResolve\(\)/);
+  assert.match(ui, /sendToResolve/);
+  assert.match(ui, /工作区 → 脚本 → 快剪/);
+  assert.match(ui, /id="sendResolveModal"/);
+  assert.match(ui, /id="sendResolveLog"/);
+  assert.match(ui, /resolveSendProgress/);
+  assert.match(ui, /已成功/);
+  assert.match(main, /installResolveLink/);
+  assert.match(main, /resolveLinkStatus/);
+  assert.match(main, /resolveSendProgress/);
+  assert.match(main, /revealResolveLog/);
+  assert.match(main, /sendToResolve/);
+  assert.doesNotMatch(ui, /id="resolveTrackSelect"/);
+  assert.doesNotMatch(ui, /id="startSendResolve"/);
+  assert.doesNotMatch(main, /resolveTimelineInfo/);
+});
+
 test("export ends at visible production material instead of the timeline ruler", () => {
   const dynamicEnd = ui.match(
     /function dynamicContentEnd\(\) \{([\s\S]*?)\n\s*\}\n\s*function trackIsVisible/,

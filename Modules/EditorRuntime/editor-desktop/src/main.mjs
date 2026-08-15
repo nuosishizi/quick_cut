@@ -62,6 +62,13 @@ import {
 } from "./ai-settings.mjs";
 import { blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
 import { writeResolveTimeline } from "./resolve-export.mjs";
+import {
+  installResolveLink,
+  resolveLinkStatus,
+  resolveSendProgress,
+  revealResolveLog,
+  sendToResolve,
+} from "./resolve-link.mjs";
 import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
 import { buildCaptions, spokenCaptionWords } from "./alignment.mjs";
 import {
@@ -362,7 +369,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.2" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.3" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1255,7 +1262,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.2",
+    version: "2.7.3",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1422,6 +1429,15 @@ nativeMethods = {
     chooseOutput(defaultName || "快剪-达芬奇.fcpxml", "fcpxml"),
   ),
   exportResolveTimeline: safe((input) => writeResolveTimeline(input || {})),
+  installResolveLink: safe(() => installResolveLink()),
+  resolveLinkStatus: safe(() => resolveLinkStatus()),
+  resolveSendProgress: safe(() => resolveSendProgress()),
+  revealResolveLog: safe(() => {
+    const logPath = revealResolveLog();
+    revealFile(logPath);
+    return logPath;
+  }),
+  sendToResolve: safe((input) => sendToResolve(input || {})),
   startExport: safe((config) => startExport(config)),
   exportHardware: safe(() => detectExportHardware()),
   exportStatus: safe((jobId) => exportStatus(jobId)),
