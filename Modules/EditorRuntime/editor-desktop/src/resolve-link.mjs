@@ -354,6 +354,26 @@ export function buildResolveSendJob(input = {}) {
             break;
           }
         }
+        if (matchStart < 0) {
+          const cleanToken = token.replace(/^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$/g, "");
+          if (cleanToken.length > 0) {
+            const cleanChars = [...cleanToken];
+            for (let i = cursor; i <= textChars.length - cleanChars.length; i++) {
+              let matches = true;
+              for (let j = 0; j < cleanChars.length; j++) {
+                if (textChars[i + j].toLowerCase() !== cleanChars[j].toLowerCase()) {
+                  matches = false;
+                  break;
+                }
+              }
+              if (matches) {
+                matchStart = i;
+                break;
+              }
+            }
+          }
+        }
+
         let startIdx = 0;
         let endIdx = 0;
         if (matchStart >= 0) {

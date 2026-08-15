@@ -820,7 +820,11 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
 
   local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
   local spline = conn and conn:GetTool()
-  if not spline then return end
+  if not spline then
+    pcall(function() cls:AddModifier("CharacterLevelStyling", "BezierSpline") end)
+    conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+    spline = conn and conn:GetTool()
+  end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
   local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
@@ -1250,61 +1254,44 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
+          -- 1. Remove AutoSubs Macro if present to ensure 100% pure native TextPlus
           local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
-          if not autosubsTool then
-            local tools = comp:GetToolList(false, "MacroOperator")
-            if tools and tools[1] then autosubsTool = tools[1] end
+          if autosubsTool then
+            pcall(function() autosubsTool:Delete() end)
           end
 
-          if autosubsTool and hasPreset then
-            pcall(function() autosubsTool:SetInput("Text", plainText) end)
-            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
+          -- 2. Find or add native TextPlus
+          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
+          if not templateTool then
+            pcall(function() templateTool = comp:AddTool("TextPlus") end)
+          end
 
-            if not fnSetInputValues then
-              local setVals = autosubsTool:GetData("SetInputValues")
-              if setVals and type(setVals) == "string" then
-                local okVal, fn = pcall(loadstring(setVals))
-                if okVal and type(fn) == "function" then
-                  fnSetInputValues = fn
-                end
-              end
-            end
-            if fnSetInputValues then
-              pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
-            end
+          -- 3. Find or add native CharacterLevelStyling
+          local clsTool = comp:FindTool("CharacterLevelStyling1") or comp:FindToolByID("CharacterLevelStyling")
+          if not clsTool then
+            pcall(function() clsTool = comp:AddTool("CharacterLevelStyling") end)
+          end
 
-            if not fnApplyWordTiming then
-              local applyWT = autosubsTool:GetData("ApplyWordTiming")
-              if applyWT and type(applyWT) == "string" then
-                local okWT, fn = pcall(loadstring(applyWT))
-                if okWT and type(fn) == "function" then
-                  fnApplyWordTiming = fn
-                end
-              end
-            end
+          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
 
-            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
-            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-            if fnApplyWordTiming then
-              pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
-            end
-          else
-            local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
-            local clsTool = comp:FindTool("CharacterLevelStyling1")
-            local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+          -- 4. Direct connect CharacterLevelStyling -> TextPlus.StyledText
+          if clsTool and templateTool then
+            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          end
 
-            if clsTool and templateTool then
-              pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
-            end
-            if mediaOut and templateTool then
-              pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
-            end
-            if templateTool then
-              apply_style(comp, templateTool, caption, style)
-            end
-            if clsTool then
-              apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
-            end
+          -- 5. Direct connect TextPlus -> MediaOut1
+          if mediaOut and templateTool then
+            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
+          end
+
+          -- 6. Apply full pristine styling (Yellow text, Thick black stroke, shadow)
+          if templateTool then
+            apply_style(comp, templateTool, caption, style)
+          end
+
+          -- 7. Directly inject frame-accurate, word-by-word highlight keyframes
+          if clsTool then
+            apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
           end
         end
       end
