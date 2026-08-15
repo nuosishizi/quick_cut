@@ -277,6 +277,25 @@ test("sentence punctuation stays behind and no final word is orphaned into the n
   assert.ok(!captions.some((caption) => caption.words.length === 1));
 });
 
+test("caption line mode changes how matching groups a sentence", () => {
+  const words = [
+    ["We're", 0, 0.2],
+    ["treating", 0.2, 0.5],
+    ["as", 0.5, 0.65],
+    ["ordinary", 0.65, 1.0],
+    ["something", 1.0, 1.35],
+    ["He", 1.35, 1.5],
+    ["calls", 1.5, 1.75],
+    ["holy.", 1.75, 2.1],
+  ].map(([display, start, end]) => ({ display, start, end }));
+  const one = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 1 });
+  const two = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 2 });
+  const multi = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 6 });
+  assert.ok(one.length >= two.length);
+  assert.ok(multi.length <= two.length);
+  assert.ok(one.every((caption) => caption.text.length <= 18 || caption.words.length === 1));
+});
+
 test("an interrupted realtime transcript recovers later speech instead of losing all captions", () => {
   const recovered = recoverIncompleteSegments(
     [{ text: "The beginning remains correct and then", start: 0, end: 2.6 }],

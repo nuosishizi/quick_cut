@@ -175,6 +175,20 @@ test("long captions wrap to two lines and keep font size in ASS", () => {
   );
   assert.match(ass, /\\N/);
   assert.match(ass, /Style: Default,Helvetica,58,/);
+  const single = wrapCaptionText(
+    "We're treating as ordinary something He calls holy.",
+    { ...style, captionLines: 1 },
+    1080,
+    720,
+  );
+  assert.equal(single.length, 1);
+  const many = wrapCaptionText(
+    "We're treating as ordinary something He calls holy.",
+    { ...style, captionLines: "multi" },
+    1080,
+    280,
+  );
+  assert.ok(many.length >= 3, `expected multi-line wrap, got ${JSON.stringify(many)}`);
   const srt = buildResolveSrt(
     [{ text: "We're treating as ordinary something He calls holy.", start: 0, end: 3 }],
     { width: 1080, height: 1920, captionStyle: style, captionTransform: { width: 720 } },

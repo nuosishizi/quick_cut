@@ -198,6 +198,11 @@ export function normalizeCaptionStyle(style = {}, transform = {}, canvas = {}) {
     backgroundHeight: Number(style.backgroundHeight ?? style.padding ?? 14),
     padding: Number(style.padding ?? style.backgroundWidth ?? 14),
     radius: Number(style.radius ?? 12),
+    captionLines: style.captionLines === 1 || style.captionLines === "1"
+      ? 1
+      : style.captionLines === 0 || style.captionLines === "multi"
+        ? "multi"
+        : 2,
     textAlign: String(style.textAlign || "center"),
     verticalAlign: String(style.verticalAlign || "middle"),
     lineHeight: Number(style.lineHeight || 1.15),
@@ -217,7 +222,7 @@ export function wrapCaptionText(text, style = {}, canvasWidth = 1080, boxWidth =
     { text, width: boxWidth, scale: 1 },
     style,
     canvasWidth,
-    { maxLines: 2 },
+    { maxLines: style.captionLines ?? 2 },
   );
   return (layout.lines || []).map((line) => String(line || "").trim()).filter(Boolean);
 }

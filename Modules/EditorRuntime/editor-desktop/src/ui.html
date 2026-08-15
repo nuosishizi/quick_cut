@@ -2021,8 +2021,10 @@
       .captionobject[data-animation="word-wave"] .word.active {
         animation: wordWave 0.34s both;
       }
-      .captionobject[data-animation="line-pulse"] .caption-line {
+      .captionobject .caption-line {
         display: block;
+      }
+      .captionobject[data-animation="line-pulse"] .caption-line {
         transform-origin: center;
         transition: transform 120ms cubic-bezier(.2,.8,.2,1), opacity 120ms;
       }
@@ -2850,6 +2852,14 @@
                     <input class="range" id="lineHeight" type="range" min="80" max="250" step="5" value="115" />
                   </div>
                   <div class="field">
+                    <div class="fieldhead"><span>字幕行数</span></div>
+                    <div class="align-buttons" id="captionLinesButtons">
+                      <button class="btn" type="button" data-caption-lines="1" title="匹配和画面都保持一行">单行</button>
+                      <button class="btn active" type="button" data-caption-lines="2" title="最多两行，和现在一样">2行</button>
+                      <button class="btn" type="button" data-caption-lines="multi" title="按框宽自动换行，不限两行">多行</button>
+                    </div>
+                  </div>
+                  <div class="field">
                     <div class="fieldhead"><span>文字对齐</span></div>
                     <div class="align-buttons">
                       <button class="btn" data-text-align="left">左</button>
@@ -3604,6 +3614,7 @@
           letterSpacing: 0,
           wordSpacing: 0,
           lineHeight: 1.15,
+          captionLines: 2,
           textAlign: "center",
           verticalAlign: "middle",
           color: "#ffffff",
@@ -3689,6 +3700,18 @@
         layout: { side: 310, inspector: 300, timeline: 270, trackLabel: 132 },
       };
       const captionStyleDefaults = Object.freeze({ ...state.captionStyle });
+      function normalizeCaptionLineMode(value) {
+        const raw = String(value ?? "2").trim().toLowerCase();
+        if (raw === "1" || raw === "one" || raw === "single") return 1;
+        if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return "multi";
+        return 2;
+      }
+      function captionWrapLineLimit(value) {
+        const mode = normalizeCaptionLineMode(value);
+        if (mode === 1) return 1;
+        if (mode === "multi") return 8;
+        return 2;
+      }
       function normalizedCaptionStyle(style = {}) {
         return {
           ...captionStyleDefaults,
@@ -3698,6 +3721,7 @@
           letterSpacing: Number(style?.letterSpacing ?? captionStyleDefaults.letterSpacing),
           wordSpacing: Number(style?.wordSpacing ?? captionStyleDefaults.wordSpacing),
           lineHeight: Number(style?.lineHeight ?? captionStyleDefaults.lineHeight),
+          captionLines: normalizeCaptionLineMode(style?.captionLines ?? captionStyleDefaults.captionLines),
           stroke: Number(style?.stroke ?? captionStyleDefaults.stroke),
           shadow: Number(style?.shadow ?? captionStyleDefaults.shadow),
           shadowOpacity: Number(style?.shadowOpacity ?? captionStyleDefaults.shadowOpacity),
@@ -4320,6 +4344,7 @@
           letterSpacing: 0,
           wordSpacing: 0,
           lineHeight: 1.15,
+          captionLines: 2,
           textAlign: "center",
           verticalAlign: "middle",
             color: "#ffffff",
@@ -6508,8 +6533,8 @@
                     caption.start +
                     ((caption.end - caption.start) * (index + 1)) / list.length,
                 }));
-        const breakIndex = captionTwoLineBreak(words, state.captionTransform.width),
-          wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
+        const breaks = captionLineBreaks(words, state.captionTransform.width, state.captionStyle.captionLines);
+        const wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
             const index = localIndex + offset;
             const status =
               state.currentTime >= Number(word.end)
@@ -6520,9 +6545,17 @@
             return `<span class="word ${status}" data-start="${Number(word.start || 0)}" data-end="${Number(word.end || 0)}">${escapeHtml(word.display)}</span>`;
           })
           .join(" ");
-        const first = breakIndex > 0 ? words.slice(0, breakIndex) : words,
-          second = breakIndex > 0 ? words.slice(breakIndex) : [];
-        element.innerHTML = `<span class="textstyle-content"><span class="caption-line">${wordHtml(first)}</span>${second.length ? `<span class="caption-line">${wordHtml(second, breakIndex)}</span>` : ""}</span>`;
+        const lines = [];
+        let cursor = 0;
+        for (const at of [...breaks, words.length]) {
+          if (at <= cursor) continue;
+          lines.push({ words: words.slice(cursor, at), offset: cursor });
+          cursor = at;
+        }
+        if (!lines.length) lines.push({ words, offset: 0 });
+        element.innerHTML = `<span class="textstyle-content">${lines
+          .map((line) => `<span class="caption-line">${wordHtml(line.words, line.offset)}</span>`)
+          .join("")}</span>`;
         updateCaptionWordStates(element);
       }
       function estimatedCaptionWordWidth(display) {
@@ -6539,7 +6572,13 @@
         return units * fontSize + Math.max(0, text.length - 1) * letterSpacing;
       }
       function captionTwoLineBreak(words, requestedWidth) {
-        if (!Array.isArray(words) || words.length < 2) return -1;
+        const breaks = captionLineBreaks(words, requestedWidth, 2);
+        return breaks[0] ?? -1;
+      }
+      function captionLineBreaks(words, requestedWidth, lineMode) {
+        if (!Array.isArray(words) || words.length < 2) return [];
+        const limit = captionWrapLineLimit(lineMode ?? state.captionStyle.captionLines);
+        if (limit <= 1) return [];
         const gap = Number(state.captionStyle.wordSpacing || 0) +
             Number(state.captionStyle.fontSize || 54) * 0.28,
           padding = state.captionStyle.backgroundEnabled
@@ -6548,21 +6587,39 @@
           width = Math.max(1, Number(requestedWidth || state.width * 0.8) - padding),
           measures = words.map((word) => estimatedCaptionWordWidth(word.display)),
           total = measures.reduce((sum, value) => sum + value, 0) + gap * (words.length - 1);
-        if (total <= width) return -1;
-        let best = 1,
-          bestScore = Infinity;
-        for (let index = 1; index < words.length; index += 1) {
-          if (words.length >= 4 && (index === 1 || index === words.length - 1)) continue;
-          const left = measures.slice(0, index).reduce((sum, value) => sum + value, 0) + gap * (index - 1),
-            right = measures.slice(index).reduce((sum, value) => sum + value, 0) + gap * (words.length - index - 1),
-            overflow = Math.max(0, left - width) + Math.max(0, right - width),
-            score = overflow * 8 + Math.abs(left - right);
-          if (score < bestScore) {
-            bestScore = score;
-            best = index;
+        if (total <= width) return [];
+        if (limit === 2) {
+          let best = 1,
+            bestScore = Infinity;
+          for (let index = 1; index < words.length; index += 1) {
+            if (words.length >= 4 && (index === 1 || index === words.length - 1)) continue;
+            const left = measures.slice(0, index).reduce((sum, value) => sum + value, 0) + gap * (index - 1),
+              right = measures.slice(index).reduce((sum, value) => sum + value, 0) + gap * (words.length - index - 1),
+              overflow = Math.max(0, left - width) + Math.max(0, right - width),
+              score = overflow * 8 + Math.abs(left - right);
+            if (score < bestScore) {
+              bestScore = score;
+              best = index;
+            }
+          }
+          return [best];
+        }
+        const breaks = [];
+        let start = 0;
+        let lineWidth = 0;
+        for (let index = 0; index < words.length; index += 1) {
+          const wordWidth = measures[index];
+          const candidate = lineWidth ? lineWidth + gap + wordWidth : wordWidth;
+          if (lineWidth && candidate > width && breaks.length < limit - 1) {
+            breaks.push(index);
+            start = index;
+            lineWidth = wordWidth;
+          } else {
+            lineWidth = candidate;
           }
         }
-        return best;
+        void start;
+        return breaks;
       }
       function visualZ(key) {
         const index = state.trackOrder.indexOf(key);
@@ -6606,7 +6663,7 @@
         element.style.width = `${resolved * px}px`;
         element.style.maxWidth = "none";
         element.style.boxSizing = "border-box";
-        element.style.whiteSpace = "normal";
+        element.style.whiteSpace = captionWrapLineLimit(state.captionStyle.captionLines) <= 1 ? "nowrap" : "normal";
         element.style.overflowWrap = "normal";
         element.style.wordBreak = "normal";
       }
@@ -6651,7 +6708,9 @@
         el.style.letterSpacing = `${Number(s.letterSpacing || 0) * px}px`;
         el.style.wordSpacing = `${Number(s.wordSpacing || 0) * px}px`;
         el.style.lineHeight = String(Number(s.lineHeight || 1.15));
-        el.style.whiteSpace = "pre-line";
+        el.style.whiteSpace = captionWrapLineLimit(s.captionLines ?? state.captionStyle.captionLines) <= 1
+          ? "nowrap"
+          : "pre-line";
         el.style.textAlign = s.textAlign || "center";
         el.style.color = s.color || "#fff";
         el.style.setProperty("--active", s.highlight || s.highlightColor || "#ffd21f");
@@ -7569,6 +7628,10 @@
           $("wordSpacingOut").textContent = `${Number(s.wordSpacing || 0)}px`;
           $("lineHeight").value = Math.round(Number(s.lineHeight || 1.15) * 100);
           $("lineHeightOut").textContent = `${$("lineHeight").value}%`;
+          const lineMode = normalizeCaptionLineMode(s.captionLines);
+          document.querySelectorAll("[data-caption-lines]").forEach((button) =>
+            button.classList.toggle("active", normalizeCaptionLineMode(button.dataset.captionLines) === lineMode),
+          );
           $("fontColor").value = s.color || "#ffffff";
           $("highlightColor").value = s.highlight || "#ffd21f";
           $("highlightEnabled").checked = s.highlightEnabled !== false;
@@ -8756,6 +8819,7 @@
               duration: state.sourceDuration,
               script: $("scriptText").value,
               removals: state.removals,
+              captionLines: state.captionStyle.captionLines,
             }),
           );
           $("modelProgress").style.display = "block";
@@ -11747,6 +11811,16 @@
           if (!style) return;
           style.textAlign = button.dataset.textAlign;
           renderAll();
+        };
+      });
+      document.querySelectorAll("[data-caption-lines]").forEach((button) => {
+        button.onclick = () => {
+          const mode = normalizeCaptionLineMode(button.dataset.captionLines);
+          state.captionStyle.captionLines = mode;
+          const style = currentStyle();
+          if (style) style.captionLines = mode;
+          renderAll();
+          queueAutosave();
         };
       });
       $("fontBoldToggle").onclick = () => {

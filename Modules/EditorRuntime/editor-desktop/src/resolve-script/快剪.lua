@@ -1214,23 +1214,32 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
           local autosubsTool = comp:FindTool("AutoSubs")
 
-          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText
-          if clsTool and templateTool then
-            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          if autosubsTool and hasPreset then
+            local setVals = autosubsTool:GetData("SetInputValues")
+            if setVals and type(setVals) == "string" then
+              local okVal, fn = pcall(loadstring(setVals))
+              if okVal and type(fn) == "function" then
+                pcall(function() fn(comp, autosubsTool, presetSettings) end)
+              end
+            end
+
+            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
+            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+            local applyWT = autosubsTool:GetData("ApplyWordTiming")
+            if applyWT and type(applyWT) == "string" then
+              local okWT, fnWT = pcall(loadstring(applyWT))
+              if okWT and type(fnWT) == "function" then
+                pcall(function() fnWT(comp, autosubsTool, wordTiming) end)
+              end
+            end
+
+            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
+            pcall(function() autosubsTool:SetInput("Text", plainText) end)
           end
 
-          -- 2. Direct connect Template output to MediaOut1 so MediaOut always renders pristine Text+
-          if mediaOut and templateTool then
-            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
-          end
-
-          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
-
-          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
-          apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
         end
       end
       pcall(function() item:SetName(string.format("快剪字幕 %03d", index)) end)

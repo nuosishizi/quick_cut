@@ -27,9 +27,34 @@ export function estimatedWordWidth(word, style, fontSize, scale = 1) {
   return Math.max(fontSize * 0.25, glyphWidth + Math.max(0, chars.length - 1) * letterSpacing);
 }
 
+export function normalizeCaptionLines(value) {
+  const raw = String(value ?? "2").trim().toLowerCase();
+  if (raw === "1" || raw === "one" || raw === "single") return 1;
+  if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return 0;
+  const numeric = Number(raw);
+  if (numeric === 1) return 1;
+  if (numeric === 0 || numeric >= 3) return 0;
+  return 2;
+}
+
+export function captionWrapLineLimit(value) {
+  const mode = normalizeCaptionLines(value);
+  if (mode === 1) return 1;
+  if (mode === 0) return 8;
+  return 2;
+}
+
+export function captionMatchLineLimit(value) {
+  const mode = normalizeCaptionLines(value);
+  if (mode === 1) return 1;
+  if (mode === 0) return 6;
+  return 2;
+}
+
 export function wrapWords(text, style, maxWidth, maxLines = 2, scale = 1) {
   const words = String(text || "").split(/\s+/).filter(Boolean);
   if (!words.length) return [""];
+  const lineLimit = captionWrapLineLimit(maxLines);
   const fontSize = Math.max(10, Number(style?.fontSize || 54) * Math.max(0.2, Number(scale || 1)));
   const gap = wordGap(style, fontSize);
   const lines = [];
@@ -38,7 +63,7 @@ export function wrapWords(text, style, maxWidth, maxLines = 2, scale = 1) {
   words.forEach((word) => {
     const w = estimatedWordWidth(word, style, fontSize, scale);
     const candidate = current.length ? width + gap + w : w;
-    if (current.length && candidate > maxWidth && lines.length < Math.max(1, maxLines) - 1) {
+    if (current.length && candidate > maxWidth && lines.length < lineLimit - 1) {
       lines.push(current.join(" "));
       current = [word];
       width = w;
@@ -55,7 +80,7 @@ export function captionLayoutMetrics(caption, style, canvasWidth, layout = {}) {
   const scale = Math.max(0.2, Number(caption?.scale || 1));
   const widthScale = Math.max(0.5, Math.min(2.5, Number(style?.captionWidthScale || 1)));
   const maxWidth = Math.max(160, Math.min(canvasWidth, Number(caption?.width || canvasWidth * 0.90 * widthScale)));
-  const maxLines = Math.max(1, Math.min(2, Number(layout?.maxLines || 2)));
+  const maxLines = captionWrapLineLimit(layout?.maxLines ?? style?.captionLines ?? 2);
   const lines = wrapWords(caption?.text || "", style, maxWidth, maxLines, scale);
   return { scale, widthScale, maxWidth, maxLines, lines };
 }

@@ -71,6 +71,7 @@ import {
 } from "./resolve-link.mjs";
 import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
 import { buildCaptions, spokenCaptionWords } from "./alignment.mjs";
+import { captionMatchLineLimit } from "./text-layout.mjs";
 import {
   createProject,
   deleteProject,
@@ -841,6 +842,7 @@ async function smartFinishAnalyze(input = {}) {
     duration,
     script,
     removals: [],
+    captionLines: input.captionLines,
   });
   let aligned = await waitForScriptAnalysis(started.jobId);
   aligned = preferLaterCorrectedRepeats(aligned);
@@ -877,7 +879,11 @@ async function smartFinishAnalyze(input = {}) {
   const words = finalCaptionWords(aligned.operations || [], removals);
   const sourceFps = Math.max(24, Math.min(60, Number(info.frameRate || 30)));
   const captionEndLimit = Math.max(0.04, outputDuration - 1 / sourceFps);
-  const captions = buildCaptions(words, { maxWords: 10, maxChars: 34, maxLines: 1 })
+  const captions = buildCaptions(words, {
+    maxWords: 10,
+    maxChars: 34,
+    maxLines: captionMatchLineLimit(input.captionLines),
+  })
     .filter((caption) => caption.start < captionEndLimit)
     .map((caption) => ({
       ...caption,

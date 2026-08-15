@@ -10,7 +10,7 @@ import {
   samplesToFrames,
   waveformPeaks,
 } from "./pausecut.mjs";
-import { captionLayoutMetrics, estimatedWordWidth, normalizedFontWeight, wordGap, wrapWords } from "./text-layout.mjs";
+import { captionLayoutMetrics, captionWrapLineLimit, estimatedWordWidth, normalizedFontWeight, wordGap, wrapWords } from "./text-layout.mjs";
 import {
   defaultSupportRoot,
   fallbackFontFiles,
@@ -1090,7 +1090,13 @@ function assAnimationTags(animation, x, y, durationMs, style = {}) {
 
 function captionAssLines(caption, style, boxWidth, canvasWidth = 1080) {
   const text = spacedText(casedText(String(caption.text || ""), style.textCase), style.wordSpacing);
-  const lines = wrapWords(text, style, Math.max(80, Number(boxWidth || canvasWidth * 0.8)), 2, 1)
+  const lines = wrapWords(
+    text,
+    style,
+    Math.max(80, Number(boxWidth || canvasWidth * 0.8)),
+    captionWrapLineLimit(style.captionLines),
+    1,
+  )
     .map((line) => String(line || "").trim())
     .filter(Boolean);
   return lines.length ? lines : [text].filter(Boolean);
@@ -1112,7 +1118,7 @@ function markWrappedCaptionWords(caption, style, boxWidth) {
     words.map((word) => word.display).join(" "),
     style,
     Math.max(80, Number(boxWidth || 860)),
-    2,
+    captionWrapLineLimit(style.captionLines),
     1,
   ).map((line) => line.split(/\s+/).filter(Boolean));
   const marked = [];

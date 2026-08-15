@@ -1540,9 +1540,10 @@ function snapMatchesAfterAbandonedPrefixes(operations = [], issues = []) {
 }
 
 export function buildCaptions(expectedWords, options = {}) {
-  const maxWords = Math.max(2, Math.min(10, Number(options.maxWords || 7)));
+  const maxWords = Math.max(2, Math.min(14, Number(options.maxWords || 7)));
   const lineChars = Math.max(12, Number(options.maxChars || 28));
-  const maxChars = lineChars * Math.max(1, Math.min(2, Number(options.maxLines || 2)));
+  const lineCount = Math.max(1, Number(options.maxLines || 2));
+  const maxChars = lineChars * lineCount;
   const captions = [];
   let group = [];
   const flush = () => {

@@ -13,6 +13,7 @@ import {
   manuscriptCaptionWords,
   normalizeWord,
 } from "./alignment.mjs";
+import { captionMatchLineLimit } from "./text-layout.mjs";
 import { mediaBinary, supportRoot } from "./media.mjs";
 import { mapSourceTime, mergeRanges } from "./pausecut.mjs";
 import { extractArchive, isWindows } from "./platform.mjs";
@@ -1211,7 +1212,7 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
   const captions = buildCaptions(manuscriptCaptionWords(aligned), {
     maxWords: 10,
     maxChars: 34,
-    maxLines: 2,
+    maxLines: captionMatchLineLimit(job.captionLines),
   })
     .filter((caption) => caption.start < outputDuration)
     .map((caption) => ({
@@ -1506,6 +1507,7 @@ export function startScriptAnalysis({
   duration,
   script,
   removals = [],
+  captionLines = 2,
 }) {
   if (!canTranscribe())
     throw new Error("请先保存 Groq API Key。没有独立显卡时使用 Groq 云端识别，无需下载本地模型。");
@@ -1522,6 +1524,7 @@ export function startScriptAnalysis({
     result: null,
     child: null,
     controller: null,
+    captionLines,
   };
   analyses.set(id, job);
   const cleanup = () => {
