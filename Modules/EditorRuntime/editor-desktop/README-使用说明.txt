@@ -5,7 +5,12 @@ Windows 版：
 2. 双击项目根目录的“启动快剪.bat”，或在 PowerShell 中运行“启动快剪.ps1”。
 3. 程序会启动本地编辑器，并用 Microsoft Edge 应用窗口打开。快捷键用 Ctrl，不再使用 Command。
 4. Windows 无独立显卡时，在字幕页保存 Groq API Key，文案匹配走 Groq 云端 Whisper，无需下载 600MB 本地模型。Mac 仍可选用本地 Whisper Turbo。
-5. 导出优先使用 NVIDIA / AMD / Intel 硬件编码，没有独显时回退到 libx264。
+5. 导出先探测真实显卡：有 NVIDIA 就走 CUDA 解码 + NVENC 编码；没有再试 Intel QSV / AMD AMF；都不可用才回退 libx264。进度条会显示当前编码器。
+
+Apple Silicon 测试包：
+1. 解压「快剪-macOS-2.7.2-测试包」。
+2. 右键「启动快剪.command」选择「打开」，用包内 Bun / FFmpeg 启动，不需要先装 Node。
+3. 若要原生窗口，在已安装 Xcode 的 Mac 上运行「一键生成APP.command」，桌面会生成「快剪.app」。
 
 Apple Silicon 一次安装版：
 

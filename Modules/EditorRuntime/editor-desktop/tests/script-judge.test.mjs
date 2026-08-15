@@ -198,6 +198,47 @@ test("wrong scripture stays blocking and cannot be kept as a paraphrase", () => 
   assert.equal(blockingScriptureIssues(aligned.issues).length, 1);
 });
 
+test("natural mode cuts a reread when the model does not keep it", () => {
+  const aligned = {
+    operations: [],
+    issues: [
+      {
+        id: "echo",
+        type: "repeat",
+        spokenText: "to you",
+        expectedText: "—",
+        confirmedCut: true,
+        action: "cut",
+      },
+    ],
+  };
+  const summary = applyJudgeDecisions(aligned, [], "natural");
+  assert.equal(summary.cut, 1);
+  assert.equal(aligned.issues[0].confirmedCut, true);
+  assert.equal(aligned.issues[0].action, "cut");
+  assert.equal(aligned.issues[0].suppressReview, false);
+});
+
+test("natural mode can keep a reread if the model says keep", () => {
+  const aligned = {
+    operations: [],
+    issues: [
+      {
+        id: "echo",
+        type: "repeat",
+        spokenText: "to you",
+        expectedText: "—",
+        confirmedCut: true,
+        action: "cut",
+      },
+    ],
+  };
+  applyJudgeDecisions(aligned, [{ id: "echo", decision: "keep", reason: "intentional" }], "natural");
+  assert.equal(aligned.issues[0].action, "keep");
+  assert.equal(aligned.issues[0].confirmedCut, false);
+  assert.equal(aligned.issues[0].suppressReview, true);
+});
+
 test("missing model ids leave the original alignment untouched", () => {
   const aligned = {
     operations: [{ type: "mismatch" }],

@@ -519,6 +519,8 @@ export function tightenTranscriptWordTimes(segments = []) {
     (left, right) =>
       Number(left.start) - Number(right.start) || Number(left.end) - Number(right.end),
   );
+  const originalStart = words.map((word) => Number(word.start));
+  const originalEnd = words.map((word) => Number(word.end));
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index];
     const next = words[index + 1];
@@ -541,6 +543,11 @@ export function tightenTranscriptWordTimes(segments = []) {
     const word = words[index];
     const next = words[index + 1];
     if (!/[.!?…]["'”’)]*$/.test(String(word.text || "").trim())) continue;
+    // Groq sometimes glues the next sentence onto stretched trailing silence.
+    // Only pull that next start back when the original timestamps were glued.
+    // A real pause after a period must keep the next word on the actual speech.
+    const gluedToSilence = originalStart[index + 1] - originalEnd[index] <= 0.4;
+    if (!gluedToSilence) continue;
     const gap = Number(next.start) - Number(word.end);
     if (gap <= 0.4 || gap >= 4) continue;
     const shifted = Number(word.end) + 0.12;

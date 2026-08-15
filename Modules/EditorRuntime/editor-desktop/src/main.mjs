@@ -7,6 +7,7 @@ import {
   chooseFile,
   chooseFiles,
   chooseOutput,
+  defaultExportPath,
   isWindows,
   openDesktopWindow,
   readClipboard,
@@ -33,6 +34,7 @@ import {
   startExport,
   saveCaptionPreset,
   supportRoot,
+  detectExportHardware,
 } from "./media.mjs";
 import {
   cancelModelDownload,
@@ -59,6 +61,7 @@ import {
   saveReviewSettings,
 } from "./ai-settings.mjs";
 import { blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
+import { writeResolveTimeline } from "./resolve-export.mjs";
 import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
 import { buildCaptions, spokenCaptionWords } from "./alignment.mjs";
 import {
@@ -721,6 +724,7 @@ function removeImmediateFalseStarts(aligned) {
     // corrected/extended sentence. Example:
     // "rest is biblical and health boundaries" ->
     // "rest is biblical and healthy boundaries are important".
+    // Also "we're treating it" -> "we're treating as ordinary...".
     // This is not an exact duplicate, so compare the longest earlier prefix against
     // the start of the later take and cut only the abandoned first take.
     const tokenNear = (a, b) => {
@@ -729,7 +733,7 @@ function removeImmediateFalseStarts(aligned) {
       const short = a.length <= b.length ? a : b, long = a.length <= b.length ? b : a;
       return short.length >= 4 && long.startsWith(short) && long.length - short.length <= 3;
     };
-    for (let n = Math.min(14, live.length - pos - 3); n >= 3 && !handled; n -= 1) {
+    for (let n = Math.min(14, live.length - pos - 2); n >= 2 && !handled; n -= 1) {
       const earlier = live.slice(pos, pos + n);
       if (earlier.some(({op}) => op.action === "cut")) continue;
       const earlierEnd = Number(earlier.at(-1)?.op?.spoken?.end || 0);
@@ -741,6 +745,23 @@ function removeImmediateFalseStarts(aligned) {
         const nearPrefix = earlier.every((entry, i) => tokenNear(normAt(entry), normAt(later[i])));
         if (!nearPrefix) continue;
         if (markEarlier(earlier, later)) { handled = true; break; }
+      }
+    }
+    if (!handled) {
+      for (let n = Math.min(8, live.length - pos - 2); n >= 2 && !handled; n -= 1) {
+        const earlier = live.slice(pos, pos + n);
+        const later = live.slice(pos + n, pos + n + 2);
+        if (earlier.length < 2 || later.length < 2) continue;
+        if (earlier.some(({ op }) => op.action === "cut") || later.some(({ op }) => op.action === "cut"))
+          continue;
+        const earlierEnd = Number(earlier.at(-1)?.op?.spoken?.end || 0);
+        const laterStart = Number(later[0]?.op?.spoken?.start || earlierEnd);
+        if (laterStart - earlierEnd > 2.4) continue;
+        if (
+          tokenNear(normAt(earlier[0]), normAt(later[0])) &&
+          tokenNear(normAt(earlier[1]), normAt(later[1]))
+        )
+          handled = markEarlier(earlier, later);
       }
     }
     if (handled) continue;
@@ -1385,10 +1406,24 @@ nativeMethods = {
       ...registered,
     };
   }),
-  chooseExport: safe((defaultName) =>
-    chooseOutput(defaultName || "快剪导出.mp4"),
+  chooseExport: safe((defaultName) => {
+    const name = defaultName || "快剪导出.mp4";
+    try {
+      return { path: chooseOutput(name), autoSaved: false };
+    } catch (error) {
+      return {
+        path: defaultExportPath(name),
+        autoSaved: true,
+        notice: error?.message || "无法打开系统保存框",
+      };
+    }
+  }),
+  chooseResolveExport: safe((defaultName) =>
+    chooseOutput(defaultName || "快剪-达芬奇.fcpxml", "fcpxml"),
   ),
+  exportResolveTimeline: safe((input) => writeResolveTimeline(input || {})),
   startExport: safe((config) => startExport(config)),
+  exportHardware: safe(() => detectExportHardware()),
   exportStatus: safe((jobId) => exportStatus(jobId)),
   cancelExport: safe((jobId) => cancelExport(jobId)),
   modelStatus: safe(() => modelStatus()),
@@ -1488,11 +1523,20 @@ nativeMethods = {
   }),
 };
 
+setImmediate(() => {
+  try {
+    detectExportHardware();
+  } catch {
+    /* first GPU probe is best-effort */
+  }
+});
+
 console.log(`QUICKCUT_EMBED_PORT=${serverPort}`);
 const editorUrl = `http://127.0.0.1:${serverPort}/`;
 console.log(`QUICKCUT_EDITOR_URL=${editorUrl}`);
 
-if (isWindows && process.env.QUICKCUT_NO_WINDOW !== "1") {
+const embeddedInNativeShell = Boolean(process.env.QUICKCUT_APP_EXECUTABLE);
+if (!embeddedInNativeShell && process.env.QUICKCUT_NO_WINDOW !== "1") {
   const windowProcess = openDesktopWindow(
     editorUrl,
     path.join(supportRoot(), "window-profile"),
@@ -1507,7 +1551,11 @@ if (isWindows && process.env.QUICKCUT_NO_WINDOW !== "1") {
       requestExit();
     });
   } else {
-    console.log("未找到 Edge，已在默认浏览器中打开编辑器。关闭这个控制台即可退出。");
+    console.log(
+      isWindows
+        ? "未找到 Edge，已在默认浏览器中打开编辑器。关闭这个控制台即可退出。"
+        : "已在浏览器中打开编辑器。关闭这个终端窗口即可退出后台。",
+    );
   }
 }
 

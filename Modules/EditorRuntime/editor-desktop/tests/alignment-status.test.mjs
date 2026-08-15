@@ -113,6 +113,84 @@ test("a breath after Not does not split Not just a mistake", () => {
   assert.ok(captions.some((caption) => /Not just a mistake/i.test(caption.text)));
 });
 
+test("abandoned prefix reread is cut and captions stay on the complete take", () => {
+  const script =
+    "We're not just breaking God's standards. We're treating as ordinary something He calls holy.";
+  const aligned = alignScript({
+    segments: [
+      { text: "We're not just breaking God's standards.", start: 160.0, end: 160.7 },
+      { text: "we're treating it", start: 161.733, end: 162.55 },
+      { text: "We're treating as ordinary something He calls holy.", start: 163.425, end: 167.0 },
+    ],
+    script,
+    duration: 170,
+  });
+  const reread = aligned.issues.find(
+    (issue) =>
+      issue.abandonedPrefix ||
+      issue.label === "没读完又重来" ||
+      /treating it/i.test(String(issue.spokenText || "")),
+  );
+  assert.ok(reread, "the incomplete first take should be marked");
+  assert.equal(reread.confirmedCut, true);
+  assert.ok(reread.start >= 161.5, `red started too early: ${reread.start}`);
+  assert.ok(reread.start <= 161.9, `red started too late: ${reread.start}`);
+  assert.ok(reread.end >= 163.2, `red should reach the complete take: ${reread.end}`);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
+    maxWords: 10,
+    maxChars: 40,
+  });
+  const complete = captions.find((caption) => /ordinary something/i.test(caption.text));
+  assert.ok(complete, "the complete sentence should stay on the caption track");
+  assert.match(complete.text, /We're treating as ordinary/i);
+  assert.ok(
+    complete.start >= 163.0,
+    `complete caption started too early: ${complete.start}`,
+  );
+});
+
+test("a trailing to you reread is a cut repeat not a scripture misread", () => {
+  const script =
+    '"Why I say to you, All manner of sin and blasphemy shall be forgiven to men."';
+  const aligned = alignScript({
+    segments: [
+      { text: "Why I say to you", start: 0, end: 1.4 },
+      { text: "to you", start: 1.55, end: 2.1 },
+      {
+        text: "All manner of sin and blasphemy shall be forgiven to men",
+        start: 2.8,
+        end: 6.5,
+      },
+    ],
+    script,
+    duration: 8,
+  });
+  const reread = aligned.issues.find(
+    (issue) =>
+      issue.type === "repeat" || /to you/i.test(String(issue.spokenText || "")),
+  );
+  assert.ok(reread, "the echoed to you should be marked");
+  assert.equal(reread.type, "repeat");
+  assert.equal(reread.confirmedCut, true);
+  assert.equal(reread.repeatKeepLater, false);
+  assert.match(String(reread.spokenText), /to you/i);
+  assert.ok(reread.start >= 1.4);
+  assert.ok(
+    reread.end >= 2.75,
+    `cut must reach the next sentence, not stop at short word times: ${reread.end}`,
+  );
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
+    maxWords: 10,
+    maxChars: 40,
+  });
+  assert.ok(captions.some((caption) => /Why I say to you/i.test(caption.text)));
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 8);
+  const clip = review.find((item) => /to you/i.test(item.text || item.spokenText || ""));
+  assert.ok(clip);
+  assert.equal(clip.action, "cut");
+  assert.equal(clip.type, "repeat");
+});
+
 test("a partial reread of the previous words is a repeat", () => {
   const aligned = alignScript({
     segments: [{

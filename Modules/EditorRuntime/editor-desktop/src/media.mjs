@@ -10,7 +10,7 @@ import {
   samplesToFrames,
   waveformPeaks,
 } from "./pausecut.mjs";
-import { captionLayoutMetrics, estimatedWordWidth, normalizedFontWeight, wordGap } from "./text-layout.mjs";
+import { captionLayoutMetrics, estimatedWordWidth, normalizedFontWeight, wordGap, wrapWords } from "./text-layout.mjs";
 import {
   defaultSupportRoot,
   fallbackFontFiles,
@@ -83,6 +83,9 @@ export function mediaBinary(name) {
   );
 }
 
+let hwaccelCatalog = null;
+let hardwareProbe = null;
+
 function availableEncoders() {
   if (encoderCatalog) return encoderCatalog;
   encoderCatalog = new Set();
@@ -103,13 +106,220 @@ function availableEncoders() {
   return encoderCatalog;
 }
 
-function preferredVideoEncoder(useHevc) {
-  if (isDarwin) return useHevc ? "hevc_videotoolbox" : "h264_videotoolbox";
+function availableHwaccels() {
+  if (hwaccelCatalog) return hwaccelCatalog;
+  hwaccelCatalog = new Set();
+  try {
+    const result = spawnSync(mediaBinary("ffmpeg"), ["-hide_banner", "-hwaccels"], {
+      encoding: "utf8",
+      timeout: 10000,
+      windowsHide: true,
+    });
+    const text = `${result.stdout || ""}\n${result.stderr || ""}`;
+    for (const line of text.split(/\r?\n/)) {
+      const name = line.trim().toLowerCase();
+      if (name && !/hardware acceleration/i.test(name) && /^[a-z0-9]+$/.test(name))
+        hwaccelCatalog.add(name);
+    }
+  } catch {
+    hwaccelCatalog = new Set();
+  }
+  return hwaccelCatalog;
+}
+
+function probeVideoEncoder(encoder, extra = []) {
+  if (!availableEncoders().has(encoder)) return false;
+  const output = path.join(
+    os.tmpdir(),
+    `quickcut-enc-${process.pid}-${encoder}-${crypto.randomUUID().slice(0, 8)}.mp4`,
+  );
+  try {
+    const result = spawnSync(
+      mediaBinary("ffmpeg"),
+      [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=128x72:d=0.08:r=24",
+        "-frames:v",
+        "2",
+        "-c:v",
+        encoder,
+        ...extra,
+        "-an",
+        output,
+      ],
+      { encoding: "utf8", timeout: 4000, windowsHide: true },
+    );
+    return result.status === 0 && fs.existsSync(output) && fs.statSync(output).size > 32;
+  } catch {
+    return false;
+  } finally {
+    try {
+      fs.unlinkSync(output);
+    } catch {
+      /* probe file */
+    }
+  }
+}
+
+export function resetExportHardwareProbe() {
+  hardwareProbe = null;
+  encoderCatalog = null;
+  hwaccelCatalog = null;
+}
+
+export function detectExportHardware() {
+  if (hardwareProbe) return hardwareProbe;
+  if (isDarwin) {
+    hardwareProbe = {
+      vendor: "apple",
+      h264: "h264_videotoolbox",
+      hevc: "hevc_videotoolbox",
+      decode: "videotoolbox",
+      nvencPreset: "",
+      label: "Apple 硬件加速",
+    };
+    return hardwareProbe;
+  }
   const encoders = availableEncoders();
-  const order = useHevc
-    ? ["hevc_nvenc", "hevc_amf", "hevc_qsv", "libx265", "hevc_mf"]
-    : ["h264_nvenc", "h264_amf", "h264_qsv", "libx264", "h264_mf"];
-  return order.find((name) => encoders.has(name)) || order.at(-2) || "libx264";
+  const hwaccels = availableHwaccels();
+  if (
+    encoders.has("h264_nvenc") &&
+    (probeVideoEncoder("h264_nvenc", ["-preset", "p5", "-pix_fmt", "yuv420p"]) ||
+      probeVideoEncoder("h264_nvenc", ["-preset", "medium", "-pix_fmt", "yuv420p"]))
+  ) {
+    hardwareProbe = {
+      vendor: "nvidia",
+      h264: "h264_nvenc",
+      hevc: encoders.has("hevc_nvenc") ? "hevc_nvenc" : "libx265",
+      decode: hwaccels.has("cuda") ? "cuda" : hwaccels.has("d3d11va") ? "d3d11va" : "",
+      nvencPreset: "p4",
+      label: "NVIDIA 显卡加速",
+    };
+    return hardwareProbe;
+  }
+  if (
+    encoders.has("h264_qsv") &&
+    (probeVideoEncoder("h264_qsv", ["-preset", "medium", "-pix_fmt", "nv12"]) ||
+      probeVideoEncoder("h264_qsv", ["-pix_fmt", "nv12"]))
+  ) {
+    hardwareProbe = {
+      vendor: "intel",
+      h264: "h264_qsv",
+      hevc: encoders.has("hevc_qsv") ? "hevc_qsv" : "libx265",
+      decode: hwaccels.has("qsv") ? "qsv" : hwaccels.has("d3d11va") ? "d3d11va" : "",
+      nvencPreset: "",
+      label: "Intel 核显加速",
+    };
+    return hardwareProbe;
+  }
+  if (
+    encoders.has("h264_amf") &&
+    probeVideoEncoder("h264_amf", ["-quality", "speed", "-pix_fmt", "yuv420p"])
+  ) {
+    hardwareProbe = {
+      vendor: "amd",
+      h264: "h264_amf",
+      hevc: encoders.has("hevc_amf") ? "hevc_amf" : "libx265",
+      decode: hwaccels.has("d3d11va") ? "d3d11va" : "",
+      nvencPreset: "",
+      label: "AMD 显卡加速",
+    };
+    return hardwareProbe;
+  }
+  hardwareProbe = {
+    vendor: "software",
+    h264: "libx264",
+    hevc: "libx265",
+    decode: hwaccels.has("d3d11va") ? "d3d11va" : "",
+    nvencPreset: "",
+    label: "软件编码",
+  };
+  return hardwareProbe;
+}
+
+export function preferredVideoEncoder(useHevc) {
+  const hardware = detectExportHardware();
+  return useHevc ? hardware.hevc : hardware.h264;
+}
+
+export function encoderDisplayName(encoder = "") {
+  if (/nvenc/.test(encoder)) return "NVIDIA NVENC";
+  if (/qsv/.test(encoder)) return "Intel QSV";
+  if (/amf/.test(encoder)) return "AMD AMF";
+  if (/videotoolbox/.test(encoder)) return "Apple 硬件";
+  if (encoder === "copy") return "原码流直出";
+  if (encoder.startsWith("libx")) return "软件编码";
+  return encoder || "编码器";
+}
+
+function decodeAccelArgs(kind) {
+  if (kind === "videotoolbox") return ["-hwaccel", "videotoolbox"];
+  if (kind === "cuda") return ["-hwaccel", "cuda"];
+  if (kind === "qsv") return ["-hwaccel", "qsv"];
+  if (kind === "d3d11va") return ["-hwaccel", "d3d11va"];
+  return [];
+}
+
+function parseMbps(value, fallback = 12) {
+  const raw = String(value || "").trim();
+  const amount = Number.parseFloat(raw);
+  if (!Number.isFinite(amount) || amount <= 0) return fallback;
+  if (/k$/i.test(raw)) return amount / 1000;
+  if (/m$/i.test(raw)) return amount;
+  return amount > 200 ? amount / 1000 : amount;
+}
+
+export function videoEncodeArgs(encoder, options = {}) {
+  const fps = Math.max(1, Number(options.fps || 30));
+  const mbps = parseMbps(options.bitrate, options.quality === "high" ? 20 : 12);
+  const qualityMode = String(options.qualityMode || "balanced");
+  const hdr = !!options.hdr;
+  const args = [
+    "-c:v",
+    encoder,
+    "-b:v",
+    `${mbps}M`,
+    "-maxrate",
+    `${Math.ceil(mbps * 1.32)}M`,
+    "-bufsize",
+    `${Math.ceil(mbps * 2)}M`,
+    "-g",
+    String(Math.max(24, Math.round(fps * 2))),
+  ];
+  if (encoder === "h264_videotoolbox")
+    args.push("-profile:v", "high", "-realtime", "true");
+  if (encoder === "hevc_videotoolbox")
+    args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1", "-realtime", "true");
+  if (encoder === "h264_nvenc" || encoder === "hevc_nvenc") {
+    const preset = qualityMode === "fast" ? "p7" : qualityMode === "maximum" ? "p3" : "p5";
+    args.push("-preset", preset, "-rc", "vbr", "-gpu", "0");
+    if (encoder === "hevc_nvenc")
+      args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1");
+    else args.push("-profile:v", "high");
+  }
+  if (encoder === "h264_amf" || encoder === "hevc_amf") {
+    args.push(
+      "-quality",
+      qualityMode === "fast" ? "speed" : qualityMode === "maximum" ? "quality" : "balanced",
+      "-rc",
+      "vbr_peak",
+    );
+    if (encoder === "hevc_amf") args.push("-tag:v", "hvc1");
+  }
+  if (encoder === "h264_qsv" || encoder === "hevc_qsv") {
+    args.push("-preset", qualityMode === "fast" ? "veryfast" : qualityMode === "maximum" ? "slow" : "medium");
+    if (encoder === "hevc_qsv")
+      args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1");
+  }
+  if (encoder.startsWith("libx"))
+    args.push("-preset", qualityMode === "fast" ? "veryfast" : qualityMode === "maximum" ? "medium" : "fast");
+  return args;
 }
 
 function run(binary, args, options = {}) {
@@ -152,6 +362,43 @@ const probeArguments = (inputPath) => [
   inputPath,
 ];
 
+function parseAspect(value, fallback = 0) {
+  const text = String(value || "").trim();
+  if (!text || text === "N/A" || text === "0/1") return fallback;
+  const parts = text.split("/").map(Number);
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return parts[0] / parts[1];
+  const number = Number(text);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+export function sourceGeometry(info = {}, fallback = {}) {
+  const encodedWidth = Math.max(2, Number(info.width || fallback.width || 1080));
+  const encodedHeight = Math.max(2, Number(info.height || fallback.height || 1920));
+  const rotation = Number(info.rotation || 0);
+  const quarterTurn = Math.abs(Math.round(rotation / 90)) % 2 === 1;
+  const displayWidth = Math.max(
+    2,
+    Math.round(Number(info.displayWidth || (quarterTurn ? encodedHeight : encodedWidth))),
+  );
+  const displayHeight = Math.max(
+    2,
+    Math.round(Number(info.displayHeight || (quarterTurn ? encodedWidth : encodedHeight))),
+  );
+  return { encodedWidth, encodedHeight, displayWidth, displayHeight, rotation };
+}
+
+export function sourceOrientationFilters(info = {}, fallback = {}) {
+  const geo = sourceGeometry(info, fallback);
+  return {
+    ...geo,
+    filters: [
+      `scale=${geo.displayWidth}:${geo.displayHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos+accurate_rnd`,
+      `pad=${geo.displayWidth}:${geo.displayHeight}:(ow-iw)/2:(oh-ih)/2:black`,
+      "setsar=1",
+    ],
+  };
+}
+
 function parsedMediaInfo(inputPath, data) {
   const video =
     data.streams?.find((stream) => stream.codec_type === "video") || {};
@@ -171,7 +418,15 @@ function parsedMediaInfo(inputPath, data) {
     rotation = Number.isFinite(rawRotation) ? rawRotation : 0,
     quarterTurn = Math.abs(Math.round(rotation / 90)) % 2 === 1,
     encodedWidth = Number(video.width || 0),
-    encodedHeight = Number(video.height || 0);
+    encodedHeight = Number(video.height || 0),
+    sar = parseAspect(video.sample_aspect_ratio, 1);
+  let displayWidth = Math.abs(sar - 1) > 0.01 ? Math.round(encodedWidth * sar) : encodedWidth;
+  let displayHeight = encodedHeight;
+  if (quarterTurn) {
+    const swapped = displayWidth;
+    displayWidth = displayHeight;
+    displayHeight = swapped;
+  }
   return {
     path: inputPath,
     name: path.basename(inputPath),
@@ -179,8 +434,8 @@ function parsedMediaInfo(inputPath, data) {
     size: Number(data.format?.size || fs.statSync(inputPath).size),
     width: encodedWidth,
     height: encodedHeight,
-    displayWidth: quarterTurn ? encodedHeight : encodedWidth,
-    displayHeight: quarterTurn ? encodedWidth : encodedHeight,
+    displayWidth,
+    displayHeight,
     rotation,
     videoCodec: video.codec_name || "",
     audioCodec: audio.codec_name || "",
@@ -742,44 +997,142 @@ function escapeAssText(value) {
     .replace(/\r?\n/g, " ");
 }
 
+function captionLayoutOrigin(caption = {}, canvas = {}) {
+  const width = Math.max(320, Number(canvas.width || 1080));
+  const height = Math.max(320, Number(canvas.height || 1920));
+  const x = Number.isFinite(Number(caption.x)) ? Number(caption.x) : 0;
+  const y = Number.isFinite(Number(caption.y)) ? Number(caption.y) : 538;
+  return {
+    width,
+    height,
+    scale: Math.max(0.05, Math.min(8, Number(caption.scale || 1))),
+    boxWidth: Math.max(160, Math.min(width, Number(caption.width || width * 0.8))),
+    posX: Math.round(width / 2 + x),
+    posY: Math.round(height / 2 + y),
+  };
+}
+
+function spokenHighlightEnabled(style = {}) {
+  return style.highlightEnabled !== false;
+}
+
+export function previewShadowOpacity(style = {}) {
+  const strength = Math.max(0, Math.min(10, Number(style.shadow || 0)));
+  const opacity = Math.max(0, Math.min(1, Number(style.shadowOpacity ?? 0.8)));
+  return opacity * (0.18 + 0.82 * (strength / 10));
+}
+
+export function assDropShadow(style = {}, scale = 1) {
+  const strength = Math.max(0, Number(style.shadow || 0));
+  if (strength <= 0.01 || previewShadowOpacity(style) <= 0.01) return null;
+  const distance = Math.max(0, Number(style.shadowDistance || 0) * scale);
+  const angle = (Number(style.shadowAngle ?? 45) * Math.PI) / 180;
+  return {
+    sx: Math.round(Math.cos(angle) * distance),
+    sy: Math.round(Math.sin(angle) * distance),
+    blur: Math.max(0, Number(style.shadowBlur || 0) * scale * (0.55 + strength * 0.07)),
+    color: assOverrideColor(style.shadowColor || "#000000"),
+    alpha: assAlpha(previewShadowOpacity(style)),
+  };
+}
+
+function assTypographyTags(style = {}, fontSize, letterSpacing) {
+  const family = style.fontFamily ? `\\fn${String(style.fontFamily).replace(/[{}]/g, "")}` : "";
+  return `${family}\\fs${Number(fontSize).toFixed(2)}\\fsp${Number(letterSpacing || 0).toFixed(2)}\\b${normalizedFontWeight(style.fontWeight || 700)}${style.fontItalic ? "\\i1" : "\\i0"}`;
+}
+
+function assStrokeTags(style = {}, scale = 1) {
+  const outline = Math.max(0, Number(style.stroke || 0) * scale);
+  if (outline <= 0.01) return "\\bord0";
+  return `\\bord${outline.toFixed(1)}\\3c${assOverrideColor(style.strokeColor || "#000000")}`;
+}
+
+function usesSpokenWordExport(style = {}) {
+  const animation = String(style.animation || "fade");
+  return (
+    spokenHighlightEnabled(style) ||
+    animation === "karaoke" ||
+    animation === "typewriter" ||
+    animation.startsWith("word-") ||
+    ["underline", "outline-active"].includes(animation)
+  );
+}
+
 function assAnimationTags(animation, x, y, durationMs, style = {}) {
   const end = Math.max(120, Math.min(durationMs, 520));
+  const pin = `\\an5\\pos(${x},${y})`;
   const tags = {
-    fade: "\\fad(180,90)",
-    rise: `\\move(${x},${y + 90},${x},${y},0,${end})\\fad(100,70)`,
-    "slide-left": `\\move(${x - 240},${y},${x},${y},0,${end})\\fad(80,70)`,
-    "slide-right": `\\move(${x + 240},${y},${x},${y},0,${end})\\fad(80,70)`,
-    zoom: `\\pos(${x},${y})\\fscx55\\fscy55\\t(0,${end},\\fscx100\\fscy100)`,
-    flip: `\\pos(${x},${y})\\frx75\\t(0,${end},\\frx0)`,
-    shake: `\\move(${x - 9},${y},${x + 9},${y},0,100)\\t(100,220,\\frz-2)\\t(220,360,\\frz2)\\t(360,480,\\frz0)`,
-    glow: `\\pos(${x},${y})\\blur7\\t(0,${end},\\blur0)\\t(${end},${Math.min(durationMs, end + 350)},\\blur4)`,
-    stretch: `\\pos(${x},${y})\\fscx25\\fsp-4\\t(0,${end},\\fscx100\\fsp0)`,
-    drop: `\\move(${x},${y - 180},${x},${y},0,${end})`,
-    swing: `\\pos(${x},${y})\\frz12\\t(0,${Math.round(end * 0.65)},\\frz-3)\\t(${Math.round(end * 0.65)},${end},\\frz0)`,
-    "neon-pulse": `\\pos(${x},${y})\\blur5\\t(0,220,\\blur0)\\t(220,440,\\blur5)\\t(440,620,\\blur0)`,
-    blink: `\\pos(${x},${y})\\alpha&HAA&\\t(0,90,\\alpha&H00&)\\t(90,180,\\alpha&HAA&)\\t(180,270,\\alpha&H00&)`,
-    typewriter: `\\pos(${x},${y})\\fad(80,40)`,
+    fade: `${pin}\\fad(180,90)`,
+    rise: `\\an5\\move(${x},${y + 90},${x},${y},0,${end})\\fad(100,70)`,
+    "slide-left": `\\an5\\move(${x - 240},${y},${x},${y},0,${end})\\fad(80,70)`,
+    "slide-right": `\\an5\\move(${x + 240},${y},${x},${y},0,${end})\\fad(80,70)`,
+    zoom: `${pin}\\fscx55\\fscy55\\t(0,${end},\\fscx100\\fscy100)`,
+    flip: `${pin}\\frx75\\t(0,${end},\\frx0)`,
+    shake: `\\an5\\move(${x - 9},${y},${x + 9},${y},0,100)\\t(100,220,\\frz-2)\\t(220,360,\\frz2)\\t(360,480,\\frz0)`,
+    glow: `${pin}\\blur7\\t(0,${end},\\blur0)\\t(${end},${Math.min(durationMs, end + 350)},\\blur4)`,
+    stretch: `${pin}\\fscx25\\fsp-4\\t(0,${end},\\fscx100\\fsp0)`,
+    drop: `\\an5\\move(${x},${y - 180},${x},${y},0,${end})`,
+    swing: `${pin}\\frz12\\t(0,${Math.round(end * 0.65)},\\frz-3)\\t(${Math.round(end * 0.65)},${end},\\frz0)`,
+    "neon-pulse": `${pin}\\blur5\\t(0,220,\\blur0)\\t(220,440,\\blur5)\\t(440,620,\\blur0)`,
+    blink: `${pin}\\alpha&HAA&\\t(0,90,\\alpha&H00&)\\t(90,180,\\alpha&HAA&)\\t(180,270,\\alpha&H00&)`,
+    typewriter: `${pin}\\fad(80,40)`,
     // Alisha：方向可选，四个方向共享同一套渐显滑入。
     "alisha-reveal": (() => {
       const d = String(style.animationDirection || "leftToRight");
       const fromX = d === "leftToRight" ? x - 180 : d === "rightToLeft" ? x + 180 : x;
       const fromY = d === "bottomToTop" ? y + 140 : d === "topToBottom" ? y - 140 : y;
-      return `\\move(${fromX},${fromY},${x},${y},0,${Math.min(end, 360)})\\alpha&HFF&\\t(0,${Math.min(end, 320)},\\alpha&H00&)\\fad(0,80)`;
+      return `\\an5\\move(${fromX},${fromY},${x},${y},0,${Math.min(end, 360)})\\alpha&HFF&\\t(0,${Math.min(end, 320)},\\alpha&H00&)\\fad(0,80)`;
     })(),
-    // 参考用户提供的 Donald 样例：粗体双行短语快速切换，几乎无位移，保留极短入场避免硬闪。
-    "donald-cut": `\\pos(${x},${y})\\fad(35,25)`,
+    "donald-cut": `${pin}\\fad(35,25)`,
   };
-  return tags[animation] || `\\pos(${x},${y})`;
+  return tags[animation] || pin;
 }
 
-function stableWordAssEvents(caption, style, x, y, animation) {
+function captionAssLines(caption, style, boxWidth, canvasWidth = 1080) {
+  const text = spacedText(casedText(String(caption.text || ""), style.textCase), style.wordSpacing);
+  const lines = wrapWords(text, style, Math.max(80, Number(boxWidth || canvasWidth * 0.8)), 2, 1)
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+  return lines.length ? lines : [text].filter(Boolean);
+}
+
+function markWrappedCaptionWords(caption, style, boxWidth) {
   const words = Array.isArray(caption.words) && caption.words.length
-    ? caption.words
+    ? caption.words.map((word) => ({
+        display: String(word.display || "").trim(),
+        start: Number(word.start ?? caption.start),
+        end: Number(word.end ?? caption.end),
+      })).filter((word) => word.display)
     : String(caption.text || "").split(/\s+/).filter(Boolean).map((display, index, list) => ({
         display,
-        start: Number(caption.start) + (Number(caption.end) - Number(caption.start)) * index / Math.max(1, list.length),
-        end: Number(caption.start) + (Number(caption.end) - Number(caption.start)) * (index + 1) / Math.max(1, list.length),
+        start: Number(caption.start) + ((Number(caption.end) - Number(caption.start)) * index) / Math.max(1, list.length),
+        end: Number(caption.start) + ((Number(caption.end) - Number(caption.start)) * (index + 1)) / Math.max(1, list.length),
       }));
+  const lines = wrapWords(
+    words.map((word) => word.display).join(" "),
+    style,
+    Math.max(80, Number(boxWidth || 860)),
+    2,
+    1,
+  ).map((line) => line.split(/\s+/).filter(Boolean));
+  const marked = [];
+  let cursor = 0;
+  lines.forEach((line, lineIndex) => {
+    line.forEach((token, tokenIndex) => {
+      const word = words[cursor] || { display: token, start: caption.start, end: caption.end };
+      cursor += 1;
+      marked.push({
+        ...word,
+        display: word.display || token,
+        breakAfter: tokenIndex === line.length - 1 && lineIndex < lines.length - 1,
+      });
+    });
+  });
+  return marked.length ? marked : words;
+}
+
+function stableWordAssEvents(caption, style, x, y, animation, boxWidth = 860) {
+  const words = markWrappedCaptionWords(caption, style, boxWidth);
   if (!words.length) return [];
   const base = assOverrideColor(style.color || "#ffffff");
   const weightTag = `\\b${normalizedFontWeight(style.fontWeight || 700)}`;
@@ -808,15 +1161,20 @@ function stableWordAssEvents(caption, style, x, y, animation) {
     const { start, end } = wordTimes[activeIndex];
     const content = words.map((word, index) => {
       const escaped = escapeAssText(word.display);
-      if (index !== activeIndex) return `{\\1c${base}\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
-      if (animation === "word-pill")
-        return `{\\1c&H000000&\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
-      if (animation === "underline")
-        return `{\\1c${hi}\\3c${stroke}\\bord${outline.toFixed(1)}\\u1}${escaped}`;
-      if (animation === "outline-active" || animation === "word-box" || animation === "word-ring")
-        return `{\\1c${base}\\3c${hi}\\bord${activeOutline.toFixed(1)}\\u0}${escaped}`;
-      return `{\\1c${hi}\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
-    }).join(separator);
+      let styled;
+      if (index !== activeIndex)
+        styled = `{\\1c${base}\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
+      else if (animation === "word-pill")
+        styled = `{\\1c&H000000&\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
+      else if (animation === "underline")
+        styled = `{\\1c${hi}\\3c${stroke}\\bord${outline.toFixed(1)}\\u1}${escaped}`;
+      else if (animation === "outline-active" || animation === "word-box" || animation === "word-ring")
+        styled = `{\\1c${base}\\3c${hi}\\bord${activeOutline.toFixed(1)}\\u0}${escaped}`;
+      else
+        styled = `{\\1c${hi}\\3c${stroke}\\bord${outline.toFixed(1)}\\u0}${escaped}`;
+      const gap = word.breakAfter ? "\\N" : index < words.length - 1 ? separator : "";
+      return `${styled}${gap}`;
+    }).join("");
     const events = [];
     if (animation === "word-pill") {
       const before = wordWidths.slice(0, activeIndex).reduce((sum, width) => sum + width, 0) + gap * activeIndex;
@@ -828,9 +1186,18 @@ function stableWordAssEvents(caption, style, x, y, animation) {
         height: fontSize * 1.18,
       }, style.highlight || "#ffd21f", 1, 1));
     }
-    const familyTag = style.fontFamily ? `\\fn${String(style.fontFamily).replace(/[{}]/g, "")}` : "";
-    const italicTag = style.fontItalic ? "\\i1" : "\\i0";
-    events.push(`Dialogue: 2,${assTime(start)},${assTime(end)},Default,,0,0,0,,{\\pos(${x},${y})${familyTag}\\fs${fontSize.toFixed(2)}\\fsp${letterSpacing.toFixed(2)}${weightTag}${italicTag}}${content}`);
+    const typeTags = assTypographyTags(style, fontSize, letterSpacing);
+    const strokeTags = assStrokeTags(style, effectiveScale);
+    const drop = assDropShadow(style, effectiveScale);
+    if (drop) {
+      const shadowRun = words.map((word, index) => {
+        const escaped = escapeAssText(word.display);
+        const gap = word.breakAfter ? "\\N" : index < words.length - 1 ? separator : "";
+        return `{\\1c${drop.color}\\bord0\\shad0}${escaped}${gap}`;
+      }).join("");
+      events.push(`Dialogue: 1,${assTime(start)},${assTime(end)},Default,,0,0,0,,{\\an5\\pos(${x + drop.sx},${y + drop.sy})${typeTags}\\1c${drop.color}\\1a${drop.alpha}\\bord0\\shad0\\blur${Math.max(0.1, drop.blur).toFixed(1)}}${shadowRun}`);
+    }
+    events.push(`Dialogue: 2,${assTime(start)},${assTime(end)},Default,,0,0,0,,{\\an5\\pos(${x},${y})${typeTags}${strokeTags}\\shad0}${content}`);
     return events;
   }).filter(Boolean);
 }
@@ -1020,7 +1387,11 @@ function prepareSharedCaptionRaster(config) {
   return true;
 }
 
-function createAssSubtitleFile(config) {
+export function writeAssSubtitleFile(config, destination = "") {
+  return createAssSubtitleFile(config, destination);
+}
+
+function createAssSubtitleFile(config, destination = "") {
   const captions = config.captions || [];
   if (!captions.length) return "";
   const style = { ...(captions[0].style || {}) };
@@ -1039,57 +1410,46 @@ function createAssSubtitleFile(config) {
   const outline = Math.max(0, Math.round(Number(style.stroke || 0) * scale));
   const shadow = 0;
   const letterSpacing = Number(style.letterSpacing || 0) * scale;
-  const x = Math.round(width / 2 + Number(captions[0].x || 0));
-  const y = Math.round(height / 2 + Number(captions[0].y || 0));
-  const textBoxWidth = Math.max(
-    160,
-    Math.min(width, Number(captions[0].width || width * 0.8)),
-  );
+  const firstOrigin = captionLayoutOrigin(captions[0], { width, height });
+  const textBoxWidth = firstOrigin.boxWidth;
   const horizontalMargin = Math.max(0, Math.round((width - textBoxWidth) / 2));
   const animation = style.animation || "fade";
   const events = captions.flatMap((caption) => {
+    const origin = captionLayoutOrigin(caption, { width, height });
+    const x = origin.posX;
+    const y = origin.posY;
     const result = [];
     const durationMs = Math.round((Number(caption.end) - Number(caption.start)) * 1000);
     const baseTags = assAnimationTags(animation, x, y, durationMs, style);
-    const box = estimatedCaptionBox(caption, style, fontSize, scale, x, y);
+    const box = estimatedCaptionBox(caption, style, fontSize, origin.scale, x, y);
     if (style.backgroundEnabled) {
       result.push(vectorRectEvent(caption.start, caption.end, box, style.background || "#000000", Number(style.backgroundOpacity ?? 0.7), 0));
     }
-    const shadowStrength = Math.max(0, Number(style.shadow || 0));
-    const shadowOpacity = Math.max(0, Math.min(1, Number(style.shadowOpacity ?? 0.8)));
-    const shadowBlur = Math.max(0, Number(style.shadowBlur || 0) * scale);
-    const shadowDistance = Math.max(0, Number(style.shadowDistance || 0) * scale);
-    if (shadowStrength > 0.01 && shadowOpacity > 0.001) {
-      const angle = Number(style.shadowAngle ?? 45) * Math.PI / 180;
-      const sx = Math.round(Math.cos(angle) * shadowDistance);
-      const sy = Math.round(Math.sin(angle) * shadowDistance);
-      const shadowText = escapeAssText(spacedText(casedText(caption.text, style.textCase), style.wordSpacing));
-      const shadowColor = assOverrideColor(style.shadowColor || "#000000");
-      const alpha = assAlpha(shadowOpacity * Math.min(1, shadowStrength / 18));
-      result.push(`Dialogue: 1,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\pos(${x + sx},${y + sy})\\1c${shadowColor}\\alpha${alpha}\\bord0\\shad0\\blur${Math.max(0.1, shadowBlur).toFixed(1)}}${shadowText}`);
+    const wrappedLines = captionAssLines(caption, style, origin.boxWidth, width);
+    const wrappedAss = wrappedLines.map((line) => escapeAssText(line)).join("\\N");
+    const drop = assDropShadow(style, origin.scale);
+    const wordPaint = usesSpokenWordExport(style);
+    if (drop && wrappedAss && !wordPaint) {
+      result.push(`Dialogue: 1,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\an5\\pos(${x + drop.sx},${y + drop.sy})\\1c${drop.color}\\1a${drop.alpha}\\bord0\\shad0\\blur${Math.max(0.1, drop.blur).toFixed(1)}}${wrappedAss}`);
     }
     const glow = Math.max(0, Number(style.glow || 0));
     if (glow > 0.01) {
-      const glowPx = glow * scale;
-      const glowText = escapeAssText(spacedText(casedText(caption.text, style.textCase), style.wordSpacing));
+      const glowPx = glow * origin.scale;
+      const glowText = wrappedAss;
       const glowColor = assOverrideColor(style.glowColor || style.color || "#ffffff");
       const familyTag = style.fontFamily ? `\\fn${String(style.fontFamily).replace(/[{}]/g, "")}` : "";
-      result.push(`Dialogue: 0,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\pos(${x},${y})${familyTag}\\fs${fontSize}\\1a&HFF&\\3c${glowColor}\\3a&H70&\\bord${Math.max(1.2, glowPx * 0.22).toFixed(1)}\\blur${Math.max(2, glowPx * 0.95).toFixed(1)}\\shad0}${glowText}`);
-      result.push(`Dialogue: 1,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\pos(${x},${y})${familyTag}\\fs${fontSize}\\1a&HFF&\\3c${glowColor}\\3a&H35&\\bord${Math.max(0.8, glowPx * 0.12).toFixed(1)}\\blur${Math.max(1.5, glowPx * 0.48).toFixed(1)}\\shad0}${glowText}`);
+      result.push(`Dialogue: 0,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\an5\\pos(${x},${y})${familyTag}\\fs${fontSize}\\1a&HFF&\\3c${glowColor}\\3a&H70&\\bord${Math.max(1.2, glowPx * 0.22).toFixed(1)}\\blur${Math.max(2, glowPx * 0.95).toFixed(1)}\\shad0}${glowText}`);
+      result.push(`Dialogue: 1,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{\\an5\\pos(${x},${y})${familyTag}\\fs${fontSize}\\1a&HFF&\\3c${glowColor}\\3a&H35&\\bord${Math.max(0.8, glowPx * 0.12).toFixed(1)}\\blur${Math.max(1.5, glowPx * 0.48).toFixed(1)}\\shad0}${glowText}`);
     }
     if (animation === "line-pulse" || animation === "donald-line-grow") {
       const lines = linePulseAssEvents(caption, style, x, y, fontSize).map((line) => line.replace(/^Dialogue: 0,/, "Dialogue: 2,"));
       if (lines.length) result.push(...lines);
     } else if (animation === "line-rise") {
       result.push(...lineRiseAssEvents(caption, style, x, y, fontSize));
+    } else if (wordPaint) {
+      result.push(...stableWordAssEvents(caption, style, x, y, animation === "fade" ? "karaoke" : animation, origin.boxWidth));
     } else {
-      const wordAnimation = animation === "karaoke" || animation === "typewriter" || animation.startsWith("word-") || ["underline", "outline-active"].includes(animation);
-      if (wordAnimation) {
-        result.push(...stableWordAssEvents(caption, style, x, y, animation));
-      } else {
-        const text = escapeAssText(spacedText(casedText(caption.text, style.textCase), style.wordSpacing));
-        result.push(`Dialogue: 2,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{${baseTags}\\b${normalizedFontWeight(style.fontWeight || 700)}}${text}`);
-      }
+      result.push(`Dialogue: 2,${assTime(caption.start)},${assTime(caption.end)},Default,,0,0,0,,{${baseTags}${assStrokeTags(style, origin.scale)}\\shad0\\b${normalizedFontWeight(style.fontWeight || 700)}}${wrappedAss}`);
     }
     const underline = fullUnderlineEvent(caption, style, x, y, fontSize, scale);
     if (underline) result.push(underline);
@@ -1097,7 +1457,8 @@ function createAssSubtitleFile(config) {
   });
   const directory = path.join(supportRoot(), "temp");
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const filePath = path.join(directory, `captions-${crypto.randomUUID()}.ass`);
+  const filePath = destination || path.join(directory, `captions-${crypto.randomUUID()}.ass`);
+  if (destination) fs.mkdirSync(path.dirname(destination), { recursive: true });
   const horizontal = { left: 1, center: 2, right: 3 }[
       style.textAlign || "center"
     ],
@@ -1337,22 +1698,21 @@ function buildExportGraph(config, info) {
     0.04,
     Number(config.outputDuration || legacyCursor || info.duration),
   );
-  const sourceWidth = Math.max(16, Number(info.width || width));
-  const sourceHeight = Math.max(16, Number(info.height || height));
+  const oriented = sourceOrientationFilters(info, { width, height });
   const linearCutMode = !!config.optimizeLinearCuts && !hasExplicitMainClips && mainVideoClips.length > 1;
   if (linearCutMode) {
     const labels = [];
     mainVideoClips.forEach((clip, index) => {
       const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
       const sourceEnd = Math.max(sourceStart + 0.002, Number(clip.sourceEnd || sourceStart + 0.002));
-      graph.push(`[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},setpts=PTS-STARTPTS[vcut${index}]`);
+      graph.push(`[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},setpts=PTS-STARTPTS,${oriented.filters.join(",")}[vcut${index}]`);
       labels.push(`[vcut${index}]`);
     });
     graph.push(`${labels.join("")}concat=n=${labels.length}:v=1:a=0[joinedv0]`);
     graph.push(`[joinedv0]tpad=stop_mode=clone:stop_duration=0.50,trim=duration=${outputDuration.toFixed(5)},setpts=PTS-STARTPTS[joinedv]`);
   } else {
     graph.push(
-      `color=c=black:s=${sourceWidth}x${sourceHeight}:r=${fps}:d=${outputDuration.toFixed(5)}[maincanvas0]`,
+      `color=c=black:s=${oriented.displayWidth}x${oriented.displayHeight}:r=${fps}:d=${outputDuration.toFixed(5)}[maincanvas0]`,
     );
     mainVideoClips.forEach((clip, index) => {
     const start = Math.max(0, Number(clip.start || 0));
@@ -1367,6 +1727,7 @@ function buildExportGraph(config, info) {
       rotation = Math.max(-360, Math.min(360, Number(settings.rotation || 0))),
       opacity = Math.max(0, Math.min(1, Number(settings.opacity ?? 1))),
       transformFilters = [
+        ...oriented.filters,
         `scale=iw*${clipScale.toFixed(5)}:ih*${clipScale.toFixed(5)}:flags=lanczos+accurate_rnd`,
       ];
     if (Math.abs(rotation) > 0.001)
@@ -1520,7 +1881,8 @@ function buildExportGraph(config, info) {
   const scale = Math.max(0.05, Number(transform.scale || 1));
   const rotation = Math.max(-360, Math.min(360, Number(transform.rotation || 0)));
   filters.push(
-    `scale=w=${Math.round(width * scale)}:h=${Math.round(height * scale)}:force_original_aspect_ratio=decrease:flags=lanczos+accurate_rnd`,
+    `scale=w=${Math.round(width * scale)}:h=${Math.round(height * scale)}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos+accurate_rnd`,
+    "setsar=1",
   );
   if (Math.abs(rotation) > 0.001)
     filters.push(`rotate=${rotation.toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`);
@@ -1761,7 +2123,7 @@ function buildExportGraph(config, info) {
         ? path.dirname(fontFile)
         : path.join(supportRoot(), "fonts");
       graph.push(
-        `[layer${layer - 1}]ass=filename='${escapeFilterPath(config.captionAssPath)}':fontsdir='${escapeFilterPath(fontsDir)}'[layer${layer}]`,
+        `[layer${layer - 1}]ass=filename='${escapeFilterPath(config.captionAssPath)}':original_size=${Math.round(width)}x${Math.round(height)}:fontsdir='${escapeFilterPath(fontsDir)}'[layer${layer}]`,
       );
       captionRendered = true;
     } else if (kind === "caption" && !captionRendered) {
@@ -1935,17 +2297,43 @@ function canSmartCopy(config, info, format) {
 }
 
 export function startExport(config) {
+  if (!config?.inputPath || !fs.existsSync(config.inputPath))
+    throw new Error("没有可导出的视频文件。");
+  if (!config?.outputPath) throw new Error("请选择导出保存位置。");
   const info = probeMedia(config.inputPath);
   const id = crypto.randomUUID();
   const job = {
     id,
     state: "preparing",
-    progress: 0.01,
+    progress: 0.02,
     error: "",
     outputPath: config.outputPath,
     child: null,
+    startedAt: Date.now(),
+    stage: "prepare",
+    frameProgress: false,
+    message: "正在准备导出… · 已用 0:00",
   };
   jobs.set(id, job);
+  const format = String(
+    config.format || path.extname(config.outputPath).slice(1) || "mp4",
+  ).toLowerCase();
+  if (canSmartCopy(config, info, format)) job.mode = "smart-copy";
+  setImmediate(() => {
+    try {
+      beginExportJob(config, info, job);
+    } catch (error) {
+      job.state = "failed";
+      job.error = error?.message || String(error);
+      job.message = job.error;
+    }
+  });
+  return { jobId: id, mode: job.mode || "preparing" };
+}
+
+function beginExportJob(config, info, job) {
+  job.stage = "prepare";
+  job.message = exportStageMessage(job);
   const format = String(
     config.format || path.extname(config.outputPath).slice(1) || "mp4",
   ).toLowerCase();
@@ -1956,7 +2344,7 @@ export function startExport(config) {
       "-map", "0:v:0", "-map", "0:a?", "-c", "copy",
       "-map_metadata", "0", "-movflags", "+faststart",
       "-t", String(Math.max(0.04, Number(config.outputDuration || info.duration))),
-      "-progress", "pipe:2", "-nostats", config.outputPath,
+      "-stats_period", "0.2", "-progress", "pipe:2", "-nostats", config.outputPath,
     ];
     const child = spawn(mediaBinary("ffmpeg"), args, {
       stdio: ["ignore", "ignore", "pipe"],
@@ -1970,17 +2358,19 @@ export function startExport(config) {
     job.encoder = "copy";
     job.mode = "smart-copy";
     monitorExport(child, job, config, info);
-    return { jobId: id, mode: "smart-copy" };
+    return;
   }
+  job.stage = "captions";
+  job.message = exportStageMessage(job);
   if (format !== "mp3" && (config.captions || []).length) {
     const rasterized = process.platform === "darwin" && prepareSharedCaptionRaster(config);
     if (!rasterized) config.captionAssPath = createAssSubtitleFile(config);
   }
-  const inputs = isDarwin
-    ? ["-hwaccel", "videotoolbox", "-i", config.inputPath]
-    : ["-i", config.inputPath];
+  const hardware = detectExportHardware();
+  const extraInputs = [];
   if (format === "mp3") {
-    for (const audio of config.audioAssets || []) inputs.push("-i", audio.path);
+    for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
+    const inputs = ["-i", config.inputPath, ...extraInputs];
     const built = buildAudioExportGraph(config, info, 1);
     const args = [
       "-y",
@@ -1996,6 +2386,8 @@ export function startExport(config) {
       "192k",
       "-t",
       String(Math.max(0.04, Number(config.outputDuration || info.duration))),
+      "-stats_period",
+      "0.2",
       "-progress",
       "pipe:2",
       "-nostats",
@@ -2011,12 +2403,11 @@ export function startExport(config) {
     job.state = "exporting";
     job.progress = Math.max(job.progress, 0.02);
     monitorExport(child, job, config, info);
-    return { jobId: id };
+    return;
   }
-  for (const video of config.videoLayers || []) inputs.push("-i", video.path);
-  for (const image of config.images || [])
-    inputs.push("-loop", "1", "-i", image.path);
-  for (const audio of config.audioAssets || []) inputs.push("-i", audio.path);
+  for (const video of config.videoLayers || []) extraInputs.push("-i", video.path);
+  for (const image of config.images || []) extraInputs.push("-loop", "1", "-i", image.path);
+  for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
   const built = buildExportGraph(config, info);
   const colorProfiles = {
       bt709: { space: "bt709", primaries: "bt709", transfer: "bt709", pixel: "yuv420p" },
@@ -2031,13 +2422,20 @@ export function startExport(config) {
       colorProfile.hdr;
   const preferredEncoder = preferredVideoEncoder(useHevc);
   const fallbackEncoder = useHevc ? "libx265" : "libx264";
-  const launch = (encoder, allowFallback) => {
-    // 商业级资源预算：滤镜图不允许无限抢满 CPU/内存。
-    // VideoToolbox 负责硬件编码，CPU 线程主要留给解码/滤镜/字幕合成。
+  const encodeQueue = [preferredEncoder];
+  if (preferredEncoder !== fallbackEncoder) encodeQueue.push(fallbackEncoder);
+  const launch = (encoder, rest, decodeKind) => {
     const logical = Math.max(2, Number(os.cpus?.().length || 4));
     const budget = config.resourceBudget && typeof config.resourceBudget === "object" ? config.resourceBudget : {};
+    const hardwareEncode = /videotoolbox|nvenc|amf|qsv|_mf$/.test(encoder);
     const workerThreads = Math.max(2, Math.min(6, Number(budget.workerThreads || Math.ceil(logical / 2))));
-    const filterThreads = Math.max(1, Math.min(6, Number(budget.filterThreads || (isDarwin ? 4 : 2))));
+    const filterThreads = Math.max(
+      1,
+      Math.min(6, Number(budget.filterThreads || (hardwareEncode ? 4 : isDarwin ? 4 : 2))),
+    );
+    const decodeKindNow =
+      decodeKind === undefined ? (hardwareEncode ? hardware.decode : hardware.decode || "") : decodeKind;
+    const inputs = [...decodeAccelArgs(decodeKindNow), "-i", config.inputPath, ...extraInputs];
     const args = [
       "-y",
       "-hide_banner",
@@ -2051,31 +2449,16 @@ export function startExport(config) {
       built.videoLabel,
     ];
     if (built.audioLabel) args.push("-map", built.audioLabel);
+    args.push("-r", String(built.fps));
     args.push(
-      "-r",
-      String(built.fps),
-      "-c:v",
-      encoder,
-      "-b:v",
-      String(config.bitrate || (config.quality === "high" ? "20M" : "12M")),
+      ...videoEncodeArgs(encoder, {
+        bitrate: config.bitrate || (config.quality === "high" ? "20M" : "12M"),
+        fps: built.fps,
+        qualityMode: config.qualityMode,
+        quality: config.quality,
+        hdr: colorProfile.hdr,
+      }),
     );
-    const numericBitrate = Number.parseFloat(String(config.bitrate || "20M")) || 20;
-    args.push(
-      "-maxrate", `${Math.ceil(numericBitrate * 1.32)}M`,
-      "-bufsize", `${Math.ceil(numericBitrate * 2)}M`,
-      "-g", String(Math.max(24, Math.round(built.fps * 2))),
-    );
-    if (encoder === "h264_videotoolbox")
-      args.push("-profile:v", "high", "-realtime", "true");
-    if (encoder === "hevc_videotoolbox")
-      args.push("-profile:v", colorProfile.hdr ? "main10" : "main", "-tag:v", "hvc1", "-realtime", "true");
-    if (encoder === "h264_nvenc" || encoder === "hevc_nvenc")
-      args.push("-preset", "p4", "-rc", "vbr", "-spatial_aq", "1");
-    if (encoder === "h264_amf" || encoder === "hevc_amf")
-      args.push("-quality", "balanced", "-rc", "vbr_peak");
-    if (encoder === "h264_qsv" || encoder === "hevc_qsv")
-      args.push("-preset", "medium");
-    if (encoder.startsWith("libx")) args.push("-preset", "fast");
     args.push(
       "-pix_fmt",
       colorProfile.pixel,
@@ -2092,6 +2475,10 @@ export function startExport(config) {
       String(Math.max(0.04, Number(config.outputDuration || info.duration))),
       "-movflags",
       "+faststart",
+      "-loglevel",
+      "error",
+      "-stats_period",
+      "0.2",
       "-progress",
       "pipe:2",
       "-nostats",
@@ -2107,56 +2494,133 @@ export function startExport(config) {
     job.state = "exporting";
     job.progress = Math.max(job.progress, 0.02);
     job.encoder = encoder;
-    job.mode =
-      /videotoolbox|nvenc|amf|qsv|_mf$/.test(encoder)
-        ? "hardware-quality"
-        : "software-fallback";
+    job.vendor = hardware.vendor;
+    job.mode = hardwareEncode ? "hardware-quality" : "software-fallback";
+    job.stage = "encoding";
+    job.encoderLabel = encoderDisplayName(encoder);
+    const retry = () => {
+      job.progress = 0.015;
+      job.error = "";
+      if (decodeKindNow && decodeKindNow !== "none") {
+        launch(encoder, rest, decodeKindNow === "cuda" ? "d3d11va" : "none");
+        return;
+      }
+      if (rest.length) {
+        launch(rest[0], rest.slice(1), rest[0] === fallbackEncoder ? "none" : undefined);
+      }
+    };
     monitorExport(
       child,
       job,
       config,
       info,
-      allowFallback
-        ? () => {
-            job.progress = 0.015;
-            job.error = "";
-            launch(fallbackEncoder, false);
-          }
-        : null,
+      (decodeKindNow && decodeKindNow !== "none") || rest.length ? retry : null,
     );
   };
-  launch(preferredEncoder, preferredEncoder !== fallbackEncoder);
-  return { jobId: id };
+  launch(encodeQueue[0], encodeQueue.slice(1));
+}
+
+function clockToSeconds(match) {
+  if (!match) return 0;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+export function parseFfmpegProgress(text, options = {}) {
+  const duration = Math.max(0.1, Number(options.duration || 0));
+  const fps = Math.max(1, Number(options.fps || 30));
+  const source = String(text || "");
+  const us = [...source.matchAll(/^out_time_us=(\d+)/gm)].pop();
+  const clock = [...source.matchAll(/^out_time=(\d+):(\d+):(\d+(?:\.\d+)?)/gm)].pop();
+  const ms = [...source.matchAll(/^out_time_ms=(\d+)/gm)].pop();
+  const frame = [...source.matchAll(/^frame=(\d+)/gm)].pop();
+  const speed = [...source.matchAll(/^speed=\s*([0-9.]+)x/gm)].pop();
+  let seconds = 0;
+  if (us) seconds = Number(us[1]) / 1e6;
+  else if (clock) seconds = clockToSeconds(clock);
+  else if (ms) {
+    const value = Number(ms[1]);
+    seconds = value > duration * 10_000 ? value / 1e6 : value / 1e3;
+  } else if (frame) seconds = Number(frame[1]) / fps;
+  return {
+    seconds: Number.isFinite(seconds) ? Math.max(0, seconds) : 0,
+    ended: /^progress=end$/m.test(source),
+    speed: speed ? Number(speed[1]) : 0,
+  };
+}
+
+export function formatExportClock(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export function refreshExportJob(job) {
+  if (!job || ["completed", "failed", "cancelled"].includes(job.state)) {
+    if (job) job.message = exportStageMessage(job);
+    return job;
+  }
+  if (!job.startedAt) job.startedAt = Date.now();
+  const elapsed = (Date.now() - job.startedAt) / 1000;
+  if (!job.frameProgress) {
+    const soft = Math.min(0.16, 0.02 + elapsed / 36);
+    job.progress = Math.max(Number(job.progress || 0.02), soft);
+  }
+  job.message = exportStageMessage(job);
+  return job;
+}
+
+function exportStageMessage(job) {
+  const elapsed = Math.max(0, (Date.now() - (job.startedAt || Date.now())) / 1000);
+  const percent = Math.round((job.progress || 0) * 100);
+  const label = job.encoderLabel || encoderDisplayName(job.encoder || "");
+  const used = formatExportClock(elapsed);
+  if (job.state === "completed") return label ? `导出完成 · ${label}` : "导出完成";
+  if (job.state === "failed") return job.error || "视频导出失败。";
+  if (job.state === "cancelled") return "已取消导出";
+  if (job.stage === "retry") return `编码器不可用，正在改用备用编码… · 已用 ${used}`;
+  if (job.stage === "prepare" || job.stage === "captions" || job.state === "preparing")
+    return `正在准备导出（字幕/滤镜/显卡）… · 已用 ${used}`;
+  if (job.stage === "muxing" || (job.progress >= 0.98 && job.state === "exporting"))
+    return `正在封装文件… ${percent}% · ${label} · 已用 ${used}`;
+  if (!job.frameProgress)
+    return `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
+  if (job.speed > 0)
+    return `正在导出 ${percent}% · ${label} · ${job.speed.toFixed(1)}x · 已用 ${used}`;
+  return `正在导出 ${percent}% · ${label} · 已用 ${used}`;
 }
 
 function monitorExport(child, job, config, info, retry = null) {
   let stderr = "", progressBuffer = "";
+  job.startedAt = job.startedAt || Date.now();
+  job.lastProgressAt = Date.now();
+  job.speed = 0;
+  job.encoderLabel = encoderDisplayName(job.encoder || "");
+  const duration = Math.max(0.1, Number(config.outputDuration || info.duration || 0));
+  const fps = Math.max(1, Number(config.fps || info.frameRate || 30));
+  refreshExportJob(job);
   child.stderr.on("data", (chunk) => {
     const text = chunk.toString();
-    stderr = (stderr + text).slice(-12000);
-    progressBuffer = (progressBuffer + text).slice(-4000);
-    const timeMatches = [...progressBuffer.matchAll(/out_time_(?:ms|us)=(\d+)/g)];
-    const frameMatches = [...progressBuffer.matchAll(/(?:^|\n)frame=(\d+)/g)];
-    let seconds = 0;
-    if (timeMatches.length)
-      seconds = Number(timeMatches[timeMatches.length - 1][1]) / 1e6;
-    else if (frameMatches.length)
-      seconds = Number(frameMatches[frameMatches.length - 1][1]) /
-        Math.max(1, Number(config.fps || info.frameRate || 30));
-    if (seconds > 0)
+    stderr = (stderr + text).slice(-16000);
+    progressBuffer = (progressBuffer + text).slice(-8000);
+    const parsed = parseFfmpegProgress(progressBuffer, { duration, fps });
+    if (parsed.seconds > 0) {
+      job.frameProgress = true;
       job.progress = Math.max(
-        job.progress,
-        Math.min(
-          0.99,
-          seconds / Math.max(0.1, Number(config.outputDuration || info.duration)),
-        ),
+        job.progress || 0,
+        Math.min(parsed.ended ? 0.99 : 0.98, parsed.seconds / duration),
       );
+      job.lastProgressAt = Date.now();
+      job.stage = parsed.ended ? "muxing" : "encoding";
+    }
+    if (parsed.speed > 0) job.speed = parsed.speed;
+    if (parsed.ended) job.stage = "muxing";
+    refreshExportJob(job);
     const lastNewline = progressBuffer.lastIndexOf("\n");
     if (lastNewline > 0) progressBuffer = progressBuffer.slice(lastNewline + 1);
   });
   child.on("error", (error) => {
     job.state = "failed";
     job.error = error.message;
+    job.message = error.message;
   });
   child.on("close", (code) => {
     job.child = null;
@@ -2172,13 +2636,19 @@ function monitorExport(child, job, config, info, retry = null) {
     if (code === 0 && fs.existsSync(config.outputPath)) {
       job.state = "completed";
       job.progress = 1;
+      job.stage = "done";
+      job.message = exportStageMessage(job);
     } else if (retry) {
       job.state = "preparing";
+      job.stage = "retry";
+      job.frameProgress = false;
+      job.message = exportStageMessage(job);
       retry(stderr);
       return;
     } else {
       job.state = "failed";
       job.error = stderr.trim() || "视频导出失败。";
+      job.message = job.error;
     }
     if (config.captionAssPath)
       try {
@@ -2192,12 +2662,21 @@ function monitorExport(child, job, config, info, retry = null) {
 export function exportStatus(jobId) {
   const job = jobs.get(String(jobId || ""));
   if (!job) throw new Error("导出任务已经不存在。");
+  refreshExportJob(job);
   return {
     jobId: job.id,
     state: job.state,
     progress: job.progress,
     error: job.error,
     outputPath: job.outputPath,
+    encoder: job.encoder || "",
+    vendor: job.vendor || "",
+    mode: job.mode || "",
+    stage: job.stage || "",
+    speed: job.speed || 0,
+    elapsed: job.startedAt ? (Date.now() - job.startedAt) / 1000 : 0,
+    encoderLabel: job.encoderLabel || encoderDisplayName(job.encoder || ""),
+    message: job.message || "",
   };
 }
 

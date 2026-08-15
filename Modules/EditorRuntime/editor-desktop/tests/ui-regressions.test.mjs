@@ -60,7 +60,13 @@ test("project entry and panel resize avoid duplicate heavy rendering", () => {
 });
 
 test("manuscript gaps are locally cut and ripple every linked track", () => {
-  assert.match(ui, /function cutScriptIssue\(id\)/);
+  assert.match(ui, /function applyConfirmedRepeatCuts\(\)/);
+  assert.match(ui, /function cutScriptIssue\(id, \{ record = true, quiet = false \} = \{\}\)/);
+  assert.match(ui, /const autoCut = applyConfirmedRepeatCuts\(\)/);
+  assert.match(
+    ui,
+    /function cutScriptIssue\(id, \{ record = true, quiet = false \} = \{\}\) \{[\s\S]*?nextKept[\s\S]*?end = Math\.min\(state\.duration, nextKept\)/,
+  );
   assert.match(ui, /data-cut-review/);
   assert.match(ui, /data-insert-review/);
   assert.match(ui, /function insertReviewSegment\(id\)/);
@@ -71,6 +77,46 @@ test("manuscript gaps are locally cut and ripple every linked track", () => {
   assert.doesNotMatch(ui, /text: item\.type === "missing" \? "需补录" : "⌫"/);
   assert.match(ui, /function reviewClipText/);
   assert.match(ui, /未识别出文字/);
+});
+
+test("red review clips accept with Ctrl and reject with Shift", () => {
+  assert.match(
+    ui,
+    /const reviewHit =[\s\S]*?data-cut-review="\$\{escapeHtml\(c\.id\)\}"/,
+  );
+  assert.match(
+    ui,
+    /class="clip \$\{visualType\}[\s\S]*?\$\{reviewHit\}/,
+  );
+  assert.match(ui, /\.caption-token\.action-cut,[\s\S]*?pointer-events:\s*auto/);
+  assert.match(ui, /function acceptReviewSegment\(id\)/);
+  assert.match(ui, /function applyRedReviewGesture\(e, id\)/);
+  assert.match(ui, /function applyHistoryState\(data\)/);
+  assert.match(ui, /Ctrl\+点击保留不删除/);
+  assert.match(ui, /Shift\+点击接受并删除/);
+  assert.match(ui, /applyRedReviewGesture\(e, cutReview\.dataset\.cutReview\)/);
+  assert.match(
+    ui,
+    /function applyRedReviewGesture\(e, id\) \{[\s\S]*?if \(e\.shiftKey && !\(e\.ctrlKey \|\| e\.metaKey\)\) \{[\s\S]*?cutReviewSegment\(id\)/,
+  );
+  assert.match(
+    ui,
+    /function applyRedReviewGesture\(e, id\) \{[\s\S]*?if \(e\.ctrlKey \|\| e\.metaKey\) \{[\s\S]*?acceptReviewSegment\(id\)/,
+  );
+  assert.match(ui, /保留，不删除（Ctrl\+点击）/);
+  assert.match(ui, /接受并删除（Shift\+点击）/);
+  assert.match(
+    ui,
+    /function acceptReviewSegment\(id\) \{[\s\S]*?seekTimeline\(Math\.max\(0, stayTime\)\)/,
+  );
+  assert.doesNotMatch(
+    ui,
+    /function acceptReviewSegment\(id\) \{[\s\S]*?selectNextScriptDifference/,
+  );
+  assert.match(
+    ui,
+    /function applyHistoryState\(data\) \{[\s\S]*?state\.zoom = viewZoom/,
+  );
 });
 
 test("timeline zoom stays anchored to the playhead", () => {
@@ -100,6 +146,22 @@ test("subtitle side handles change wrapping width without changing font scale", 
   assert.match(ui, /objectDrag\.obj\.width = nextWidth/);
   assert.match(ui, /function captionTwoLineBreak\(/);
   assert.match(ui, /scheduleObjectDragMove\(e\.clientX, e\.clientY\)/);
+});
+
+test("standalone Mac and Windows both open a window unless the native shell embeds the editor", () => {
+  assert.match(main, /QUICKCUT_APP_EXECUTABLE/);
+  assert.match(main, /embeddedInNativeShell/);
+  assert.match(main, /openDesktopWindow/);
+  assert.doesNotMatch(main, /if \(isWindows && process\.env\.QUICKCUT_NO_WINDOW/);
+});
+
+test("DaVinci Resolve timeline export is wired", () => {
+  assert.match(ui, /id="exportResolve"/);
+  assert.match(ui, /function exportResolveTimeline\(\)/);
+  assert.match(ui, /chooseResolveExport/);
+  assert.match(ui, /exportResolveTimeline/);
+  assert.match(main, /chooseResolveExport/);
+  assert.match(main, /writeResolveTimeline/);
 });
 
 test("export ends at visible production material instead of the timeline ruler", () => {
@@ -263,8 +325,8 @@ test("ripple deletion owns subtitle removal and timestamp shifting", () => {
 test("export beauty path avoids the former bilateral bottleneck and reports preparation", () => {
   assert.match(media, /hqdn3d=/);
   assert.doesNotMatch(media, /bilateral=sigmaS/);
-  assert.match(media, /progress: 0\.01/);
-  assert.match(media, /out_time_\(\?:ms\|us\)/);
+  assert.match(media, /progress: 0\.02/);
+  assert.match(media, /out_time_us=/);
 });
 
 test("preview dragging updates only the selected compositor layer", () => {
@@ -305,17 +367,28 @@ test("export defaults balance Apple hardware speed and Rec. 709 quality", () => 
   assert.match(ui, /function projectCanSmartRemux/);
   assert.match(ui, /极速原码流直出（零损失）/);
   assert.match(media, /function canSmartCopy/);
-  assert.match(media, /mode:\s*"smart-copy"/);
+  assert.match(media, /mode = "smart-copy"|mode:\s*"smart-copy"/);
   assert.match(ui, /Rec\. 709 SDR（推荐）/);
   assert.match(media, /h264_videotoolbox/);
   assert.match(media, /h264_nvenc/);
   assert.match(media, /preferredVideoEncoder/);
+  assert.match(media, /detectExportHardware/);
+  assert.match(media, /-hwaccel", "cuda/);
+  assert.match(ui, /NVIDIA 显卡加速导出/);
+  assert.match(ui, /function hardwareExportLabel/);
+  assert.match(main, /exportHardware/);
   assert.match(media, /bt709:\s*\{\s*space:\s*"bt709"/);
   assert.match(media, /arib-std-b67/);
   assert.match(media, /smpte2084/);
-  assert.match(media, /out_time_\(\?:ms\|us\)=/);
+  assert.match(media, /out_time_us=/);
+  assert.match(media, /parseFfmpegProgress/);
+  assert.match(media, /stats_period/);
   assert.match(ui, /id="exportDurationText"/);
   assert.match(ui, /id="exportModeText"/);
+  assert.match(ui, /已取消选择保存位置/);
+  assert.match(ui, /z-index: 240/);
+  assert.match(ui, /已用 \$\{clock\}/);
+  assert.match(media, /refreshExportJob/);
   assert.match(ui, /id="exportSizeText"/);
   assert.match(ui, /function formatFileSize/);
   assert.match(ui, /function recommendedExportBitrate/);

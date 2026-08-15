@@ -14,7 +14,7 @@ const launcherPath = path.join(contentsRoot, "MacOS", "QuickCut");
 test("bundle launcher resolves Contents/Resources and all runtime components exist", { skip: !fs.existsSync(launcherPath) }, () => {
   const launcher = fs.readFileSync(launcherPath, "utf8");
   assert.match(launcher, /SCRIPT_DIR\/\.\.\/Resources\/runtime/);
-  assert.match(launcher, /APP_VERSION="2\.7\.1"/);
+  assert.match(launcher, /APP_VERSION="2\.7\.2"/);
   assert.match(launcher, /component_verified/);
   assert.match(launcher, /automatic runtime repair and retry/);
   assert.match(launcher, /runtime retry exited with status/);

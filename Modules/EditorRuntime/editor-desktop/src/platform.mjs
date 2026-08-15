@@ -52,22 +52,70 @@ function powershellEncoded(script) {
   );
 }
 
+export function parseWindowsPickerOutput(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+  const code = lines[0] || "";
+  const payload = lines.slice(1).filter(Boolean);
+  if (code === "CANCEL") return { status: "cancel", paths: [] };
+  if (code === "OK") return { status: "ok", paths: payload };
+  if (code === "ERROR")
+    return { status: "error", paths: [], error: payload.join("\n") || "文件对话框失败。" };
+  const legacy = [code, ...payload].filter(Boolean);
+  if (legacy.length) return { status: "ok", paths: legacy };
+  return { status: "error", paths: [], error: "文件对话框没有返回结果。" };
+}
+
+export function defaultExportPath(fileName) {
+  const videos = path.join(os.homedir(), "Videos");
+  const desktop = path.join(os.homedir(), "Desktop");
+  const directory = fs.existsSync(videos) ? videos : desktop;
+  fs.mkdirSync(directory, { recursive: true });
+  const base = path.basename(String(fileName || "快剪导出.mp4"));
+  const dest = path.join(directory, base);
+  if (!fs.existsSync(dest)) return dest;
+  const parsed = path.parse(base);
+  return path.join(directory, `${parsed.name}-${Date.now()}${parsed.ext}`);
+}
+
 function writePickerResult(scriptBody) {
   const output = path.join(os.tmpdir(), `quickcut-pick-${crypto.randomUUID()}.txt`);
+  const outputLiteral = output.replaceAll("'", "''");
   const script = `
+$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.FormBorderStyle = 'None'
+$owner.StartPosition = 'Manual'
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Location = New-Object System.Drawing.Point(-32000, -32000)
+$owner.Show()
+$owner.Activate()
+$owner.TopMost = $true
+try {
 ${scriptBody}
+} catch {
+  [System.IO.File]::WriteAllText('${outputLiteral}', "ERROR\`n$($_.Exception.Message)", [System.Text.UTF8Encoding]::new($false))
+} finally {
+  $owner.Close()
+  $owner.Dispose()
+}
 `;
-  const result = powershellEncoded(script.replaceAll("__OUTPUT__", output.replaceAll("'", "''")));
-  if (result.status !== 0) return [];
-  if (!fs.existsSync(output)) return [];
+  const result = powershellEncoded(script.replaceAll("__OUTPUT__", outputLiteral));
+  let parsed;
   try {
-    return fs
-      .readFileSync(output, "utf8")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
+    parsed = fs.existsSync(output)
+      ? parseWindowsPickerOutput(fs.readFileSync(output, "utf8"))
+      : {
+          status: "error",
+          paths: [],
+          error: String(result.stderr || result.stdout || "").trim() || "无法打开系统文件对话框。",
+        };
   } finally {
     try {
       fs.unlinkSync(output);
@@ -75,6 +123,9 @@ ${scriptBody}
       /* temp picker file */
     }
   }
+  if (parsed.status === "ok") return parsed.paths;
+  if (parsed.status === "cancel") return [];
+  throw new Error(parsed.error || "无法打开系统文件对话框。");
 }
 
 export function defaultSupportRoot() {
@@ -172,8 +223,11 @@ $dialog = New-Object System.Windows.Forms.OpenFileDialog
 $dialog.Title = '${title.replaceAll("'", "''")}'
 $dialog.Filter = '${filter}'
 $dialog.Multiselect = $false
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  [System.IO.File]::WriteAllText('__OUTPUT__', $dialog.FileName, [System.Text.UTF8Encoding]::new($false))
+$result = $dialog.ShowDialog($owner)
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  [System.IO.File]::WriteAllText('__OUTPUT__', "OK\`n$($dialog.FileName)", [System.Text.UTF8Encoding]::new($false))
+} else {
+  [System.IO.File]::WriteAllText('__OUTPUT__', "CANCEL", [System.Text.UTF8Encoding]::new($false))
 }
 `);
     return picked[0] || null;
@@ -193,8 +247,11 @@ $dialog = New-Object System.Windows.Forms.OpenFileDialog
 $dialog.Title = '选择字体文件（可多选）'
 $dialog.Filter = '${FILTERS.font}'
 $dialog.Multiselect = $true
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  [System.IO.File]::WriteAllText('__OUTPUT__', ($dialog.FileNames -join [Environment]::NewLine), [System.Text.UTF8Encoding]::new($false))
+$result = $dialog.ShowDialog($owner)
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  [System.IO.File]::WriteAllText('__OUTPUT__', ("OK\`n" + ($dialog.FileNames -join [Environment]::NewLine)), [System.Text.UTF8Encoding]::new($false))
+} else {
+  [System.IO.File]::WriteAllText('__OUTPUT__', "CANCEL", [System.Text.UTF8Encoding]::new($false))
 }
 `);
   }
@@ -224,25 +281,48 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 
 export function chooseOutput(defaultName, extension = "mp4") {
-  const safeName = String(defaultName || `快剪导出.${extension}`).replace(
+  const fromName = String(defaultName || "").match(/\.([a-z0-9]+)$/i)?.[1];
+  const ext = String(extension || fromName || "mp4").replace(/^\./, "") || "mp4";
+  const safeName = String(defaultName || `快剪导出.${ext}`).replace(
     /["\\]/g,
     "",
   );
+  const isTimeline = ext === "fcpxml";
+  const title = isTimeline
+    ? "导出达芬奇时间线"
+    : ext === "mp3"
+      ? "保存导出音频"
+      : ext === "png"
+        ? "保存静帧"
+        : "保存导出视频";
+  const filter = isTimeline
+    ? "Final Cut / 达芬奇 XML|*.fcpxml|所有文件|*.*"
+    : ext === "mp3"
+      ? "音频|*.mp3|所有文件|*.*"
+      : ext === "png"
+        ? "图片|*.png|所有文件|*.*"
+        : ext === "zpe"
+          ? "快剪工程|*.zpe|所有文件|*.*"
+          : "视频|*.mp4;*.mov;*.mp3|所有文件|*.*";
   if (isWindows) {
     const picked = writePickerResult(`
 $dialog = New-Object System.Windows.Forms.SaveFileDialog
-$dialog.Title = '保存导出视频'
+$dialog.Title = '${title.replaceAll("'", "''")}'
 $dialog.FileName = '${safeName.replaceAll("'", "''")}'
-$dialog.Filter = '视频|*.mp4;*.mov;*.mp3|所有文件|*.*'
+$dialog.Filter = '${filter}'
 $dialog.AddExtension = $true
 $dialog.OverwritePrompt = $true
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  [System.IO.File]::WriteAllText('__OUTPUT__', $dialog.FileName, [System.Text.UTF8Encoding]::new($false))
+$dialog.InitialDirectory = [Environment]::GetFolderPath('MyVideos')
+$result = $dialog.ShowDialog($owner)
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  [System.IO.File]::WriteAllText('__OUTPUT__', "OK\`n$($dialog.FileName)", [System.Text.UTF8Encoding]::new($false))
+} else {
+  [System.IO.File]::WriteAllText('__OUTPUT__', "CANCEL", [System.Text.UTF8Encoding]::new($false))
 }
 `);
     return picked[0] || null;
   }
-  const script = `POSIX path of (choose file name with prompt "保存导出视频" default name "${safeName}")`;
+  const script = `POSIX path of (choose file name with prompt "${title}" default name "${safeName}")`;
   const result = spawnSync("/usr/bin/osascript", ["-e", script], {
     encoding: "utf8",
   });

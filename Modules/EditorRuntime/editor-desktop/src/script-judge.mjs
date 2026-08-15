@@ -21,11 +21,11 @@ Captions already use the manuscript. You only decide which spoken spans stay.
 
 Choose one decision per item:
 - keep: ASR glitch (The/Tthe, dropped leading T), same meaning, filler, a title/question expansion such as "Are You Guilty?" → "Are you guilty of any...", or a short helpful aside.
-- cut: only a clear reread/restart, a long off-topic tangent, or a meaning change of 3+ words. Prefer the later clean take.
+- cut: a clear reread/restart/self-correction (type=repeat, including a repeated ending such as "to you, to you"), a long off-topic tangent, or a meaning change of 3+ words. Prefer the later clean take. Rereads must be cut.
 - missing: manuscript phrase was not spoken. Do not cut.
 - unsure: leave the original mark.
 
-Default to keep or unsure. Use cut rarely.
+Default to keep for ordinary extras. Never keep a reread just because it is short.
 Return JSON only: {"decisions":[{"id":"...","decision":"keep","reason":"..."}]}`,
 };
 
@@ -230,12 +230,21 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
         issue.aiDecision = "keep";
         issue.aiMode = reviewMode;
         applyKeep(issue, "local same-point keep");
+      } else if (issue.type === "repeat") {
+        summary.cut += 1;
+        issue.aiDecision = "cut";
+        issue.aiMode = reviewMode;
+        issue.confirmedCut = true;
+        issue.suggested = true;
+        issue.action = "cut";
+        issue.suppressReview = false;
       }
       continue;
     }
     let decision = judged.decision;
     if ((decision === "unsure" || (decision === "cut" && inferredKeep && reviewMode === "natural")) && inferredKeep)
       decision = "keep";
+    if (decision === "unsure" && issue.type === "repeat") decision = "cut";
     issue.aiDecision = decision;
     issue.aiReason = judged.reason || "";
     issue.aiMode = reviewMode;

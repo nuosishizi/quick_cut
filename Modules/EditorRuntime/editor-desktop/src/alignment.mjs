@@ -984,6 +984,9 @@ function recoverManuscriptFirstASR(operations) {
 
 function phraseWordList(value) {
   return String(value || "")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
@@ -993,14 +996,93 @@ function looksLikeRestart(phrase, before) {
   const extra = phraseWordList(phrase);
   const prev = phraseWordList(before);
   if (extra.length < 2 || prev.length < 2) return false;
-  if (before.endsWith(phrase) || phrase.endsWith(before) || before.startsWith(phrase)) return true;
+  const extraText = extra.join(" ");
+  const prevText = prev.join(" ");
+  if (prevText.endsWith(extraText) || extraText.endsWith(prevText) || prevText.startsWith(extraText))
+    return true;
   for (let count = Math.min(4, extra.length, prev.length); count >= 2; count -= 1) {
     const tail = prev.slice(-count).join(" ");
     const head = extra.slice(0, count).join(" ");
-    if (tail && (tail === head || phrase.startsWith(`${tail} `) || phrase.endsWith(` ${tail}`)))
+    if (tail && (tail === head || extraText.startsWith(`${tail} `) || extraText.endsWith(` ${tail}`)))
       return true;
   }
   return false;
+}
+
+function rematchPrefixFalseStarts(operations = []) {
+  for (let index = 1; index < operations.length; index += 1) {
+    if (!["match", "near"].includes(operations[index].type) || !operations[index].expected)
+      continue;
+    const previousDisplay = String(
+      operations[index - 1]?.expected?.display || operations[index - 1]?.spoken?.display || "",
+    );
+    if (!/[.!?…]["'”’)]*$/.test(previousDisplay.trim())) continue;
+    let prefixEnd = index;
+    while (
+      prefixEnd < operations.length &&
+      ["match", "near"].includes(operations[prefixEnd].type) &&
+      operations[prefixEnd].expected &&
+      operations[prefixEnd].spoken
+    )
+      prefixEnd += 1;
+    const prefix = operations.slice(index, prefixEnd);
+    if (prefix.length < 2) continue;
+    const extras = [];
+    let cursor = prefixEnd;
+    while (
+      cursor < operations.length &&
+      operations[cursor].type === "extra" &&
+      operations[cursor].spoken
+    ) {
+      extras.push(operations[cursor]);
+      cursor += 1;
+    }
+    if (extras.length < 2) continue;
+    const prefixNorms = prefix.map((item) => item.expected.norm);
+    const extraNorms = extras.map((item) => item.spoken.norm);
+    let extraAt = -1;
+    for (
+      let offset = 0;
+      offset <= Math.min(2, extraNorms.length - prefixNorms.length);
+      offset += 1
+    ) {
+      if (prefixNorms.every((norm, pos) => extraNorms[offset + pos] === norm)) {
+        extraAt = offset;
+        break;
+      }
+    }
+    if (extraAt < 0) continue;
+    for (let pos = 0; pos < prefix.length; pos += 1) {
+      const later = extras[extraAt + pos];
+      const earlier = prefix[pos];
+      later.type = "match";
+      later.relation = "match";
+      later.expected = { ...earlier.expected };
+      later.issueType = "";
+      later.issueId = "";
+      later.action = "";
+      earlier.type = "extra";
+      earlier.relation = "extra";
+      earlier.expected = null;
+      earlier.action = "cut";
+      earlier.issueType = "repeat";
+    }
+    for (let pos = 0; pos < extraAt; pos += 1) {
+      extras[pos].action = "cut";
+      extras[pos].issueType = extras[pos].issueType || "repeat";
+    }
+  }
+  return operations;
+}
+
+function looksLikeAbandonedPrefix(phrase, after) {
+  const extra = phraseWordList(phrase);
+  const next = phraseWordList(after);
+  if (extra.length < 2 || next.length < 3) return false;
+  if (extra.slice(0, 2).join(" ") !== next.slice(0, 2).join(" ")) return false;
+  if (extra.join(" ") === next.slice(0, extra.length).join(" "))
+    return extra.length < next.length;
+  return extra.length <= 6;
 }
 
 function sentenceContinues(display) {
@@ -1140,7 +1222,9 @@ function confirmedMismatchEvidence(expectedGroup = [], spokenGroup = [], strict 
 export function alignScript({ segments, script, duration = 0 }) {
   const spoken = transcriptWords(segments);
   const expected = scriptWords(script);
-  const operations = recoverManuscriptFirstASR(anchoredAlignment(expected, spoken));
+  const operations = rematchPrefixFalseStarts(
+    recoverManuscriptFirstASR(anchoredAlignment(expected, spoken)),
+  );
   // Short conversational fillers do not alter the manuscript meaning and
   // should not flood the review track. A conjunction such as "and" or "but"
   // is ignored only when reliable manuscript words exist on both sides.
@@ -1238,36 +1322,67 @@ export function alignScript({ segments, script, duration = 0 }) {
     if (issueType === "mismatch" && !strictGroup && semanticScore >= 0.58)
       issueType = "semantic";
     let repeatKeepLater = false;
+    let abandonedPrefix = false;
     let earlierOperationIndexes = [];
     if (issueType === "extra" && spokenGroup.length) {
       const phrase = spokenGroup.map((word) => word.norm).join(" ");
       const before = operations
-        .slice(Math.max(0, start - spokenGroup.length - 2), start)
+        .slice(Math.max(0, start - Math.max(spokenGroup.length + 4, 8)), start)
         .map((item) => item.expected?.norm)
         .filter(Boolean)
         .join(" ");
       const after = operations
-        .slice(cursor, cursor + spokenGroup.length + 2)
+        .slice(cursor, cursor + Math.max(spokenGroup.length + 2, 8))
         .map((item) => item.expected?.norm)
         .filter(Boolean)
         .join(" ");
-      if (after.startsWith(phrase) && !before.endsWith(phrase)) {
+      if (looksLikeAbandonedPrefix(phrase, after)) {
+        // "we're treating it" then the complete "We're treating as ordinary..."
+        // is an abandoned first take. Cut it and keep the later complete sentence.
+        issueType = "repeat";
+        abandonedPrefix = true;
+      } else if (after.startsWith(phrase) && !before.endsWith(phrase)) {
         // The manuscript itself can intentionally repeat a sentence.  In that case
         // this spoken phrase belongs to the upcoming repeated manuscript text and
         // must be preserved, not treated as an accidental re-read.
         issueType = "semantic";
-      } else if (before.endsWith(phrase) || looksLikeRestart(phrase, before)) {
+      } else if (
+        phraseWordList(before).join(" ").endsWith(phraseWordList(phrase).join(" ")) ||
+        looksLikeRestart(phrase, before)
+      ) {
         issueType = "repeat";
         const candidate = [];
         for (let opIndex = start - 1; opIndex >= 0 && candidate.length < spokenGroup.length; opIndex -= 1) {
           const op = operations[opIndex];
-          if (op.spoken && op.expected && ["match", "near"].includes(op.type)) candidate.unshift(opIndex);
-          else if (op.spoken && !["filler"].includes(op.type)) break;
+          if (op.spoken && op.expected && ["match", "near"].includes(op.type)) {
+            if (/[.!?…]["'”’)]*$/.test(String(op.expected.display || "").trim()) && candidate.length)
+              break;
+            candidate.unshift(opIndex);
+            if (/[.!?…]["'”’)]*$/.test(String(operations[opIndex - 1]?.expected?.display || "").trim()))
+              break;
+          } else if (op.spoken && !["filler"].includes(op.type)) break;
         }
         const candidatePhrase = candidate.map((opIndex) => operations[opIndex].expected?.norm).filter(Boolean).join(" ");
         if (candidate.length && (candidatePhrase === phrase || looksLikeRestart(phrase, candidatePhrase))) {
-          repeatKeepLater = true;
-          earlierOperationIndexes = candidate;
+          const previousRun = [];
+          for (let opIndex = start - 1; opIndex >= 0; opIndex -= 1) {
+            const op = operations[opIndex];
+            if (op.spoken && op.expected && ["match", "near"].includes(op.type)) {
+              previousRun.unshift(op);
+              if (/[.!?…]["'”’)]*$/.test(String(operations[opIndex - 1]?.expected?.display || "").trim()))
+                break;
+            } else break;
+          }
+          const previousEnded = /[,.!?…]["'”’)]*$/.test(
+            String(operations[start - 1]?.expected?.display || "").trim(),
+          );
+          const extraIsOnlyTail = previousRun.length > spokenGroup.length + 1;
+          // Trailing echo: "Why I say to you, to you" keeps the complete clause
+          // and cuts the later extra. A same-length restart still prefers later.
+          if (!previousEnded && !extraIsOnlyTail) {
+            repeatKeepLater = true;
+            earlierOperationIndexes = candidate;
+          }
         }
       } else {
         const boundedBefore = operations
@@ -1304,9 +1419,9 @@ export function alignScript({ segments, script, duration = 0 }) {
     let confirmedCut = false;
     let confirmedError = false;
     if (issueType === "repeat") {
-      // A real re-read is corrected automatically (prefer the later take) and never
-      // blocks export by itself, including inside scripture.
-      confirmedCut = repeatKeepLater;
+      // Cut the abandoned take. Trailing echoes such as "to you / to you"
+      // delete the later extra; false starts delete the earlier take.
+      confirmedCut = true;
       confirmedError = false;
     } else if (issueType === "mismatch") {
       confirmedCut = confirmedMismatchEvidence(expectedGroup, spokenGroup, strictGroup);
@@ -1342,11 +1457,23 @@ export function alignScript({ segments, script, duration = 0 }) {
       ? earlierOperationIndexes.map((opIndex) => operations[opIndex].spoken).filter(Boolean)
       : [];
     const rangeStart = earlierWords[0]?.start ?? spokenGroup[0]?.start ?? previousTime ?? nextTime ?? 0;
-    const rangeEnd = earlierWords.at(-1)?.end ?? spokenGroup.at(-1)?.end ?? rangeStart + 0.08;
+    let rangeEnd = earlierWords.at(-1)?.end ?? spokenGroup.at(-1)?.end ?? rangeStart + 0.08;
+    // Word timestamps often end before the voice does. For a cut extra/reread,
+    // stretch to the next kept word so leftover "to you" audio is not left behind.
+    if (
+      confirmedCut &&
+      !repeatKeepLater &&
+      Number.isFinite(nextTime) &&
+      nextTime > rangeEnd &&
+      nextTime - rangeEnd <= 2.8
+    )
+      rangeEnd = nextTime;
+    else if (confirmedCut && !repeatKeepLater)
+      rangeEnd = Math.max(rangeEnd, rangeStart + 0.08) + 0.06;
     const issue = {
       id: crypto.randomUUID(),
       type: issueType,
-      label: issueLabel(issueType),
+      label: abandonedPrefix ? "没读完又重来" : issueLabel(issueType),
       spokenText: formatDisplayWords(spokenGroup) || "—",
       expectedText: formatDisplayWords(expectedGroup) || "—",
       start: rangeStart,
@@ -1365,6 +1492,7 @@ export function alignScript({ segments, script, duration = 0 }) {
       confirmedCut,
       confirmedError,
       repeatKeepLater,
+      abandonedPrefix,
       earlierOperationIndexes,
       laterOperationIndexes: repeatKeepLater ? group.map((_, offset) => start + offset) : [],
     };
@@ -1382,7 +1510,33 @@ export function alignScript({ segments, script, duration = 0 }) {
     issues.push(issue);
   }
   issues.push(...collectFalseStartGapIssues(operations));
+  snapMatchesAfterAbandonedPrefixes(operations, issues);
   return { spoken, expected, operations, issues };
+}
+
+function snapMatchesAfterAbandonedPrefixes(operations = [], issues = []) {
+  for (const issue of issues) {
+    if (!issue?.abandonedPrefix && !(issue?.type === "repeat" && issue?.confirmedCut && !issue.repeatKeepLater))
+      continue;
+    const extraEnd = Number(issue.end || 0);
+    if (!(extraEnd > 0)) continue;
+    let cursor = extraEnd;
+    for (const operation of operations) {
+      if (!operation?.spoken || !["match", "near"].includes(operation.type)) continue;
+      const start = Number(operation.spoken.start || 0);
+      const end = Number(operation.spoken.end || start);
+      if (end <= extraEnd + 0.01) continue;
+      if (start >= cursor - 0.02) break;
+      const duration = Math.max(0.04, end - start);
+      operation.spoken.start = cursor;
+      operation.spoken.end = cursor + duration;
+      if (operation.expected) {
+        operation.expected.start = operation.spoken.start;
+        operation.expected.end = operation.spoken.end;
+      }
+      cursor = operation.spoken.end;
+    }
+  }
 }
 
 export function buildCaptions(expectedWords, options = {}) {
@@ -1577,11 +1731,19 @@ function interpolateManuscriptTimes(words = []) {
     const previous = start > 0 ? words[start - 1] : null;
     const next = index < words.length ? words[index] : null;
     const count = index - start;
-    const from = previous
+    const previousEnded = /[.!?…]["'”’)]*$/.test(String(previous?.display || "").trim());
+    const nextStart = next
+      ? Number(next.start)
+      : Number(previous?.end || 0) + Math.max(0.24, count * 0.22);
+    // After a finished sentence, park unanchored words on the later take.
+    // Filling the hole would stretch the complete sentence over a false start.
+    let from = previous
       ? Number(previous.end)
       : next
         ? Math.max(0, Number(next.start) - Math.max(0.24, count * 0.22))
         : 0;
+    if (previousEnded && next && nextStart - Number(previous.end) > 0.62)
+      from = Math.max(from, nextStart - Math.max(0.24, count * 0.22));
     const to = next
       ? Number(next.start)
       : from + Math.max(0.24, count * 0.22);

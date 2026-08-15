@@ -126,6 +126,18 @@ test("Groq trailing silence is not kept on the previous sentence", () => {
   assert.ok(tightened[1].start >= tightened[0].end);
 });
 
+test("a real pause after a sentence is not pulled into the next reread", () => {
+  const tightened = tightenTranscriptWordTimes([
+    { text: "standards.", start: 160.0, end: 160.7 },
+    { text: "we're", start: 161.733, end: 161.95 },
+    { text: "treating", start: 161.95, end: 162.3 },
+    { text: "it", start: 162.3, end: 162.55 },
+  ]);
+  assert.ok(tightened[0].end <= 160.9);
+  assert.ok(tightened[1].start >= 161.6);
+  assert.equal(Number(tightened[1].start.toFixed(3)), 161.733);
+});
+
 test("Deepgram word timestamps become alignment segments", () => {
   const segments = parseDeepgramTranscription(
     {
