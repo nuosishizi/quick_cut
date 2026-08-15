@@ -579,43 +579,120 @@ local function apply_style(comp, tool, item, style)
       tool:SetInput("Style", style.fontStyle)
     end)
   end
-  set_number(tool, "Size", tonumber(style.size) or 0.06)
+  set_number(tool, "Size", tonumber(style.size) or 0.065)
   pcall(function()
     tool:SetInput("Center", { tonumber(style.centerX) or 0.5, tonumber(style.centerY) or 0.22 })
   end)
-  local align = tonumber(style.align)
-  if align ~= nil then
-    set_number(tool, "HorizontalJustificationNew", align)
-  end
+  set_number(tool, "HorizontalJustificationNew", 3)
+  set_number(tool, "VerticalJustificationNew", 3)
+
+  -- Element 1: Default White Text Fill
+  set_number(tool, "SelectElement", 1)
   set_number(tool, "Enabled1", 1)
-  apply_rgb(tool, 1, style.color or item.color, 1)
-  if style.strokeEnabled then
-    set_number(tool, "Enabled2", 1)
-    apply_rgb(tool, 2, style.strokeColor, 1)
-    set_number(tool, "Thickness2", tonumber(style.stroke) or 0.06)
-  else
-    set_number(tool, "Enabled2", 0)
-  end
-  if style.shadowEnabled then
-    set_number(tool, "Enabled3", 1)
-    apply_rgb(tool, 3, style.shadowColor, 1)
-  else
-    set_number(tool, "Enabled3", 0)
-  end
+  set_number(tool, "Type1", 0) -- 0 = Solid fill
+  set_number(tool, "Red1", 1.0)
+  set_number(tool, "Green1", 1.0)
+  set_number(tool, "Blue1", 1.0)
+  set_number(tool, "Alpha1", 1.0)
+  set_number(tool, "Opacity1", 1.0)
+  pcall(function()
+    tool:SetInput("Color1Red", 1.0)
+    tool:SetInput("Color1Green", 1.0)
+    tool:SetInput("Color1Blue", 1.0)
+  end)
+
   if style.backgroundEnabled then
+    -- Preset 2: Rounded Dark Capsule Box (Element 2 = Text Border)
+    local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
+    local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
+    local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
+    local bgA = tonumber(style.backgroundOpacity) or 0.94
+    local extX = tonumber(style.backgroundExtendX) or 0.12
+    local extY = tonumber(style.backgroundExtendY) or 0.06
+    local round = tonumber(style.backgroundRound) or 0.5
+
+    set_number(tool, "SelectElement", 2)
+    set_number(tool, "Enabled2", 1)
+    set_number(tool, "Type2", 1) -- 1 = Text Border Box
+    set_number(tool, "Level2", 0) -- 0 = Line level
+    set_number(tool, "Red2", bgR)
+    set_number(tool, "Green2", bgG)
+    set_number(tool, "Blue2", bgB)
+    set_number(tool, "Alpha2", bgA)
+    set_number(tool, "Opacity2", bgA)
+    set_number(tool, "Extends2X", extX)
+    set_number(tool, "Extends2Y", extY)
+    set_number(tool, "ExtendHorizontal2", extX)
+    set_number(tool, "ExtendVertical2", extY)
+    set_number(tool, "Round2X", round)
+    set_number(tool, "Round2Y", round)
+    set_number(tool, "Round2", round)
+    set_number(tool, "Softness2", 0)
+    pcall(function()
+      tool:SetInput("Color2Red", bgR)
+      tool:SetInput("Color2Green", bgG)
+      tool:SetInput("Color2Blue", bgB)
+    end)
+
+    -- Also configure Shading 4 for compatibility
     set_number(tool, "Enabled4", 1)
-    set_number(tool, "ElementShape4", 2) -- 2 = Solid Box
-    set_number(tool, "Level4", 0) -- 0 = Line (full continuous box)
-    apply_rgb(tool, 4, style.backgroundColor, style.backgroundOpacity or 0.8)
-    set_number(tool, "ExtendHorizontal4", tonumber(style.backgroundExtendX) or 0.05)
-    set_number(tool, "ExtendVertical4", tonumber(style.backgroundExtendY) or 0.05)
-    set_number(tool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.05)
-    set_number(tool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.05)
-    set_number(tool, "Round4", tonumber(style.backgroundRound) or 0.25)
+    set_number(tool, "Element4", 2)
+    set_number(tool, "ElementShape4", 2)
+    set_number(tool, "Type4", 0)
+    set_number(tool, "Thickness4", 1.0)
+    set_number(tool, "Level4", 0)
+    set_number(tool, "Red4", bgR)
+    set_number(tool, "Green4", bgG)
+    set_number(tool, "Blue4", bgB)
+    set_number(tool, "Alpha4", bgA)
+    set_number(tool, "Opacity4", bgA)
+    set_number(tool, "ExtendHorizontal4", extX)
+    set_number(tool, "ExtendVertical4", extY)
+    set_number(tool, "ExtendX4", extX)
+    set_number(tool, "ExtendY4", extY)
+    set_number(tool, "Round4", round)
     set_number(tool, "Softness4", 0)
+
+    set_number(tool, "Enabled3", 0)
   else
+    -- Preset 1: Bold Dark Outline (Element 3 / Element 2 = Outline)
+    local strokeThick = tonumber(style.stroke) or 0.025
+    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.08
+    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.08
+    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.08
+
+    -- Element 3: Outline
+    set_number(tool, "SelectElement", 3)
+    set_number(tool, "Enabled3", 1)
+    set_number(tool, "Type3", 1) -- 1 = Outline / Border
+    set_number(tool, "Red3", sR)
+    set_number(tool, "Green3", sG)
+    set_number(tool, "Blue3", sB)
+    set_number(tool, "Alpha3", 1.0)
+    set_number(tool, "Opacity3", 1.0)
+    set_number(tool, "Thickness3", strokeThick)
+    set_number(tool, "JoinStyle3", 1) -- 1 = Round Join
+    set_number(tool, "Softness3", 0)
+    pcall(function()
+      tool:SetInput("Color3Red", sR)
+      tool:SetInput("Color3Green", sG)
+      tool:SetInput("Color3Blue", sB)
+    end)
+
+    -- Element 2 fallback outline
+    set_number(tool, "SelectElement", 2)
+    set_number(tool, "Enabled2", 1)
+    set_number(tool, "Type2", 1)
+    set_number(tool, "Red2", sR)
+    set_number(tool, "Green2", sG)
+    set_number(tool, "Blue2", sB)
+    set_number(tool, "Thickness2", strokeThick)
+    set_number(tool, "JoinStyle2", 1)
+    set_number(tool, "Softness2", 0)
+
     set_number(tool, "Enabled4", 0)
   end
+
   local plain = tostring(item.text or "")
   pcall(function()
     tool:SetInput("StyledText", plain)
@@ -626,58 +703,68 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
-local function apply_background(comp, templateTool, followerTool, autosubsTool, style)
-  if not style or not style.backgroundEnabled then
-    if templateTool then pcall(function() templateTool:SetInput("Enabled4", 0) end) end
-    if followerTool then pcall(function() followerTool:SetInput("Enabled4", 0) end) end
-    if autosubsTool then pcall(function() autosubsTool:SetInput("BubbleEnabled", 0) end) end
-    return
+local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+  local cls = clsTool or (comp and comp:FindTool("CharacterLevelStyling1"))
+  if not cls then return end
+
+  pcall(function() cls:SetInput("Text", plainText) end)
+  pcall(function() cls:SetInput("StyledText", plainText) end)
+
+  local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+  local spline = conn and conn:GetTool()
+  if not spline then return end
+
+  local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
+  local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+  if not wordTiming or #wordTiming == 0 then return end
+
+  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
+  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
+  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
+
+  local keyframes = {
+    [0] = {
+      0,
+      Value = {
+        __ctor = "StyledText",
+        Array = {},
+        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+      }
+    }
+  }
+
+  for i, word in ipairs(wordTiming) do
+    local sFrame = math.max(0, tonumber(word.startFrame) or 0)
+    local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 5))
+
+    local activeArray = {
+      { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 },
+      { 2401, word.startIndex, word.endIndex, Value = hlR, Index = 0, __flags = 256 },
+      { 2402, word.startIndex, word.endIndex, Value = hlG, Index = 0, __flags = 256 },
+      { 2403, word.startIndex, word.endIndex, Value = hlB, Index = 0, __flags = 256 }
+    }
+
+    keyframes[sFrame] = {
+      sFrame,
+      Value = {
+        __ctor = "StyledText",
+        Array = activeArray,
+        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+      }
+    }
+
+    keyframes[eFrame] = {
+      eFrame,
+      Value = {
+        __ctor = "StyledText",
+        Array = {},
+        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+      }
+    }
   end
 
-  local r = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0
-  local g = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0
-  local b = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0
-  local a = tonumber(style.backgroundOpacity) or 0.85
-  local extX = tonumber(style.backgroundExtendX) or 0.08
-  local extY = tonumber(style.backgroundExtendY) or 0.08
-  local round = tonumber(style.backgroundRound) or 0.25
-
-  local tTool = templateTool or (comp and comp:FindTool("Template"))
-  local fTool = followerTool or (comp and comp:FindTool("Follower1"))
-  local aTool = autosubsTool or (comp and comp:FindTool("AutoSubs"))
-
-  local targets = {}
-  if tTool then table.insert(targets, tTool) end
-  if fTool then table.insert(targets, fTool) end
-
-  for _, tool in ipairs(targets) do
-    pcall(function()
-      tool:SetInput("Enabled4", 1)
-      tool:SetInput("Element4", 2) -- Solid Box / Border
-      tool:SetInput("ElementShape4", 2)
-      tool:SetInput("Shape4", 2)
-      tool:SetInput("Type4", 0) -- Solid Color
-      tool:SetInput("Thickness4", 1.0)
-      tool:SetInput("Level4", 0) -- Line level (0 = Line, continuous background banner)
-      tool:SetInput("Red4", r)
-      tool:SetInput("Green4", g)
-      tool:SetInput("Blue4", b)
-      tool:SetInput("Alpha4", a)
-      tool:SetInput("Opacity4", a)
-      tool:SetInput("ExtendHorizontal4", extX)
-      tool:SetInput("ExtendVertical4", extY)
-      tool:SetInput("ExtendX4", extX)
-      tool:SetInput("ExtendY4", extY)
-      tool:SetInput("Round4", round)
-      tool:SetInput("Softness4", 0)
-    end)
-  end
-
-  if aTool then
-    pcall(function()
-      aTool:SetInput("BubbleEnabled", 1)
-      aTool:SetInput("BubbleColorRed", r)
-      aTool:SetInput("BubbleColorGreen", g)
+  pcall(function() spline:SetKeyFrames(keyframes) end)
+end
       aTool:SetInput("BubbleColorBlue", b)
       aTool:SetInput("HighlightRound", round)
       aTool:SetInput("HighlightExtendHorizontal", extX)
@@ -1103,91 +1190,33 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           local autosubsTool = comp:FindTool("AutoSubs")
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
           local followerTool = comp:FindTool("Follower1")
+          local clsTool = comp:FindTool("CharacterLevelStyling1")
 
-          -- 1. Apply full styling (font, size, center, fill, outline, shadow) to Text+ tool directly
+          -- 1. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
           if followerTool then
             apply_style(comp, followerTool, caption, style)
           end
-          apply_background(comp, templateTool, followerTool, autosubsTool, style)
 
-          -- 2. If AutoSubs macro is present, configure dynamic animation and word timing
+          -- 2. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
+          apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+
+          -- 3. If AutoSubs macro is present, disable its animation overrides so it cannot corrupt the style
           if autosubsTool then
             local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps
             local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-            autosubsTool:SetData("WordTiming", wordTiming)
+            pcall(function() autosubsTool:SetData("WordTiming", wordTiming) end)
+            pcall(function() autosubsTool:SetInput("FadeEnabled", 0) end)
+            pcall(function() autosubsTool:SetInput("PopInEnabled", 0) end)
+            pcall(function() autosubsTool:SetInput("SlideUpEnabled", 0) end)
+            pcall(function() autosubsTool:SetInput("HighlightEnabled", 0) end)
 
-            local clsTool = comp:FindTool("CharacterLevelStyling1")
-            if clsTool then
-              pcall(function() clsTool:SetInput("StyledText", plainText) end)
-              pcall(function() clsTool:SetInput("Text", plainText) end)
+            -- Re-assert native style onto templateTool
+            if templateTool then
+              apply_style(comp, templateTool, caption, style)
             end
-
-            pcall(function() autosubsTool:SetInput("HighlightEnabled", 1) end)
-            pcall(function() autosubsTool:SetInput("HighlightStyle", tonumber(style.highlightStyle) or 0) end)
-            if style.highlightColor and type(style.highlightColor) == "table" then
-              pcall(function() autosubsTool:SetInput("HighlightColorRed", tonumber(style.highlightColor[1]) or 1.0) end)
-              pcall(function() autosubsTool:SetInput("HighlightColorGreen", tonumber(style.highlightColor[2]) or 0.82) end)
-              pcall(function() autosubsTool:SetInput("HighlightColorBlue", tonumber(style.highlightColor[3]) or 0.0) end)
-            end
-
-            if tonumber(style.highlightStyle) == 3 then
-              local bubbleR = style.backgroundColor and style.backgroundColor[1] or 0.0
-              local bubbleG = style.backgroundColor and style.backgroundColor[2] or 0.0
-              local bubbleB = style.backgroundColor and style.backgroundColor[3] or 0.0
-              pcall(function() autosubsTool:SetInput("BubbleEnabled", 1) end)
-              pcall(function() autosubsTool:SetInput("BubbleColorRed", tonumber(bubbleR) or 0.0) end)
-              pcall(function() autosubsTool:SetInput("BubbleColorGreen", tonumber(bubbleG) or 0.0) end)
-              pcall(function() autosubsTool:SetInput("BubbleColorBlue", tonumber(bubbleB) or 0.0) end)
-              pcall(function() autosubsTool:SetInput("HighlightRound", tonumber(style.backgroundRound) or 0.25) end)
-              pcall(function() autosubsTool:SetInput("HighlightExtendHorizontal", tonumber(style.backgroundExtendX) or 0.04) end)
-              pcall(function() autosubsTool:SetInput("HighlightExtendVertical", tonumber(style.backgroundExtendY) or 0.04) end)
-            end
-
-            if hasPreset then
-              local setter = autosubsTool:GetData("SetInputValues")
-              if setter and setter ~= "" then
-                local setterFunc = loadstring(setter)
-                if setterFunc then
-                  pcall(setterFunc(), comp, autosubsTool, presetSettings)
-                end
-              else
-                for k, v in pairs(presetSettings) do
-                  pcall(function() autosubsTool:SetInput(k, v) end)
-                end
-                local setAnims = autosubsTool:GetData("SetAnimations")
-                if setAnims and setAnims ~= "" then
-                  local f = loadstring(setAnims)
-                  if f then pcall(f(), comp, autosubsTool) end
-                end
-                local updateHl = autosubsTool:GetData("UpdateHighlight")
-                if updateHl and updateHl ~= "" then
-                  local f = loadstring(updateHl)
-                  if f then pcall(f(), comp, autosubsTool) end
-                end
-              end
-            end
-
-            local applyHl = autosubsTool:GetData("ApplyHighlight")
-            if applyHl and applyHl ~= "" then
-              local hlFunc = loadstring(applyHl)
-              if hlFunc then
-                pcall(hlFunc(), comp, autosubsTool)
-              end
-            else
-              local updateHl = autosubsTool:GetData("UpdateHighlight")
-              if updateHl and updateHl ~= "" then
-                local hlFunc = loadstring(updateHl)
-                if hlFunc then
-                  pcall(hlFunc(), comp, autosubsTool)
-                end
-              end
-            end
-
-            -- 3. Re-assert background on BOTH templateTool and followerTool after ApplyHighlight
-            apply_background(comp, templateTool, followerTool, autosubsTool, style)
           end
         end
       end
