@@ -765,13 +765,6 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
 
   pcall(function() spline:SetKeyFrames(keyframes) end)
 end
-      aTool:SetInput("BubbleColorBlue", b)
-      aTool:SetInput("HighlightRound", round)
-      aTool:SetInput("HighlightExtendHorizontal", extX)
-      aTool:SetInput("HighlightExtendVertical", extY)
-    end)
-  end
-end
 
 local function set_clip_span(item, start_frame, end_frame, root)
   if not item then
