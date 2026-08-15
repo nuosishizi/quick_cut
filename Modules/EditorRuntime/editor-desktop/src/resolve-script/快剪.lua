@@ -642,14 +642,22 @@ local function apply_background(comp, templateTool, followerTool, autosubsTool, 
   local extY = tonumber(style.backgroundExtendY) or 0.08
   local round = tonumber(style.backgroundRound) or 0.25
 
+  local tTool = templateTool or (comp and comp:FindTool("Template"))
+  local fTool = followerTool or (comp and comp:FindTool("Follower1"))
+  local aTool = autosubsTool or (comp and comp:FindTool("AutoSubs"))
+
   local targets = {}
-  if templateTool then table.insert(targets, templateTool) end
-  if followerTool then table.insert(targets, followerTool) end
+  if tTool then table.insert(targets, tTool) end
+  if fTool then table.insert(targets, fTool) end
 
   for _, tool in ipairs(targets) do
     pcall(function()
       tool:SetInput("Enabled4", 1)
-      tool:SetInput("ElementShape4", 2) -- Solid Box
+      tool:SetInput("Element4", 2) -- Solid Box / Border
+      tool:SetInput("ElementShape4", 2)
+      tool:SetInput("Shape4", 2)
+      tool:SetInput("Type4", 0) -- Solid Color
+      tool:SetInput("Thickness4", 1.0)
       tool:SetInput("Level4", 0) -- Line level (0 = Line, continuous background banner)
       tool:SetInput("Red4", r)
       tool:SetInput("Green4", g)
@@ -665,15 +673,15 @@ local function apply_background(comp, templateTool, followerTool, autosubsTool, 
     end)
   end
 
-  if autosubsTool then
+  if aTool then
     pcall(function()
-      autosubsTool:SetInput("BubbleEnabled", 1)
-      autosubsTool:SetInput("BubbleColorRed", r)
-      autosubsTool:SetInput("BubbleColorGreen", g)
-      autosubsTool:SetInput("BubbleColorBlue", b)
-      autosubsTool:SetInput("HighlightRound", round)
-      autosubsTool:SetInput("HighlightExtendHorizontal", extX)
-      autosubsTool:SetInput("HighlightExtendVertical", extY)
+      aTool:SetInput("BubbleEnabled", 1)
+      aTool:SetInput("BubbleColorRed", r)
+      aTool:SetInput("BubbleColorGreen", g)
+      aTool:SetInput("BubbleColorBlue", b)
+      aTool:SetInput("HighlightRound", round)
+      aTool:SetInput("HighlightExtendHorizontal", extX)
+      aTool:SetInput("HighlightExtendVertical", extY)
     end)
   end
 end
