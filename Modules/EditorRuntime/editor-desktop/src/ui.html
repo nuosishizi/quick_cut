@@ -9469,10 +9469,12 @@
         const ids = (state.issues || [])
           .filter(
             (issue) =>
-              issue.type === "repeat" &&
+              (issue.type === "repeat" || issue.confirmedCut === true || issue.action === "cut") &&
               issue.confirmedCut === true &&
               issue.suppressReview !== true &&
-              issue.action !== "keep",
+              issue.action !== "keep" &&
+              !issue.scripture &&
+              !issue.confirmedError,
           )
           .sort((left, right) => Number(right.start || 0) - Number(left.start || 0))
           .map((issue) => issue.id);
