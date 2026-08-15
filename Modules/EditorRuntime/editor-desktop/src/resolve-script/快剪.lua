@@ -690,9 +690,11 @@ local function apply_style(comp, tool, item, style)
     local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
     local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
     local bgA = tonumber(style.backgroundOpacity) or 0.94
-    local extX = math.max(0.18, tonumber(style.backgroundExtendX) or 0.22)
-    local extY = math.max(0.08, tonumber(style.backgroundExtendY) or 0.12)
+    local extX = math.max(0.04, tonumber(style.backgroundExtendX) or 0.12)
+    local extY = math.max(0.04, tonumber(style.backgroundExtendY) or 0.08)
     local round = math.min(0.28, tonumber(style.backgroundRound) or 0.22)
+    local bgMode = tostring(style.backgroundMode or "block")
+    local bgLevel = (bgMode == "line") and 2 or 3 -- 2 = Line level, 3 = Text level
 
     set_number(tool, "SelectElement", 4)
     set_number(tool, "Enabled4", 1)
@@ -700,7 +702,7 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "ElementShape4", 2)
     set_number(tool, "Type4", 0)
     set_number(tool, "Thickness4", 1.0)
-    set_number(tool, "Level4", 0)
+    set_number(tool, "Level4", bgLevel)
     set_number(tool, "Red4", bgR)
     set_number(tool, "Green4", bgG)
     set_number(tool, "Blue4", bgB)
@@ -716,7 +718,7 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "SelectElement", 2)
     set_number(tool, "Enabled2", 1)
     set_number(tool, "Type2", 1) -- 1 = Text Border Box
-    set_number(tool, "Level2", 0) -- 0 = Line level
+    set_number(tool, "Level2", bgLevel == 2 and 0 or 1)
     set_number(tool, "Red2", bgR)
     set_number(tool, "Green2", bgG)
     set_number(tool, "Blue2", bgB)

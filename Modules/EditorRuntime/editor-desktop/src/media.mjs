@@ -1275,11 +1275,15 @@ function lineRiseAssEvents(caption, style, x, y, fontSize) {
 
 function estimatedCaptionBox(caption, style, fontSize, scale, x, y) {
   const words = String(casedText(caption.text || "", style.textCase)).split(/\s+/).filter(Boolean);
-  const padding = Math.max(0, Number(style.padding || 0)) * scale;
+  const widthPad = Math.max(0, Number(style.backgroundWidth ?? style.padding ?? 14)) * scale;
+  const heightPad = Math.max(0, Number(style.backgroundHeight ?? style.padding ?? 14)) * scale;
   const gap = wordGap(style, fontSize);
   const textWidth = words.reduce((sum, word) => sum + estimatedWordWidth(word, style, fontSize, scale), 0) + gap * Math.max(0, words.length - 1);
-  const width = Math.max(80, textWidth + padding * 2) * Math.max(0.2, Number(style.backgroundScaleX || 1));
-  const height = Math.max(28, fontSize * Math.max(1.2, Number(style.lineHeight || 1.15)) * 1.35 + padding * 2) * Math.max(0.2, Number(style.backgroundScaleY || 1));
+  const isFit = style.backgroundFitText !== false;
+  const width = isFit
+    ? Math.max(80, textWidth + widthPad * 2) * Math.max(0.2, Number(style.backgroundScaleX || 1))
+    : Math.max(80, Number(style.boxWidth || 864) * scale);
+  const height = Math.max(28, fontSize * Math.max(1.2, Number(style.lineHeight || 1.15)) * 1.35 + heightPad * 2) * Math.max(0.2, Number(style.backgroundScaleY || 1));
   return {
     width,
     height,

@@ -382,6 +382,7 @@ test("advanced typography controls include per-slider reset and both background 
     "backgroundHeight",
     "backgroundX",
     "backgroundY",
+    "backgroundFitText",
   ]) assert.match(ui, new RegExp(`id="${id}"`));
   assert.match(ui, /data-background-mode="block"/);
   assert.match(ui, /data-background-mode="line"/);
@@ -391,6 +392,7 @@ test("advanced typography controls include per-slider reset and both background 
   assert.match(ui, /reset\.textContent = "↺"/);
   assert.match(media, /style\.wordSpacing/);
   assert.match(media, /style\.shadowAngle/);
+  assert.match(ui, /backgroundFitText/);
 });
 
 test("export defaults balance Apple hardware speed and Rec. 709 quality", () => {

@@ -246,6 +246,8 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
     BubbleColorRed: background.color ? background.color[0] : 0,
     BubbleColorGreen: background.color ? background.color[1] : 0,
     BubbleColorBlue: background.color ? background.color[2] : 0,
+    BubbleMode: String(firstStyle.backgroundMode || "block"),
+    BubbleFitText: firstStyle.backgroundFitText !== false ? 1 : 0,
     HighlightEnabled: highlightEnabled,
     HighlightStyle: highlightStyle,
     HighlightColorRed: highlightColorRgb[0],

@@ -792,9 +792,23 @@
         72% { opacity:1; transform:translate(0,0) rotate(0) scale(1.035); filter:blur(0); }
         100% { opacity:1; transform:translate(0,0) rotate(0) scale(1); filter:blur(0); }
       }
+      .textstyle-content.block-fit-background {
+        display: inline-block;
+        width: fit-content;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
       .textstyle-content.line-background {
+        display: inline;
         -webkit-box-decoration-break: clone;
         box-decoration-break: clone;
+      }
+      .textstyle-content.line-background .caption-line {
+        display: inline-block;
+        background: inherit;
+        padding: inherit;
+        border-radius: inherit;
+        margin: 2px 0;
       }
       .twocol {
         display: grid;
@@ -2935,6 +2949,10 @@
                     <button class="btn" data-background-mode="block">整体底板</button>
                     <button class="btn" data-background-mode="line">逐行底板</button>
                   </div>
+                  <div class="switch" style="margin-top: 6px;">
+                    <span>跟随文字宽度</span>
+                    <input id="backgroundFitText" type="checkbox" checked />
+                  </div>
                   <div class="field">
                     <div class="fieldhead"><span>背景颜色</span></div>
                     <input class="input colorinput" id="backgroundColor" type="color" value="#000000" />
@@ -3639,6 +3657,7 @@
           backgroundOpacity: 0.94,
           padding: 18,
           backgroundMode: "block",
+          backgroundFitText: true,
           backgroundWidth: 26,
           backgroundHeight: 14,
           backgroundX: 0,
@@ -4987,6 +5006,7 @@
           shadowDistance: Number(style.shadowDistance ?? style.shadow ?? 3),
           shadowAngle: Number(style.shadowAngle ?? 45),
           backgroundMode: style.backgroundMode || "block",
+          backgroundFitText: style.backgroundFitText !== false,
           backgroundWidth: Number(style.backgroundWidth ?? style.padding ?? 14),
           backgroundHeight: Number(style.backgroundHeight ?? style.padding ?? 14),
           backgroundX: Number(style.backgroundX || 0),
@@ -6742,30 +6762,35 @@
           shadows.push(`0 0 ${(glowRadius * 0.82).toFixed(2)}px ${hexAlpha(glowColor, 0.48)}`);
           shadows.push(`0 0 ${(glowRadius * 1.55).toFixed(2)}px ${hexAlpha(glowColor, 0.23)}`);
         }
+        const fitText = s.backgroundFitText !== false;
         el.style.textShadow = shadows.join(",");
         el.style.background =
-          s.backgroundEnabled && backgroundMode === "block"
+          s.backgroundEnabled && backgroundMode === "block" && !fitText
             ? backgroundColor
             : "transparent";
         el.style.padding =
-          s.backgroundEnabled && backgroundMode === "block"
+          s.backgroundEnabled && backgroundMode === "block" && !fitText
             ? `${heightPad}px ${widthPad}px`
             : "0";
-        el.style.borderRadius = `${(s.radius || 0) * px}px`;
+        el.style.borderRadius =
+          s.backgroundEnabled && backgroundMode === "block" && !fitText
+            ? `${(s.radius || 0) * px}px`
+            : "0";
         el.style.boxShadow = "none";
         content.classList.toggle(
           "line-background",
           !!s.backgroundEnabled && backgroundMode === "line",
         );
-        content.style.background =
-          s.backgroundEnabled && backgroundMode === "line"
-            ? backgroundColor
-            : "transparent";
-        content.style.padding =
-          s.backgroundEnabled && backgroundMode === "line"
-            ? `${heightPad}px ${widthPad}px`
-            : "0";
-        content.style.borderRadius = `${(s.radius || 0) * px}px`;
+        content.classList.toggle(
+          "block-fit-background",
+          !!s.backgroundEnabled && backgroundMode === "block" && fitText,
+        );
+        const useContentBg =
+          (s.backgroundEnabled && backgroundMode === "block" && fitText) ||
+          (s.backgroundEnabled && backgroundMode === "line");
+        content.style.background = useContentBg ? backgroundColor : "transparent";
+        content.style.padding = useContentBg ? `${heightPad}px ${widthPad}px` : "0";
+        content.style.borderRadius = useContentBg ? `${(s.radius || 0) * px}px` : "0";
         content.style.position = "relative";
         content.style.left = s.backgroundEnabled
           ? `${Number(s.backgroundX || 0) * px}px`
@@ -7656,6 +7681,7 @@
           $("glow").value = s.glow || 0;
           $("glowOut").textContent = s.glow || 0;
           $("backgroundEnabled").checked = !!s.backgroundEnabled;
+          if ($("backgroundFitText")) $("backgroundFitText").checked = s.backgroundFitText !== false;
           $("backgroundColor").value = s.background || "#000000";
           $("backgroundOpacity").value = Math.round(
             (s.backgroundOpacity ?? 0.7) * 100,
@@ -11746,6 +11772,7 @@
         "glowColor",
         "glow",
         "backgroundEnabled",
+        "backgroundFitText",
         "backgroundColor",
         "backgroundOpacity",
         "backgroundWidth",
@@ -11786,6 +11813,7 @@
           s.glow = Number($("glow").value);
           $("glowOut").textContent = s.glow;
           s.backgroundEnabled = $("backgroundEnabled").checked;
+          if ($("backgroundFitText")) s.backgroundFitText = $("backgroundFitText").checked;
           s.background = $("backgroundColor").value;
           s.backgroundColor = $("backgroundColor").value;
           s.backgroundOpacity = Number($("backgroundOpacity").value) / 100;
@@ -11808,12 +11836,12 @@
         if (el) {
           el.oninput = () => {
             syncAndRefresh();
-            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled"].includes(id))
+            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled", "backgroundFitText"].includes(id))
               scheduleCaptionReflow();
           };
           el.onchange = () => {
             syncAndRefresh();
-            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled"].includes(id))
+            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled", "backgroundFitText"].includes(id))
               scheduleCaptionReflow();
           };
         }
