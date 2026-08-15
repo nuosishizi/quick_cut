@@ -14,6 +14,7 @@ const {
   parseGeminiTranscription,
   parseGroqTranscription,
   parseTimestampSeconds,
+  tightenTranscriptWordTimes,
   saveGroqApiKey,
   saveSpeechSettings,
   modelStatus,
@@ -109,6 +110,17 @@ test("Gemini timestamps parse seconds and clock strings", () => {
   assert.equal(segments.length, 2);
   assert.equal(segments[0].start, 11.2);
   assert.equal(segments[1].text, "world");
+});
+
+test("Groq trailing silence is not kept on the previous sentence", () => {
+  const tightened = tightenTranscriptWordTimes([
+    { text: "soul.", start: 184.0, end: 187.2 },
+    { text: "And", start: 187.25, end: 187.5 },
+    { text: "here's", start: 187.5, end: 187.9 },
+  ]);
+  assert.ok(tightened[0].end <= 185.4);
+  assert.ok(tightened[1].start < 185.7);
+  assert.ok(tightened[1].start >= tightened[0].end);
 });
 
 test("speech engine can switch to Gemini without a Groq key", () => {

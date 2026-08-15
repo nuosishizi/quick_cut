@@ -431,6 +431,44 @@ export function parseGroqTranscription(data, offset = 0) {
     .filter(Boolean);
 }
 
+export function tightenTranscriptWordTimes(segments = []) {
+  const words = (segments || []).map((item) => ({ ...item }));
+  words.sort(
+    (left, right) =>
+      Number(left.start) - Number(right.start) || Number(left.end) - Number(right.end),
+  );
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const next = words[index + 1];
+    const text = String(word.text || "").trim();
+    const letters = text.replace(/[^\p{L}\p{N}']+/gu, "");
+    const tokens = text.split(/\s+/).filter(Boolean).length || 1;
+    const closes = /[.!?…]["'”’)]*$/.test(text);
+    const maxDur =
+      Math.min(0.28 + tokens * 0.42, Math.max(0.16, 0.1 + letters.length * 0.052 + tokens * 0.08)) +
+      (closes ? 0.2 : 0);
+    const start = Number(word.start);
+    if (!Number.isFinite(start)) continue;
+    let end = Number(word.end);
+    if (!Number.isFinite(end) || end <= start) end = start + Math.min(0.32, maxDur);
+    end = Math.min(end, start + maxDur);
+    if (next && Number.isFinite(Number(next.start))) end = Math.min(end, Number(next.start) - 0.012);
+    word.end = Math.max(start + 0.04, end);
+  }
+  for (let index = 0; index < words.length - 1; index += 1) {
+    const word = words[index];
+    const next = words[index + 1];
+    if (!/[.!?…]["'”’)]*$/.test(String(word.text || "").trim())) continue;
+    const gap = Number(next.start) - Number(word.end);
+    if (gap <= 0.4 || gap >= 4) continue;
+    const shifted = Number(word.end) + 0.12;
+    const nextDur = Math.max(0.04, Number(next.end) - Number(next.start));
+    next.start = shifted;
+    next.end = Math.max(shifted + 0.04, Math.min(Number(next.end), shifted + Math.min(nextDur, 0.55)));
+  }
+  return words;
+}
+
 function groqPrompt() {
   return "This is a clear spoken English Bible teaching.";
 }
@@ -934,6 +972,7 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
     normalizeTranscriptTimebase(segments, duration),
   );
   unique = recoverIncompleteSegments(unique, fallbackText, duration);
+  unique = tightenTranscriptWordTimes(unique);
   if (!unique.length) throw new Error("没有识别到清晰的英语人声。");
   const aligned = alignScript({ segments: unique, script, duration });
   const cutRanges = mergeRanges(removals, duration);

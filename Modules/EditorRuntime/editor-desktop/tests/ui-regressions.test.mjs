@@ -368,6 +368,7 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /Gemini 听写/);
   assert.match(whisper, /transcribeWithGemini/);
   assert.match(whisper, /v1beta\/interactions|completeGeminiMedia/);
+  assert.match(whisper, /tightenTranscriptWordTimes\(unique\)/);
   assert.match(ui, /saveGroqApiKey/);
   assert.match(ui, /id="aiReviewStrict"/);
   assert.match(ui, /id="openReviewSettings"/);
