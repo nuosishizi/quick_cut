@@ -150,6 +150,60 @@ const rawNormalize = (text) =>
     .toLowerCase()
     .replace(/[’']/g, "'")
     .replace(/[^\p{L}\p{N}']/gu, "");
+
+const CONTRACTIONS = new Map([
+  ["i'm", ["i", "am"]],
+  ["i've", ["i", "have"]],
+  ["i'll", ["i", "will"]],
+  ["i'd", ["i", "would"]],
+  ["you're", ["you", "are"]],
+  ["you've", ["you", "have"]],
+  ["you'll", ["you", "will"]],
+  ["you'd", ["you", "would"]],
+  ["we're", ["we", "are"]],
+  ["we've", ["we", "have"]],
+  ["we'll", ["we", "will"]],
+  ["we'd", ["we", "would"]],
+  ["they're", ["they", "are"]],
+  ["they've", ["they", "have"]],
+  ["they'll", ["they", "will"]],
+  ["they'd", ["they", "would"]],
+  ["that's", ["that", "is"]],
+  ["there's", ["there", "is"]],
+  ["here's", ["here", "is"]],
+  ["what's", ["what", "is"]],
+  ["who's", ["who", "is"]],
+  ["where's", ["where", "is"]],
+  ["how's", ["how", "is"]],
+  ["he's", ["he", "is"]],
+  ["she's", ["she", "is"]],
+  ["it's", ["it", "is"]],
+  ["let's", ["let", "us"]],
+  ["isn't", ["is", "not"]],
+  ["aren't", ["are", "not"]],
+  ["wasn't", ["was", "not"]],
+  ["weren't", ["were", "not"]],
+  ["don't", ["do", "not"]],
+  ["doesn't", ["does", "not"]],
+  ["didn't", ["did", "not"]],
+  ["can't", ["can", "not"]],
+  ["couldn't", ["could", "not"]],
+  ["won't", ["will", "not"]],
+  ["wouldn't", ["would", "not"]],
+  ["shouldn't", ["should", "not"]],
+  ["haven't", ["have", "not"]],
+  ["hasn't", ["has", "not"]],
+  ["hadn't", ["had", "not"]],
+]);
+
+const STRIPPED_CONTRACTIONS = new Map(
+  [...CONTRACTIONS.entries()]
+    .map(([form, parts]) => [form.replace(/'/g, ""), parts])
+    .filter(([form]) =>
+      !["were", "well", "wed", "ill", "id", "its", "cant", "lets", "hell", "shed"].includes(form),
+    ),
+);
+
 export function normalizeWord(text) {
   const raw = rawNormalize(text);
   if (!raw) return "";
@@ -157,6 +211,18 @@ export function normalizeWord(text) {
   if (/^\d+(?:st|nd|rd|th)$/i.test(raw))
     return raw.replace(/(?:st|nd|rd|th)$/i, "");
   return equivalents.get(raw) || raw.replace(/'/g, "");
+}
+
+export function contractionParts(word) {
+  if (!word) return null;
+  if (Array.isArray(word.expansion) && word.expansion.length >= 2) return word.expansion;
+  const raw = rawNormalize(word.display || "");
+  if (CONTRACTIONS.has(raw)) return CONTRACTIONS.get(raw);
+  if (/'/.test(raw)) {
+    const stripped = raw.replace(/'/g, "");
+    return STRIPPED_CONTRACTIONS.get(stripped) || CONTRACTIONS.get(stripped) || null;
+  }
+  return STRIPPED_CONTRACTIONS.get(word.norm) || null;
 }
 
 function comparisonStem(value) {
@@ -177,7 +243,10 @@ function displayWords(text) {
   for (const token of String(text || "").match(wordPattern) || []) {
     const norm = normalizeWord(token);
     if (norm) {
-      output.push({ display: `${prefix}${token}`, norm });
+      const item = { display: `${prefix}${token}`, norm };
+      const expansion = contractionParts(item);
+      if (expansion) item.expansion = expansion;
+      output.push(item);
       prefix = "";
     } else if (/^[\"“‘(\[]$/.test(token)) prefix += token;
     else if (output.length) output.at(-1).display += token;
@@ -242,6 +311,7 @@ export function transcriptWords(segments) {
       words.push({
         display: token.display,
         norm: token.norm,
+        expansion: token.expansion,
         keepWithPrevious: !!token.keepWithPrevious,
         scriptureReference: !!token.scriptureReference,
         start: start + ((end - start) * index) / Math.max(1, tokens.length),
@@ -348,6 +418,93 @@ function characterSimilarity(left, right) {
   return 1 - previous[right.length] / Math.max(left.length, right.length);
 }
 
+function partMatchesWord(word, part) {
+  if (!word || !part) return false;
+  if (word.norm === part) return true;
+  if (comparisonStem(word.norm) === comparisonStem(part)) return true;
+  const parts = contractionParts(word);
+  return parts?.[0] === part;
+}
+
+function contractionPairQuality(parts, first, second) {
+  if (!parts || parts.length !== 2 || !first || !second) return "";
+  const firstExact = first.norm === parts[0];
+  const secondExact = second.norm === parts[1];
+  if (firstExact && secondExact) return "match";
+  if (partMatchesWord(first, parts[0]) && partMatchesWord(second, parts[1])) return "near";
+  return "";
+}
+
+function mergeSpokenWords(first, second) {
+  return {
+    ...first,
+    display: `${first.display} ${second.display}`,
+    start: Number(first.start || 0),
+    end: Math.max(Number(first.end || 0), Number(second.end || 0)),
+    mergedFrom: [first, second],
+  };
+}
+
+function splitSpokenWord(spoken, index, count = 2) {
+  const start = Number(spoken.start || 0);
+  const end = Math.max(start + 0.04, Number(spoken.end || start + 0.04));
+  const span = (end - start) / count;
+  return {
+    ...spoken,
+    start: start + span * index,
+    end: start + span * (index + 1),
+  };
+}
+
+function takeContractionOperations(expected, spoken, expectedIndex, spokenIndex) {
+  const expectedWord = expected[expectedIndex];
+  const spokenWord = spoken[spokenIndex];
+  const expectedParts = contractionParts(expectedWord);
+  const spokenNext = spoken[spokenIndex + 1];
+  const expectedPair = contractionPairQuality(expectedParts, spokenWord, spokenNext);
+  if (expectedPair) {
+    return {
+      expectedDelta: 1,
+      spokenDelta: 2,
+      operations: [
+        {
+          type: expectedPair,
+          relation: expectedPair,
+          expected: expectedWord,
+          spoken: mergeSpokenWords(spokenWord, spokenNext),
+          contraction: true,
+        },
+      ],
+    };
+  }
+  const spokenParts = contractionParts(spokenWord);
+  const expectedNext = expected[expectedIndex + 1];
+  const spokenPair = contractionPairQuality(spokenParts, expectedWord, expectedNext);
+  if (spokenPair) {
+    return {
+      expectedDelta: 2,
+      spokenDelta: 1,
+      operations: [
+        {
+          type: spokenPair,
+          relation: spokenPair,
+          expected: expectedWord,
+          spoken: splitSpokenWord(spokenWord, 0),
+          contraction: true,
+        },
+        {
+          type: spokenPair,
+          relation: spokenPair,
+          expected: expectedNext,
+          spoken: splitSpokenWord(spokenWord, 1),
+          contraction: true,
+        },
+      ],
+    };
+  }
+  return null;
+}
+
 function wordRelation(expected, spoken) {
   if (expected.norm === spoken.norm) return "match";
   const expectedStem = comparisonStem(expected.norm),
@@ -392,9 +549,38 @@ function localAlignment(expected, spoken) {
         costs[i - 1][j] + 1,
         costs[i][j - 1] + 1,
       ];
-      const best = Math.min(...choices);
+      let best = Math.min(...choices);
+      let step = choices.indexOf(best);
+      if (j >= 2) {
+        const expectedPair = contractionPairQuality(
+          contractionParts(expected[i - 1]),
+          spoken[j - 2],
+          spoken[j - 1],
+        );
+        if (expectedPair) {
+          const cost = costs[i - 1][j - 2] + (expectedPair === "match" ? 0 : 0.18);
+          if (cost < best - 0.001) {
+            best = cost;
+            step = 3;
+          }
+        }
+      }
+      if (i >= 2) {
+        const spokenPair = contractionPairQuality(
+          contractionParts(spoken[j - 1]),
+          expected[i - 2],
+          expected[i - 1],
+        );
+        if (spokenPair) {
+          const cost = costs[i - 2][j - 1] + (spokenPair === "match" ? 0 : 0.18);
+          if (cost < best - 0.001) {
+            best = cost;
+            step = 4;
+          }
+        }
+      }
       costs[i][j] = best;
-      steps[i][j] = choices.indexOf(best);
+      steps[i][j] = step;
     }
   }
   const operations = [];
@@ -402,7 +588,42 @@ function localAlignment(expected, spoken) {
   let j = spoken.length;
   while (i || j) {
     const step = steps[i][j];
-    if (i && j && step === 0) {
+    if (i && j && step === 3 && j >= 2) {
+      const pair = contractionPairQuality(
+        contractionParts(expected[i - 1]),
+        spoken[j - 2],
+        spoken[j - 1],
+      ) || "match";
+      operations.push({
+        type: pair,
+        relation: pair,
+        expected: expected[--i],
+        spoken: mergeSpokenWords(spoken[j - 2], spoken[j - 1]),
+        contraction: true,
+      });
+      j -= 2;
+    } else if (i >= 2 && j && step === 4) {
+      const pair = contractionPairQuality(
+        contractionParts(spoken[j - 1]),
+        expected[i - 2],
+        expected[i - 1],
+      ) || "match";
+      const spokenWord = spoken[--j];
+      operations.push({
+        type: pair,
+        relation: pair,
+        expected: expected[--i],
+        spoken: splitSpokenWord(spokenWord, 1),
+        contraction: true,
+      });
+      operations.push({
+        type: pair,
+        relation: pair,
+        expected: expected[--i],
+        spoken: splitSpokenWord(spokenWord, 0),
+        contraction: true,
+      });
+    } else if (i && j && step === 0) {
       const relation = wordRelation(expected[i - 1], spoken[j - 1]);
       operations.push({
         type:
@@ -551,6 +772,18 @@ function anchoredAlignment(expected, spoken) {
   let expectedCursor = 0;
   let spokenCursor = 0;
   while (expectedCursor < expected.length && spokenCursor < spoken.length) {
+    const contracted = takeContractionOperations(
+      expected,
+      spoken,
+      expectedCursor,
+      spokenCursor,
+    );
+    if (contracted) {
+      operations.push(...contracted.operations);
+      expectedCursor += contracted.expectedDelta;
+      spokenCursor += contracted.spokenDelta;
+      continue;
+    }
     const relation = wordRelation(
       expected[expectedCursor],
       spoken[spokenCursor],
@@ -808,6 +1041,16 @@ export function alignScript({ segments, script, duration = 0 }) {
       (harmlessFillers.has(norm) ||
         (harmlessConnectors.has(norm) && acceptedBefore && acceptedAfter))
     ) operation.type = "filler";
+  }
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (!["match", "near"].includes(operation.type) || !operation.expected) continue;
+    const parts = contractionParts(operation.expected);
+    if (!parts) continue;
+    const next = operations[index + 1];
+    if (next?.type === "extra" && parts.slice(1).includes(next.spoken?.norm)) {
+      next.type = "filler";
+    }
   }
   let lastTime = 0;
   for (const operation of operations) {
@@ -1081,9 +1324,12 @@ export function buildCaptions(expectedWords, options = {}) {
     const joinsNext = /^(?:and|but|or|so|because|for|yet|then|when|while|if|that|which|who)$/i.test(
       singleton.replace(/[^\p{L}]/gu, ""),
     );
+    const shortCloser = /^(?:me|you|it|us|him|her|them)[.!?]["'\u201d\u2019)]*$/i.test(
+      singleton.replace(/^[\"“]+/, ""),
+    );
     const canMergePrevious =
       previous &&
-      gapFromPrevious <= 0.62 &&
+      (gapFromPrevious <= 0.62 || (shortCloser && !previousClosesSentence && gapFromPrevious <= 1.8)) &&
       previous.words.length + caption.words.length <= maxWords + 1 &&
       !previousClosesSentence;
     const canMergeNext =

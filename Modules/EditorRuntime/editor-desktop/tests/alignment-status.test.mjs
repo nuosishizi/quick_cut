@@ -397,3 +397,60 @@ test("overlapping recognition windows are stitched without a fake repeated word"
   );
   assert.ok(stitched.every((segment, index) => index === 0 || segment.start >= stitched[index - 1].end));
 });
+
+test("That's me stays one manuscript phrase when ASR expands the contraction", () => {
+  const script = `Maybe you're thinking,\n\n"That's me.\n\nI've done those things.`;
+  const aligned = alignScript({
+    segments: [{
+      text: "Maybe you're thinking that is me this is me I've done those things",
+      start: 5,
+      end: 13,
+    }],
+    script,
+    duration: 13,
+  });
+  const thatsIndex = aligned.operations.findIndex((operation) =>
+    /that.?s/i.test(operation.expected?.display || ""),
+  );
+  const meIndex = aligned.operations.findIndex(
+    (operation, index) =>
+      index > thatsIndex &&
+      /^["“]?me[.!]?["”]?$/i.test(String(operation.expected?.display || "").replace(/^[\"“]+/, "")),
+  );
+  assert.ok(thatsIndex >= 0);
+  assert.ok(meIndex > thatsIndex);
+  const between = aligned.operations.slice(thatsIndex + 1, meIndex);
+  assert.equal(between.some((operation) => operation.type === "extra"), false);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
+    maxWords: 7,
+    maxChars: 32,
+  });
+  assert.ok(captions.some((caption) => /That's/i.test(caption.text) && /\bme\./i.test(caption.text)));
+  assert.ok(!captions.some((caption) => /^me\.$/i.test(caption.text.trim())));
+  const extra = aligned.issues.find((issue) => /this is/i.test(issue.spokenText || ""));
+  if (extra) {
+    const me = aligned.operations[meIndex];
+    assert.ok(extra.start >= Number(me.spoken?.start || me.expected?.start || 0) - 0.08);
+  }
+});
+
+test("I've done matches spoken I have done", () => {
+  const aligned = alignScript({
+    segments: [{ text: "I have done those things more than once", start: 0, end: 4 }],
+    script: "I've done those things. More than once.",
+    duration: 4,
+  });
+  assert.equal(textOf(aligned.operations), "I've done those things. More than once.");
+  assert.equal(aligned.issues.some((issue) => issue.type === "extra" && /have/i.test(issue.spokenText || "")), false);
+});
+
+test("doesn't just say stays matched when ASR speaks does not", () => {
+  const script = "The Bible doesn't just say God dislikes these sins.";
+  const aligned = alignScript({
+    segments: [{ text: "The Bible does not just say God dislikes these sins", start: 0, end: 5 }],
+    script,
+    duration: 5,
+  });
+  assert.equal(textOf(aligned.operations), script);
+  assert.equal(aligned.issues.length, 0);
+});
