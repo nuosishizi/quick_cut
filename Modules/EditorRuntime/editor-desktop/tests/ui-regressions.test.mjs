@@ -124,6 +124,9 @@ test("timeline zoom stays anchored to the playhead", () => {
   assert.match(ui, /playheadTime \* state\.zoom - anchorX/);
   assert.match(ui, /scheduleTimelineZoomCommit\(\)/);
   assert.match(ui, /timelineZoom"\)\.oninput[\s\S]*?setTimelineZoomAroundPlayhead/);
+  assert.match(ui, /id="zoomToFitTimeline"/);
+  assert.match(ui, /function zoomToFitTimeline\(\)/);
+  assert.match(ui, /clamp\(Number\(nextZoom\) \|\| oldZoom, 1, 300\)/);
 });
 
 test("timeline follows the playhead, stacks overlaps, and keeps clip names visible", () => {

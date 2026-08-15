@@ -3294,11 +3294,11 @@
             class="zoom"
             id="timelineZoom"
             type="range"
-            min="20"
-            max="180"
+            min="1"
+            max="300"
             data-button-step="5"
             value="60"
-          /><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button><span class="small" id="durationLabel">00:00</span>
+          /><button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-left: 2px;">⛶</button><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button><span class="small" id="durationLabel">00:00</span>
         </div>
         <div class="timelinebody">
           <div class="tracklabels" id="trackLabels"></div>
@@ -6870,7 +6870,13 @@
           ruler = $("ruler");
         $("timelineContent").style.width = `${width}px`;
         const step =
-          state.zoom < 35 ? 10 : state.zoom < 70 ? 5 : state.zoom < 130 ? 2 : 1;
+          state.zoom < 2 ? 300 :
+          state.zoom < 5 ? 120 :
+          state.zoom < 10 ? 60 :
+          state.zoom < 20 ? 30 :
+          state.zoom < 40 ? 10 :
+          state.zoom < 80 ? 5 :
+          state.zoom < 140 ? 2 : 1;
         let html = "";
         for (let t = 0; t <= visibleDuration; t += step)
           html += `<span class="tick" style="left:${t * state.zoom}px">${formatTime(t, false)}</span>`;
@@ -10852,7 +10858,7 @@
           anchorX = oldScreenX >= 0 && oldScreenX <= scroll.clientWidth
             ? oldScreenX
             : scroll.clientWidth / 2;
-        state.zoom = clamp(Number(nextZoom) || oldZoom, 20, 180);
+        state.zoom = clamp(Number(nextZoom) || oldZoom, 1, 300);
         $("timelineZoom").value = state.zoom;
         const ratio = state.zoom / oldZoom,
           content = $("timelineContent"),
@@ -10877,6 +10883,25 @@
       }
       $("timelineZoom").oninput = (e) =>
         setTimelineZoomAroundPlayhead(Number(e.target.value));
+      function zoomToFitTimeline() {
+        const scroll = $("timelineScroll");
+        if (!scroll) return;
+        const totalDuration = Math.max(1, mainContentEnd() || state.duration || 60);
+        const availableWidth = Math.max(100, scroll.clientWidth - 48);
+        const fitZoom = clamp(Math.round((availableWidth / totalDuration) * 10) / 10, 1, 300);
+        state.zoom = fitZoom;
+        if ($("timelineZoom")) $("timelineZoom").value = fitZoom;
+        const content = $("timelineContent");
+        if (content) {
+          const nextWidth = Math.max(scroll.clientWidth, visibleTimelineDuration() * state.zoom);
+          content.style.width = `${nextWidth}px`;
+        }
+        $("playhead").style.left = `${state.currentTime * state.zoom}px`;
+        scroll.scrollLeft = 0;
+        renderTimeline();
+        scheduleWaveformRender();
+      }
+      if ($("zoomToFitTimeline")) $("zoomToFitTimeline").onclick = zoomToFitTimeline;
       $("followPlayhead").onclick = () => {
         state.followPlayhead = state.followPlayhead === false;
         syncFollowPlayheadButton();
@@ -12601,6 +12626,12 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           target.select();
+          return;
+        }
+        if ((code === "KeyZ" || e.key === "Z" || e.key === "z") && e.shiftKey && !command && !textEditing) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          zoomToFitTimeline();
           return;
         }
         if (command && code === "KeyZ" && !textEditing) {
