@@ -1183,7 +1183,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
         if comp then
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
           local clsTool = comp:FindTool("CharacterLevelStyling1")
-          local followerTool = comp:FindTool("Follower1")
+          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
           local autosubsTool = comp:FindTool("AutoSubs")
 
           -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText
@@ -1191,12 +1191,9 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
           end
 
-          -- 2. Delete interfering Follower1 & AutoSubs macro wrappers if present
-          if followerTool then
-            pcall(function() followerTool:Delete() end)
-          end
-          if autosubsTool then
-            pcall(function() autosubsTool:Delete() end)
+          -- 2. Direct connect Template output to MediaOut1 so MediaOut always renders pristine Text+
+          if mediaOut and templateTool then
+            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
           end
 
           -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
