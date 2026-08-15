@@ -42,7 +42,6 @@ test("bundled Resolve script has AutoSubs dynamic template engine and text fallb
   assert.match(lua, /env_global\("resolve"\)/);
   assert.match(lua, /write_progress/);
   assert.match(lua, /notify_user/);
-  assert.match(lua, /restore_pushed_video/);
   assert.match(lua, /快剪已连接达芬奇/);
 });
 

@@ -648,6 +648,20 @@ local function unlock_all_video(timeline)
   end
 end
 
+local function track_has_non_caption_clips(timeline, track_index)
+  local items = nil
+  pcall(function() items = timeline:GetItemListInTrack("video", track_index) end)
+  if type(items) ~= "table" then return false end
+  for _, item in ipairs(items) do
+    local name = ""
+    pcall(function() name = item:GetName() or "" end)
+    if name:find("快剪字幕", 1, true) ~= 1 and name:find("AutoSubs", 1, true) ~= 1 and name ~= "Text+" then
+      return true
+    end
+  end
+  return false
+end
+
 local function find_or_add_caption_track(timeline)
   local count = timeline:GetTrackCount("video") or 0
   for track = 1, count do
@@ -655,149 +669,39 @@ local function find_or_add_caption_track(timeline)
     pcall(function()
       name = timeline:GetTrackName("video", track) or ""
     end)
-    if name == "快剪字幕" then
+    if (name == "快剪字幕" or name == "AutoSubs" or name == "AutoSubs Caption") and not track_has_non_caption_clips(timeline, track) then
       return track
     end
   end
   pcall(function()
     timeline:AddTrack("video")
   end)
-  local index = timeline:GetTrackCount("video") or 1
+  local index = timeline:GetTrackCount("video") or (count + 1)
   pcall(function()
     timeline:SetTrackName("video", index, "快剪字幕")
   end)
   return index
 end
 
-local function describe_item(item)
-  if not item then
-    return "item=nil"
-  end
-  local name, start_at, ending, duration, comps = "?", "?", "?", "?", "?"
-  pcall(function() name = item:GetName() end)
-  pcall(function() start_at = item:GetStart() end)
-  pcall(function() ending = item:GetEnd() end)
-  pcall(function() duration = item:GetDuration() end)
-  pcall(function() comps = item:GetFusionCompCount() end)
-  return string.format(
-    "name=%s start=%s end=%s duration=%s comps=%s",
-    tostring(name),
-    tostring(start_at),
-    tostring(ending),
-    tostring(duration),
-    tostring(comps)
-  )
-end
-
-local function clip_name(item)
-  local name = ""
-  pcall(function()
-    name = item:GetName() or ""
-  end)
-  return name
-end
-
-local function is_quickcut_clip(item)
-  local name = clip_name(item)
-  return name:find("快剪字幕", 1, true) == 1
-    or name:find("快剪模板", 1, true) == 1
-    or name:find("QuickCutCap", 1, true) == 1
-end
-
-local function last_occupied_frame(timeline, start_frame)
-  local last = tonumber(start_frame) or 0
-  local tracks = timeline:GetTrackCount("video") or 0
-  for track = 1, tracks do
-    local items = nil
-    pcall(function()
-      items = timeline:GetItemListInTrack("video", track)
-    end)
-    if type(items) == "table" then
-      for _, item in ipairs(items) do
-        local ending = nil
-        pcall(function()
-          ending = item:GetEnd()
-        end)
-        if ending and ending > last then
-          last = ending
-        end
-      end
-    end
-  end
-  return last
-end
-
-local function restore_pushed_video(timeline, start_frame, root)
+local function clear_previous(timeline, caption_track_index)
+  if not caption_track_index then return end
   local items = nil
   pcall(function()
-    items = timeline:GetItemListInTrack("video", 1)
+    items = timeline:GetItemListInTrack("video", caption_track_index)
   end)
-  if type(items) ~= "table" then
+  if type(items) ~= "table" or #items == 0 then
     return
   end
+  local doomed = {}
   for _, item in ipairs(items) do
-    if not is_quickcut_clip(item) then
-      local current = nil
-      local duration = nil
-      pcall(function()
-        current = item:GetStart()
-        duration = item:GetDuration() or ((item:GetEnd() or 0) - (current or 0))
-      end)
-      if current and current > start_frame + 1 then
-        append_log(root, string.format(
-          "restore video %s from %s to %s",
-          clip_name(item),
-          tostring(current),
-          tostring(start_frame)
-        ))
-        pcall(function()
-          item:SetProperty("Start", start_frame)
-          item:SetProperty("End", start_frame + math.max(1, duration or 1))
-        end)
-      end
+    local name = ""
+    pcall(function() name = item:GetName() or "" end)
+    if name:find("快剪字幕", 1, true) == 1 or name:find("AutoSubs", 1, true) == 1 or name == "Text+" then
+      doomed[#doomed + 1] = item
     end
   end
-end
-
-local function clear_previous(timeline)
-  local count = timeline:GetTrackCount("video") or 0
-  for track = 1, count do
-    local track_name = ""
-    pcall(function()
-      track_name = timeline:GetTrackName("video", track) or ""
-    end)
-    local items = nil
-    pcall(function()
-      items = timeline:GetItemListInTrack("video", track)
-    end)
-    if type(items) ~= "table" or #items == 0 then
-      goto continue_clear
-    end
-    local doomed = {}
-    if track_name == "快剪字幕" then
-      for _, item in ipairs(items) do
-        doomed[#doomed + 1] = item
-      end
-    else
-      for _, item in ipairs(items) do
-        local name = ""
-        pcall(function()
-          name = item:GetName() or ""
-        end)
-        if name:find("快剪字幕", 1, true) == 1
-          or name:find("QuickCutCap", 1, true) == 1
-          or name == "Text+"
-          or name == "Basic Template" then
-          doomed[#doomed + 1] = item
-        end
-      end
-    end
-    if #doomed > 0 then
-      pcall(function()
-        timeline:DeleteClips(doomed)
-      end)
-    end
-    ::continue_clear::
+  if #doomed > 0 then
+    pcall(function() timeline:DeleteClips(doomed) end)
   end
 end
 
@@ -1087,12 +991,14 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             autosubsTool:SetData("WordTiming", wordTiming)
 
             if templateTool then
-              templateTool:SetInput("Text", plainText)
+              pcall(function() templateTool:SetInput("StyledText", plainText) end)
+              pcall(function() templateTool:SetInput("Text", plainText) end)
             end
 
             local clsTool = comp:FindTool("CharacterLevelStyling1")
             if clsTool then
-              pcall(clsTool.SetInput, clsTool, "Text", plainText)
+              pcall(function() clsTool:SetInput("StyledText", plainText) end)
+              pcall(function() clsTool:SetInput("Text", plainText) end)
             end
 
             if hasPreset then
@@ -1194,9 +1100,8 @@ local function place_captions(job, root)
   unlock_all_video(timeline)
   local track_index = find_or_add_caption_track(timeline)
   if job.replace ~= false then
-    clear_previous(timeline)
+    clear_previous(timeline, track_index)
   end
-  restore_pushed_video(timeline, start_frame, root)
   append_log(root, "caption track=" .. tostring(track_index))
   try_set_destination_track(timeline, track_index)
 
