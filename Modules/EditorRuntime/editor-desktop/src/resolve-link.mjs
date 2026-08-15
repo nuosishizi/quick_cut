@@ -155,6 +155,25 @@ export function fusionGlow(style = {}) {
   };
 }
 
+export function fusionBackground(style = {}) {
+  const enabled = !!(style.backgroundEnabled || (style.background && style.background !== "none" && style.background !== "transparent" && style.backgroundEnabled !== false));
+  if (!enabled) return { enabled: false, color: [0, 0, 0], opacity: 0, extendX: 0, extendY: 0, round: 0 };
+  const color = hexToUnitRgb(style.background || "#000000");
+  const opacity = Math.max(0.05, Math.min(1, Number(style.backgroundOpacity ?? 0.8)));
+  const paddingX = Math.max(4, Number(style.backgroundWidth ?? style.padding ?? 14));
+  const paddingY = Math.max(4, Number(style.backgroundHeight ?? style.padding ?? 14));
+  const radius = Math.max(0, Number(style.radius ?? 12));
+  const fontSize = Math.max(10, Number(style.fontSize) || 58);
+  return {
+    enabled: true,
+    color,
+    opacity,
+    extendX: Math.max(0.01, Math.min(0.35, (paddingX / fontSize) * 0.25)),
+    extendY: Math.max(0.01, Math.min(0.35, (paddingY / fontSize) * 0.25)),
+    round: Math.max(0, Math.min(1, radius / 28)),
+  };
+}
+
 export function tokenizeWordsFallback(text, start = 0, end = 1) {
   const str = String(text || "").trim();
   if (!str) return [];
@@ -183,7 +202,7 @@ export function tokenizeWordsFallback(text, start = 0, end = 1) {
   });
 }
 
-export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, stroke = 0, shadow = {}) {
+export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, stroke = 0, shadow = {}, background = {}) {
   const colorRgb = hexToUnitRgb(firstStyle.color);
   const strokeColorRgb = hexToUnitRgb(firstStyle.strokeColor || "#000000");
   const shadowColorRgb = hexToUnitRgb(firstStyle.shadowColor || "#000000");
@@ -191,9 +210,19 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
   const highlightColorRgb = hexToUnitRgb(highlightColor);
   const highlightEnabled = firstStyle.highlightEnabled !== false ? 1 : 0;
   const anim = String(firstStyle.animation || "").toLowerCase();
-  const isPopIn = anim === "pop-in" || anim === "popin" || !!firstStyle.popIn ? 1 : 0;
-  const isSlideUp = anim === "slide-up" || anim === "slideup" ? 1 : 0;
-  const isFade = anim === "fade" || (!isPopIn && !isSlideUp) ? 1 : 0;
+
+  let highlightStyle = 0; // 0 = Fill
+  if (anim === "outline-active" || anim === "underline") {
+    highlightStyle = 1;
+  } else if (anim === "glow" || anim === "neon-pulse" || anim === "word-gradient") {
+    highlightStyle = 2;
+  } else if (anim === "word-pill" || anim === "word-box" || anim === "word-ring" || anim === "bubble") {
+    highlightStyle = 3;
+  }
+
+  const isPopIn = anim === "pop-in" || anim === "popin" || anim.startsWith("word-pop") || anim.startsWith("word-bounce") || anim === "zoom" || !!firstStyle.popIn ? 1 : 0;
+  const isSlideUp = anim === "slide-up" || anim === "slideup" || anim.startsWith("word-lift") || anim.startsWith("word-rise") ? 1 : 0;
+  const isFade = anim === "fade" || anim === "typewriter" || (!isPopIn && !isSlideUp) ? 1 : 0;
 
   return {
     Font: pickResolveFont(firstStyle.fontFamily, ""),
@@ -213,11 +242,18 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
     ShadowColorRed: shadowColorRgb[0],
     ShadowColorGreen: shadowColorRgb[1],
     ShadowColorBlue: shadowColorRgb[2],
+    BubbleEnabled: background.enabled ? 1 : 0,
+    BubbleColorRed: background.color ? background.color[0] : 0,
+    BubbleColorGreen: background.color ? background.color[1] : 0,
+    BubbleColorBlue: background.color ? background.color[2] : 0,
     HighlightEnabled: highlightEnabled,
-    HighlightStyle: 0,
+    HighlightStyle: highlightStyle,
     HighlightColorRed: highlightColorRgb[0],
     HighlightColorGreen: highlightColorRgb[1],
     HighlightColorBlue: highlightColorRgb[2],
+    HighlightRound: background.round || 0.25,
+    HighlightExtendHorizontal: background.extendX || 0.04,
+    HighlightExtendVertical: background.extendY || 0.04,
     PopInEnabled: isPopIn,
     FadeEnabled: isFade,
     SlideUpEnabled: isSlideUp,
@@ -251,12 +287,14 @@ export function buildResolveSendJob(input = {}) {
   const highlightColorRgb = hexToUnitRgb(highlightColor);
   const highlightEnabled = firstStyle.highlightEnabled !== false;
 
+  const background = fusionBackground(firstStyle);
   const presetSettings = buildPresetSettings(
     { ...firstStyle, fontFamily: fontName, highlightColor, highlightEnabled },
     canvas,
     center,
     stroke,
     shadow,
+    background,
   );
 
   const items = captions
@@ -362,11 +400,18 @@ export function buildResolveSendJob(input = {}) {
       stroke,
       shadowEnabled: shadow.enabled,
       shadowColor: shadowColorRgb,
+      backgroundEnabled: background.enabled,
+      backgroundColor: background.color,
+      backgroundOpacity: background.opacity,
+      backgroundExtendX: background.extendX,
+      backgroundExtendY: background.extendY,
+      backgroundRound: background.round,
       centerX: center.centerX,
       centerY: center.centerY,
       align: firstStyle.textAlign === "left" ? 0 : firstStyle.textAlign === "right" ? 2 : 1,
       highlightColor: highlightColorRgb,
       highlightEnabled,
+      highlightStyle: presetSettings.HighlightStyle,
     },
     items,
   };

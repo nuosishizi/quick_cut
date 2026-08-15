@@ -596,6 +596,20 @@ local function apply_style(comp, tool, item, style)
   if style.shadowEnabled then
     set_number(tool, "Enabled3", 1)
     apply_rgb(tool, 3, style.shadowColor, 1)
+  else
+    set_number(tool, "Enabled3", 0)
+  end
+  if style.backgroundEnabled then
+    set_number(tool, "Enabled4", 1)
+    set_number(tool, "ElementShape4", 2) -- Solid Box
+    set_number(tool, "Level4", 0) -- Block level
+    apply_rgb(tool, 4, style.backgroundColor, style.backgroundOpacity or 0.8)
+    set_number(tool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.04)
+    set_number(tool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.04)
+    set_number(tool, "Round4", tonumber(style.backgroundRound) or 0.25)
+    set_number(tool, "Softness4", 0)
+  else
+    set_number(tool, "Enabled4", 0)
   end
   local plain = tostring(item.text or "")
   pcall(function()
@@ -1042,11 +1056,24 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             end
 
             pcall(function() autosubsTool:SetInput("HighlightEnabled", 1) end)
-            pcall(function() autosubsTool:SetInput("HighlightStyle", 0) end)
+            pcall(function() autosubsTool:SetInput("HighlightStyle", tonumber(style.highlightStyle) or 0) end)
             if style.highlightColor and type(style.highlightColor) == "table" then
               pcall(function() autosubsTool:SetInput("HighlightColorRed", tonumber(style.highlightColor[1]) or 1.0) end)
               pcall(function() autosubsTool:SetInput("HighlightColorGreen", tonumber(style.highlightColor[2]) or 0.82) end)
               pcall(function() autosubsTool:SetInput("HighlightColorBlue", tonumber(style.highlightColor[3]) or 0.0) end)
+            end
+
+            if tonumber(style.highlightStyle) == 3 then
+              local bubbleR = style.backgroundColor and style.backgroundColor[1] or 0.0
+              local bubbleG = style.backgroundColor and style.backgroundColor[2] or 0.0
+              local bubbleB = style.backgroundColor and style.backgroundColor[3] or 0.0
+              pcall(function() autosubsTool:SetInput("BubbleEnabled", 1) end)
+              pcall(function() autosubsTool:SetInput("BubbleColorRed", tonumber(bubbleR) or 0.0) end)
+              pcall(function() autosubsTool:SetInput("BubbleColorGreen", tonumber(bubbleG) or 0.0) end)
+              pcall(function() autosubsTool:SetInput("BubbleColorBlue", tonumber(bubbleB) or 0.0) end)
+              pcall(function() autosubsTool:SetInput("HighlightRound", tonumber(style.backgroundRound) or 0.25) end)
+              pcall(function() autosubsTool:SetInput("HighlightExtendHorizontal", tonumber(style.backgroundExtendX) or 0.04) end)
+              pcall(function() autosubsTool:SetInput("HighlightExtendVertical", tonumber(style.backgroundExtendY) or 0.04) end)
             end
 
             if hasPreset then
