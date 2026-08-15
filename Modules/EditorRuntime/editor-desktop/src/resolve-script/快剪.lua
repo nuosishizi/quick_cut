@@ -811,27 +811,40 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
-local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
-  local cls = clsTool or (comp and comp:FindTool("CharacterLevelStyling1"))
+local function apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
+  if not templateTool then return end
+
+  local conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+  local cls = conn and conn:GetTool()
+  if not cls then
+    pcall(function() templateTool.StyledText:AddModifier("CharacterLevelStyling", "CharacterLevelStyling") end)
+    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+    cls = conn and conn:GetTool()
+  end
+  if not cls then
+    pcall(function() templateTool:AddModifier("StyledText", "CharacterLevelStyling") end)
+    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+    cls = conn and conn:GetTool()
+  end
   if not cls then return end
 
   pcall(function() cls:SetInput("Text", plainText) end)
   pcall(function() cls:SetInput("StyledText", plainText) end)
 
-  local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-  local spline = conn and conn:GetTool()
+  local splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+  local spline = splineConn and splineConn:GetTool()
   if not spline then
     pcall(function() cls:AddModifier("CharacterLevelStyling", "BezierSpline") end)
-    conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-    spline = conn and conn:GetTool()
+    splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+    spline = splineConn and splineConn:GetTool()
   end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
   local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
   if not wordTiming or #wordTiming == 0 then return end
 
-  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
-  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 1.0
+  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 0.33
+  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.85
   local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 1.0
 
   local keyframes = {}
@@ -898,7 +911,11 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
     end
   end
 
-  pcall(function() spline:SetKeyFrames(keyframes, true) end)
+  if spline then
+    pcall(function() spline:SetKeyFrames(keyframes, true) end)
+  else
+    pcall(function() cls:SetKeyFrames(keyframes) end)
+  end
 end
 
 local function set_clip_span(item, start_frame, end_frame, root)
@@ -1266,32 +1283,21 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             pcall(function() templateTool = comp:AddTool("TextPlus") end)
           end
 
-          -- 3. Find or add native CharacterLevelStyling
-          local clsTool = comp:FindTool("CharacterLevelStyling1") or comp:FindToolByID("CharacterLevelStyling")
-          if not clsTool then
-            pcall(function() clsTool = comp:AddTool("CharacterLevelStyling") end)
-          end
-
           local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
 
-          -- 4. Direct connect CharacterLevelStyling -> TextPlus.StyledText
-          if clsTool and templateTool then
-            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
-          end
-
-          -- 5. Direct connect TextPlus -> MediaOut1
+          -- 3. Direct connect TextPlus -> MediaOut1
           if mediaOut and templateTool then
             pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
           end
 
-          -- 6. Apply full pristine styling (Yellow text, Thick black stroke, shadow)
+          -- 4. Apply full pristine styling (Yellow text, Thick black stroke, shadow)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
 
-          -- 7. Directly inject frame-accurate, word-by-word highlight keyframes
-          if clsTool then
-            apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+          -- 5. Directly attach CharacterLevelStyling and inject frame-accurate, word-by-word highlight keyframes
+          if templateTool then
+            apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
           end
         end
       end
