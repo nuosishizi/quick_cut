@@ -786,27 +786,47 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
-local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
-  local cls = clsTool or (comp and comp:FindTool("CharacterLevelStyling1"))
+local function apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
+  if not templateTool then return end
+
+  local conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+  local cls = conn and conn:GetTool()
+  if not cls then
+    pcall(function() templateTool.StyledText:AddModifier("CharacterLevelStyling", "CharacterLevelStyling") end)
+    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+    cls = conn and conn:GetTool()
+  end
+  if not cls then
+    pcall(function() templateTool:AddModifier("StyledText", "CharacterLevelStyling") end)
+    conn = templateTool.StyledText and templateTool.StyledText:GetConnectedOutput()
+    cls = conn and conn:GetTool()
+  end
   if not cls then return end
 
   pcall(function() cls:SetInput("Text", plainText) end)
   pcall(function() cls:SetInput("StyledText", plainText) end)
 
-  local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-  local spline = conn and conn:GetTool()
-  if not spline then return end
+  local splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+  local spline = splineConn and splineConn:GetTool()
+  if not spline then
+    pcall(function() cls:AddModifier("CharacterLevelStyling", "BezierSpline") end)
+    splineConn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+    spline = splineConn and splineConn:GetTool()
+  end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
   local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
   if not wordTiming or #wordTiming == 0 then return end
 
-  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
-  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
-  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
+  local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 0.33
+  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.85
+  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 1.0
 
-  local keyframes = {
-    [0] = {
+  local keyframes = {}
+
+  local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
+  if firstStart > 0 then
+    keyframes[0] = {
       0,
       Value = {
         __ctor = "StyledText",
@@ -814,9 +834,11 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
         Flags = { StepIn = true, LockedY = true, __flags = 256 }
       }
     }
-  }
+  end
 
-  for i, word in ipairs(wordTiming) do
+  local totalWords = #wordTiming
+  for i = 1, totalWords do
+    local word = wordTiming[i]
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
     local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 5))
 
@@ -836,17 +858,36 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
       }
     }
 
-    keyframes[eFrame] = {
-      eFrame,
-      Value = {
-        __ctor = "StyledText",
-        Array = {},
-        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+    if i < totalWords then
+      local nextWord = wordTiming[i + 1]
+      local nextStart = math.max(sFrame + 1, tonumber(nextWord.startFrame) or (sFrame + 1))
+      if nextStart - eFrame > 2 then
+        keyframes[eFrame] = {
+          eFrame,
+          Value = {
+            __ctor = "StyledText",
+            Array = {},
+            Flags = { StepIn = true, LockedY = true, __flags = 256 }
+          }
+        }
+      end
+    else
+      keyframes[eFrame] = {
+        eFrame,
+        Value = {
+          __ctor = "StyledText",
+          Array = {},
+          Flags = { StepIn = true, LockedY = true, __flags = 256 }
+        }
       }
-    }
+    end
   end
 
-  pcall(function() spline:SetKeyFrames(keyframes) end)
+  if spline then
+    pcall(function() spline:SetKeyFrames(keyframes, true) end)
+  else
+    pcall(function() cls:SetKeyFrames(keyframes) end)
+  end
 end
 
 local function set_clip_span(item, start_frame, end_frame, root)
@@ -1199,28 +1240,34 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
-          local clsTool = comp:FindTool("CharacterLevelStyling1")
-          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
-          local autosubsTool = comp:FindTool("AutoSubs")
-
-          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText
-          if clsTool and templateTool then
-            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          -- 1. Remove AutoSubs MacroOperator if present so it NEVER runs in the background
+          local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
+          if autosubsTool then
+            pcall(function() autosubsTool:Delete() end)
           end
 
-          -- 2. Direct connect Template output to MediaOut1 so MediaOut always renders pristine Text+
+          -- 2. Locate or create pure native TextPlus tool
+          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
+          if not templateTool then
+            pcall(function() templateTool = comp:AddTool("TextPlus") end)
+          end
+
+          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+
+          -- 3. Connect TextPlus output to MediaOut1.Input
           if mediaOut and templateTool then
             pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
           end
 
-          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
+          -- 4. Apply 100% accurate native styling (Yellow text, Heavy black stroke, Font, Position)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
 
-          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
-          apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+          -- 5. Attach CharacterLevelStyling modifier and inject frame-accurate highlight keyframes
+          if templateTool then
+            apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
+          end
         end
       end
       pcall(function() item:SetName(string.format("快剪字幕 %03d", index)) end)
@@ -1388,6 +1435,7 @@ local function place_captions(job, root)
             error("找不到 Text+")
           end
           apply_style(comp, tool, caption, style)
+          apply_native_cls_keyframes(comp, tool, caption, tostring(caption.text or ""), fps, style)
         end)
         if styleOk then
           placed = placed + 1
