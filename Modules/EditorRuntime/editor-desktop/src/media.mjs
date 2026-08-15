@@ -1597,9 +1597,64 @@ function appendExternalAudio(
   if (!labels.length) return null;
   if (labels.length === 1) return labels[0];
   graph.push(
-    `${labels.join("")}amix=inputs=${labels.length}:duration=longest:dropout_transition=0,atrim=duration=${outputDuration.toFixed(5)}[mixeda]`,
+    `${labels.join("")}amix=inputs=${labels.length}:duration=longest:dropout_transition=0:normalize=0,atrim=duration=${outputDuration.toFixed(5)}[mixeda]`,
   );
   return "[mixeda]";
+}
+
+function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPrefix = "a") {
+  const sortedClips = [...(clips || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+  const audioSegments = [];
+  let timelineCursor = 0;
+
+  sortedClips.forEach((clip, index) => {
+    const start = Math.max(0, Number(clip.start || 0));
+    const end = Math.max(start + 0.002, Number(clip.end || start));
+    const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
+    const sourceEnd = Math.max(
+      sourceStart + 0.002,
+      Number(clip.sourceEnd || sourceStart + (end - start) * speed),
+    );
+    const clipDuration = Math.max(0.002, (sourceEnd - sourceStart) / speed);
+    const edgeFade = Math.min(0.006, clipDuration / 4);
+
+    if (start > timelineCursor + 0.002) {
+      const gapDuration = start - timelineCursor;
+      const gapLabel = `[${labelPrefix}gap${index}]`;
+      graph.push(
+        `anullsrc=r=48000:cl=stereo,atrim=duration=${gapDuration.toFixed(5)},asetpts=PTS-STARTPTS${gapLabel}`,
+      );
+      audioSegments.push(gapLabel);
+      timelineCursor = start;
+    }
+
+    const clipLabel = `[${labelPrefix}clip${index}]`;
+    const fadeFilters = edgeFade > 0.001
+      ? `,afade=t=in:st=0:d=${edgeFade.toFixed(5)},afade=t=out:st=${Math.max(0, clipDuration - edgeFade).toFixed(5)}:d=${edgeFade.toFixed(5)}`
+      : "";
+    graph.push(
+      `[0:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)}${fadeFilters}${clipLabel}`,
+    );
+    audioSegments.push(clipLabel);
+    timelineCursor = start + clipDuration;
+  });
+
+  if (outputDuration > timelineCursor + 0.002) {
+    const tailDuration = outputDuration - timelineCursor;
+    const tailLabel = `[${labelPrefix}gaptail]`;
+    graph.push(
+      `anullsrc=r=48000:cl=stereo,atrim=duration=${tailDuration.toFixed(5)},asetpts=PTS-STARTPTS${tailLabel}`,
+    );
+    audioSegments.push(tailLabel);
+  }
+
+  if (audioSegments.length > 1) {
+    graph.push(`${audioSegments.join("")}concat=n=${audioSegments.length}:v=0:a=1[joineda]`);
+  } else if (audioSegments.length === 1) {
+    graph.push(`${audioSegments[0]}anull[joineda]`);
+  } else {
+    graph.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${outputDuration.toFixed(5)}[joineda]`);
+  }
 }
 
 function buildAudioExportGraph(config, info, audioInputOffset = 1) {
@@ -1630,31 +1685,8 @@ function buildAudioExportGraph(config, info, audioInputOffset = 1) {
       0.04,
       Number(config.outputDuration || cursor || info.duration),
     );
-    const inputs = [];
-    clips.forEach((clip, index) => {
-      const start = Math.max(0, Number(clip.start || 0));
-      const end = Math.max(start + 0.002, Number(clip.end || start));
-      const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
-      const sourceEnd = Math.max(
-        sourceStart + 0.002,
-        Number(clip.sourceEnd || sourceStart + (end - start) * speed),
-      ),
-        clipDuration = Math.max(0.002, (sourceEnd - sourceStart) / speed),
-        edgeFade = Math.min(0.009, clipDuration / 4);
-      graph.push(
-        `[0:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)},afade=t=in:st=0:d=${edgeFade.toFixed(5)},afade=t=out:st=${Math.max(0, clipDuration - edgeFade).toFixed(5)}:d=${edgeFade.toFixed(5)},adelay=${Math.round(start * 1000)}:all=1,apad,atrim=duration=${outputDuration.toFixed(5)}[a${index}]`,
-      );
-      inputs.push(`[a${index}]`);
-    });
-    if (inputs.length > 1) {
-      graph.push(
-        `${inputs.join("")}amix=inputs=${inputs.length}:duration=longest:dropout_transition=0,atrim=duration=${outputDuration.toFixed(5)}[joineda]`,
-      );
-      label = "[joineda]";
-    } else if (inputs.length === 1) {
-      graph.push("[a0]anull[joineda]");
-      label = "[joineda]";
-    }
+    buildMainAudioClipsGraph(graph, clips, speed, outputDuration, "a");
+    label = "[joineda]";
     const master = label
       ? audioMasterFilter(
           { ...config, audio: { ...(config.audio || {}), speed: 1, offset: 0 } },
@@ -1773,32 +1805,7 @@ function buildExportGraph(config, info) {
       Array.isArray(config.mainAudioClips) && config.mainAudioClips.length
         ? config.mainAudioClips
         : mainVideoClips;
-    const audioLabels = [];
-    audioClips.forEach((clip, index) => {
-      const start = Math.max(0, Number(clip.start || 0));
-      const end = Math.max(start + 0.002, Number(clip.end || start));
-      const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
-      const sourceEnd = Math.max(
-        sourceStart + 0.002,
-        Number(clip.sourceEnd || sourceStart + (end - start) * speed),
-      );
-      if (linearCutMode) {
-        graph.push(`[0:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)},afade=t=in:st=0:d=0.008,afade=t=out:st=${Math.max(0, (sourceEnd-sourceStart)/speed-0.008).toFixed(5)}:d=0.008[maina${index}]`);
-      } else {
-        graph.push(
-          `[0:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)},adelay=${Math.round(start * 1000)}:all=1,apad,atrim=duration=${outputDuration.toFixed(5)}[maina${index}]`,
-        );
-      }
-      audioLabels.push(`[maina${index}]`);
-    });
-    if (linearCutMode && audioLabels.length > 1)
-      graph.push(`${audioLabels.join("")}concat=n=${audioLabels.length}:v=0:a=1[joineda]`);
-    else if (audioLabels.length > 1)
-      graph.push(
-        `${audioLabels.join("")}amix=inputs=${audioLabels.length}:duration=longest:dropout_transition=0,atrim=duration=${outputDuration.toFixed(5)}[joineda]`,
-      );
-    else if (audioLabels.length === 1)
-      graph.push(`${audioLabels[0]}anull[joineda]`);
+    buildMainAudioClipsGraph(graph, audioClips, speed, outputDuration, "maina");
   }
   const mainOffset = 0;
   let sourceVideoLabel = "[joinedv]";
