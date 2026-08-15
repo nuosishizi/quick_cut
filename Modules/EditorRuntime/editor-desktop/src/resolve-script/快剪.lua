@@ -580,7 +580,7 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
     local start_idx = tonumber(word.startIndex)
     local end_idx = tonumber(word.endIndex)
 
-    if not start_idx or not end_idx then
+    if start_idx == nil or end_idx == nil then
       local token_chars = {}
       for uchar in token:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
         table.insert(token_chars, uchar)
@@ -617,13 +617,28 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
 
     local w_start = tonumber(word.start) or segmentStart
     local w_end = tonumber(word["end"] or word.endFrame) or (w_start + 0.2)
+    local s_frame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5))
+    local e_frame = math.max(s_frame + 1, math.floor((w_end - segmentStart) * frameRate + 0.5))
+
     table.insert(result, {
       startIndex = start_idx,
       endIndex   = end_idx,
-      startFrame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5)),
-      endFrame   = math.max(1, math.floor((w_end - segmentStart) * frameRate + 0.5)),
+      startFrame = s_frame,
+      endFrame   = e_frame,
     })
   end
+
+  local prevStart = -1
+  for _, w in ipairs(result) do
+    if w.startFrame <= prevStart then
+      w.startFrame = prevStart + 1
+    end
+    if w.endFrame <= w.startFrame then
+      w.endFrame = w.startFrame + 1
+    end
+    prevStart = w.startFrame
+  end
+
   return result
 end
 
@@ -1242,6 +1257,9 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           end
 
           if autosubsTool and hasPreset then
+            pcall(function() autosubsTool:SetInput("Text", plainText) end)
+            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
+
             if not fnSetInputValues then
               local setVals = autosubsTool:GetData("SetInputValues")
               if setVals and type(setVals) == "string" then
@@ -1270,9 +1288,6 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             if fnApplyWordTiming then
               pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
             end
-
-            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
-            pcall(function() autosubsTool:SetInput("Text", plainText) end)
           else
             local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
             local clsTool = comp:FindTool("CharacterLevelStyling1")
