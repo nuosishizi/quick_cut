@@ -812,11 +812,15 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   if not wordTiming or #wordTiming == 0 then return end
 
   local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
-  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
-  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
+  local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 1.0
+  local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 1.0
 
-  local keyframes = {
-    [0] = {
+  local keyframes = {}
+
+  -- If speech doesn't start at frame 0, initialize frame 0 to empty (base color)
+  local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
+  if firstStart > 0 then
+    keyframes[0] = {
       0,
       Value = {
         __ctor = "StyledText",
@@ -824,9 +828,11 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
         Flags = { StepIn = true, LockedY = true, __flags = 256 }
       }
     }
-  }
+  end
 
-  for i, word in ipairs(wordTiming) do
+  local totalWords = #wordTiming
+  for i = 1, totalWords do
+    local word = wordTiming[i]
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
     local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 5))
 
@@ -846,17 +852,34 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
       }
     }
 
-    keyframes[eFrame] = {
-      eFrame,
-      Value = {
-        __ctor = "StyledText",
-        Array = {},
-        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+    if i < totalWords then
+      local nextWord = wordTiming[i + 1]
+      local nextStart = math.max(sFrame + 1, tonumber(nextWord.startFrame) or (sFrame + 1))
+      -- If there is a distinct pause between words (> 2 frames), turn off highlight during pause
+      if nextStart - eFrame > 2 then
+        keyframes[eFrame] = {
+          eFrame,
+          Value = {
+            __ctor = "StyledText",
+            Array = {},
+            Flags = { StepIn = true, LockedY = true, __flags = 256 }
+          }
+        }
+      end
+    else
+      -- Last word: turn off highlight when the last word finishes
+      keyframes[eFrame] = {
+        eFrame,
+        Value = {
+          __ctor = "StyledText",
+          Array = {},
+          Flags = { StepIn = true, LockedY = true, __flags = 256 }
+        }
       }
-    }
+    end
   end
 
-  pcall(function() spline:SetKeyFrames(keyframes) end)
+  pcall(function() spline:SetKeyFrames(keyframes, true) end)
 end
 
 local function set_clip_span(item, start_frame, end_frame, root)
@@ -1213,44 +1236,27 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
         local comp = item:GetFusionCompByIndex(1)
         if comp then
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
-          local autosubsTool = comp:FindTool("AutoSubs")
+          local clsTool = comp:FindTool("CharacterLevelStyling1")
+          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
 
-          if autosubsTool and hasPreset then
-            if not fnSetInputValues then
-              local setVals = autosubsTool:GetData("SetInputValues")
-              if setVals and type(setVals) == "string" then
-                local okVal, fn = pcall(loadstring(setVals))
-                if okVal and type(fn) == "function" then
-                  fnSetInputValues = fn
-                end
-              end
-            end
-            if fnSetInputValues then
-              pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
-            end
-
-            if not fnApplyWordTiming then
-              local applyWT = autosubsTool:GetData("ApplyWordTiming")
-              if applyWT and type(applyWT) == "string" then
-                local okWT, fn = pcall(loadstring(applyWT))
-                if okWT and type(fn) == "function" then
-                  fnApplyWordTiming = fn
-                end
-              end
-            end
-
-            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
-            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-            if fnApplyWordTiming then
-              pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
-            end
-
-            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
-            pcall(function() autosubsTool:SetInput("Text", plainText) end)
+          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText (bypasses Follower character delay)
+          if clsTool and templateTool then
+            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
           end
 
+          -- 2. Direct connect Template output to MediaOut1
+          if mediaOut and templateTool then
+            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
+          end
+
+          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
+          end
+
+          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
+          if clsTool then
+            apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
           end
         end
       end
