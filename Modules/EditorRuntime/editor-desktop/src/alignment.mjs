@@ -986,6 +986,28 @@ function joinedNorm(words = []) {
   return words.map((word) => String(word?.norm || "")).filter(Boolean).join(" ");
 }
 
+function upcomingExpectedNorms(operations = [], cursor = 0, limit = 16) {
+  const words = [];
+  for (let index = cursor; index < operations.length && words.length < limit; index += 1) {
+    const norm = operations[index]?.expected?.norm;
+    if (norm) words.push(norm);
+  }
+  return words;
+}
+
+function isSpokenHookForManuscript(spokenNorms = [], manuscriptNorms = []) {
+  if (spokenNorms.length < 3 || spokenNorms.length > 10 || manuscriptNorms.length < 3) return false;
+  const spokenSet = new Set(spokenNorms);
+  for (let start = 0; start < manuscriptNorms.length - 2; start += 1) {
+    for (let length = 3; length <= Math.min(5, manuscriptNorms.length - start); length += 1) {
+      const window = manuscriptNorms.slice(start, start + length);
+      const hit = window.filter((word) => spokenSet.has(word)).length;
+      if (hit / window.length >= 0.75 && spokenNorms.length <= window.length + 6) return true;
+    }
+  }
+  return false;
+}
+
 function confirmedMismatchEvidence(expectedGroup = [], spokenGroup = [], strict = false) {
   if (!expectedGroup.length || !spokenGroup.length) return false;
   const expected = joinedNorm(expectedGroup), spoken = joinedNorm(spokenGroup);
@@ -1167,9 +1189,14 @@ export function alignScript({ segments, script, duration = 0 }) {
           ) ||
           optionalSpeechAdditions.has(phrase);
         const closingAddition = closingAdditionPhrases.some((pattern) => pattern.test(phrase));
+        const titleHook = isSpokenHookForManuscript(
+          phraseWords,
+          upcomingExpectedNorms(operations, cursor),
+        );
         if (
           !strictGroup && safeWords && spokenGroup.length <= 10 &&
-          ((boundedBefore && boundedAfter && (conversational || spokenGroup.length <= 3)) ||
+          (titleHook ||
+            (boundedBefore && boundedAfter && (conversational || spokenGroup.length <= 3)) ||
             (boundedBefore && !boundedAfter && closingAddition))
         ) issueType = "addition";
       }

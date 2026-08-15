@@ -398,6 +398,27 @@ test("overlapping recognition windows are stitched without a fake repeated word"
   assert.ok(stitched.every((segment, index) => index === 0 || segment.start >= stitched[index - 1].end));
 });
 
+test("opening Are you guilty of any is a title hook, not a red cut", () => {
+  const script = "God Hates These 3 Sins—Are You Guilty? The Bible doesn't just say God dislikes these sins.";
+  const aligned = alignScript({
+    segments: [
+      { text: "Are you guilty of any of these", start: 2.0, end: 3.1 },
+      { text: "God hates these 3 sins are you guilty", start: 3.1, end: 5.2 },
+      { text: "The Bible doesn't just say God dislikes these sins", start: 5.2, end: 8.4 },
+    ],
+    script,
+    duration: 9,
+  });
+  const hook = aligned.issues.find((issue) => /guilty of any/i.test(issue.spokenText || ""));
+  assert.ok(hook);
+  assert.equal(hook.confirmedCut, false);
+  assert.notEqual(hook.action, "cut");
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 9);
+  assert.ok(!review.some((item) => item.action === "cut" && /guilty of any/i.test(item.text)));
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 80 });
+  assert.ok(captions.some((caption) => /God Hates These 3 Sins/i.test(caption.text)));
+});
+
 test("That's me stays one manuscript phrase when ASR expands the contraction", () => {
   const script = `Maybe you're thinking,\n\n"That's me.\n\nI've done those things.`;
   const aligned = alignScript({

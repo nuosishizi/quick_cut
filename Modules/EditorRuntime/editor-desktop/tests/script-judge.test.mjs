@@ -127,6 +127,10 @@ test("This wasn't an accident matches That thought wasn't an accident", () => {
 test("Are you guilty of any is the same point as Are You Guilty", () => {
   assert.equal(looksLikeSamePoint("Are you guilty of any", "Are You Guilty?"), true);
   assert.equal(
+    looksLikeSamePoint("Are you guilty of any of", "God Hates These 3 Sins—Are You Guilty?"),
+    true,
+  );
+  assert.equal(
     inferKeepable({
       type: "extra",
       spokenText: "Are you guilty of any",

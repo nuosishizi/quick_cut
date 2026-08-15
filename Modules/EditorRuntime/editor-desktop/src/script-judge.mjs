@@ -144,11 +144,18 @@ export function looksLikeSamePoint(spoken, expected) {
   const coreCoverage = expectedCore.length
     ? coreOverlap / expectedCore.length
     : coverage;
-  return (
+  const same =
     (coverage >= 0.66 || coreCoverage >= 0.55) &&
     spokenWords.length <= expectedWords.length + 6 &&
-    spokenCore.length <= expectedCore.length + 3
-  );
+    spokenCore.length <= expectedCore.length + 3;
+  if (same) return true;
+  if (expectedWords.length >= 6 && spokenWords.length >= 3 && spokenWords.length <= 10) {
+    for (let start = 0; start <= expectedWords.length - 3; start += 1) {
+      const window = expectedWords.slice(start, start + Math.min(5, expectedWords.length - start));
+      if (window.length >= 3 && looksLikeSamePoint(spoken, window.join(" "))) return true;
+    }
+  }
+  return false;
 }
 
 function overlappingManuscript(operations = [], issue) {
