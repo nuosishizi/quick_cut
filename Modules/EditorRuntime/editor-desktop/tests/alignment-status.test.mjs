@@ -83,6 +83,36 @@ test("mid-sentence reread with a timestamp hole is marked for cutting", () => {
   assert.ok(review.some((item) => item.action === "cut" && item.end - item.start > 0.8));
 });
 
+test("a breath after Here does not count as a reread and keeps the sentence together", () => {
+  const script = "Here are the three sins.";
+  const aligned = alignScript({
+    segments: [
+      { text: "Here", start: 0, end: 0.35 },
+      { text: "are the three sins", start: 1.15, end: 2.4 },
+    ],
+    script,
+    duration: 3,
+  });
+  assert.equal(aligned.issues.some((issue) => issue.falseStartGap || issue.label === "没读完又重来"), false);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  assert.ok(captions.some((caption) => /Here are the three sins/i.test(caption.text)));
+});
+
+test("a breath after Not does not split Not just a mistake", () => {
+  const script = "Not just a mistake.";
+  const aligned = alignScript({
+    segments: [
+      { text: "Not", start: 0, end: 0.28 },
+      { text: "just a mistake", start: 1.05, end: 2.1 },
+    ],
+    script,
+    duration: 3,
+  });
+  assert.equal(aligned.issues.some((issue) => issue.falseStartGap), false);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  assert.ok(captions.some((caption) => /Not just a mistake/i.test(caption.text)));
+});
+
 test("a partial reread of the previous words is a repeat", () => {
   const aligned = alignScript({
     segments: [{

@@ -1007,6 +1007,23 @@ function sentenceContinues(display) {
   return !/[.!?…]["'”’)]*$/.test(String(display || "").trim());
 }
 
+function isBreathLeadWord(word) {
+  return /^(here|there|now|so|and|but|or|not|just|the|a|an|this|that|these|those|we|i|you|it|he|she|they|if|when|then|for)$/i.test(
+    String(word?.norm || word?.display || "").replace(/[^\p{L}]/gu, ""),
+  );
+}
+
+function sameSentenceMatchCount(operations, index) {
+  let count = 0;
+  for (let cursor = index; cursor >= 0; cursor -= 1) {
+    const operation = operations[cursor];
+    if (!["match", "near"].includes(operation?.type) || !operation.expected) break;
+    count += 1;
+    if (!sentenceContinues(operations[cursor - 1]?.expected?.display || "")) break;
+  }
+  return count;
+}
+
 function collectFalseStartGapIssues(operations = []) {
   const issues = [];
   let last = -1;
@@ -1027,11 +1044,14 @@ function collectFalseStartGapIssues(operations = []) {
       );
       const gap =
         Number(operation.spoken.start || 0) - Number(previous.spoken.end || 0);
+      const startedAPhrase = sameSentenceMatchCount(operations, last) >= 2;
       if (
         !between &&
-        gap >= 0.55 &&
+        gap >= 1.15 &&
         gap <= 3.2 &&
-        sentenceContinues(previous.expected.display)
+        sentenceContinues(previous.expected.display) &&
+        startedAPhrase &&
+        !isBreathLeadWord(previous.expected)
       ) {
         const start = Number(previous.spoken.end || 0);
         const end = Number(operation.spoken.start || start + 0.04);
@@ -1402,10 +1422,11 @@ export function buildCaptions(expectedWords, options = {}) {
       priorWord?.display || "",
     );
     const keepReferenceTogether = !!word.keepWithPrevious;
+    const splitGap = priorEnds ? 0.62 : 1.85;
     if (
       group.length &&
       !keepReferenceTogether &&
-      (timingGap > 0.62 ||
+      (timingGap > splitGap ||
         timingGap < -0.02 ||
         group.length >= maxWords ||
         candidate.length > maxChars ||
@@ -1442,7 +1463,7 @@ export function buildCaptions(expectedWords, options = {}) {
       !previousClosesSentence;
     const canMergeNext =
       next &&
-      gapToNext <= 0.62 &&
+      (gapToNext <= 0.62 || (!closesSentence && gapToNext <= 1.85)) &&
       caption.words.length + next.words.length <= maxWords + 1 &&
       !closesSentence;
     const target = closesSentence
