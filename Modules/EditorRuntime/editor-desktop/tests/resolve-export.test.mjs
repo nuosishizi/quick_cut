@@ -22,6 +22,7 @@ import {
   isCaptionWordMotion,
   resolveFormatName,
   alignExportToFirstClip,
+  buildResolveXmeml,
 } from "../src/resolve-export.mjs";
 
 test("kept source segments skip removed rereads", () => {
@@ -262,6 +263,8 @@ test("writeResolveTimeline saves xml and srt together", () => {
   assert.equal(result.clipCount, 2);
   assert.equal(result.captionCount, 1);
   assert.equal(fs.existsSync(result.xmlPath), true);
+  assert.equal(fs.existsSync(result.xmemlPath), true);
+  assert.match(fs.readFileSync(result.xmemlPath, "utf8"), /<xmeml version="5">/);
   assert.equal(fs.existsSync(result.srtPath), true);
   assert.equal(fs.existsSync(result.assPath), true);
   assert.equal(fs.existsSync(result.ittPath), true);
@@ -323,6 +326,24 @@ test("drop-frame rates stay on a Resolve-friendly timebase", () => {
   assert.equal(normalizeTimelineClips({ clips: [] , sourceDuration: 0 }).length, 0);
   assert.equal(resolveFormatName(1080, 1920, resolveTimebase(30)), "FFVideoFormat1080x1920p30");
   assert.equal(resolveFormatName(1920, 1080, resolveTimebase(30)), "FFVideoFormat1080p30");
+});
+
+test("FCP7 XML keeps timeline start at zero and source in/out separate", () => {
+  const xml = buildResolveXmeml({
+    inputPath: "C:\\Users\\newnew\\video.mp4",
+    sourceDuration: 80,
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    clips: [
+      { start: 20 + 16 / 30, end: 80, sourceStart: 20 + 16 / 30, sourceEnd: 80, name: "take-a" },
+    ],
+  });
+  assert.match(xml, /<xmeml version="5">/);
+  assert.match(xml, /<start>0<\/start>/);
+  assert.match(xml, /<in>616<\/in>/);
+  assert.match(xml, /<out>2400<\/out>/);
+  assert.match(xml, /<string>00:00:00:00<\/string>/);
 });
 
 test("trimmed source in-point stays at timeline zero instead of leaving a hole", () => {

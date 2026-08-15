@@ -1203,6 +1203,126 @@ ${spineXml.join("\n")}
 `;
 }
 
+function xmemlFrames(seconds, timebase) {
+  return Math.max(0, Math.round(Number(seconds || 0) * timebase.num / timebase.den));
+}
+
+export function buildResolveXmeml(input = {}) {
+  const videoPath = String(input.inputPath || "");
+  if (!videoPath) throw new Error("没有可导出的视频素材。");
+  const timebase = resolveTimebase(input.fps);
+  const rawClips = snapClipsToTimebase(normalizeTimelineClips(input), timebase);
+  if (!rawClips.length) throw new Error("时间线上没有可导出的剪辑。");
+  const aligned = alignExportToFirstClip(rawClips);
+  const clips = aligned.clips;
+  const width = Math.max(1, Number(input.width || 1080));
+  const height = Math.max(1, Number(input.height || 1920));
+  const ntsc = timebase.den === 1001 ? "TRUE" : "FALSE";
+  const rate = timebase.den === 1001 ? Math.round(timebase.num / 1000) : timebase.num;
+  const sourceDuration = Math.max(
+    Number(input.sourceDuration || 0),
+    ...clips.map((clip) => clip.sourceEnd),
+  );
+  const sequenceFrames = Math.max(...clips.map((clip) => xmemlFrames(clip.end, timebase)));
+  const fileDuration = xmemlFrames(sourceDuration, timebase);
+  const projectName = xmlEscape(input.projectName || "快剪导出");
+  const fileName = xmlEscape(path.basename(videoPath));
+  const pathurl = xmlEscape(fileUrl(videoPath));
+  const rateXml = `        <rate>
+          <timebase>${rate}</timebase>
+          <ntsc>${ntsc}</ntsc>
+        </rate>`;
+  const fileXml = `          <file id="file-1">
+            <name>${fileName}</name>
+            <pathurl>${pathurl}</pathurl>
+${rateXml}
+            <duration>${fileDuration}</duration>
+            <timecode>
+${rateXml}
+              <string>00:00:00:00</string>
+              <frame>0</frame>
+              <displayformat>NDF</displayformat>
+            </timecode>
+            <media>
+              <video>
+                <samplecharacteristics>
+                  <width>${width}</width>
+                  <height>${height}</height>
+                </samplecharacteristics>
+              </video>
+              <audio>
+                <samplecharacteristics>
+                  <depth>16</depth>
+                  <samplerate>${Math.max(8000, Math.round(Number(input.audioRate || 48000)))}</samplerate>
+                </samplecharacteristics>
+                <channelcount>${Math.max(1, Math.round(Number(input.audioChannels || 2)))}</channelcount>
+              </audio>
+            </media>
+          </file>`;
+  const clipItems = clips.map((clip, index) => {
+    const start = xmemlFrames(clip.start, timebase);
+    const end = xmemlFrames(clip.end, timebase);
+    const inn = xmemlFrames(clip.sourceStart, timebase);
+    const out = xmemlFrames(clip.sourceEnd, timebase);
+    const duration = Math.max(1, out - inn);
+    return `        <clipitem id="clip-${index + 1}">
+          <name>${xmlEscape(clip.name)}</name>
+          <enabled>TRUE</enabled>
+          <duration>${duration}</duration>
+${rateXml}
+          <start>${start}</start>
+          <end>${end}</end>
+          <in>${inn}</in>
+          <out>${out}</out>
+${index === 0 ? `${fileXml}` : `          <file id="file-1"/>`}
+        </clipitem>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xmeml>
+<xmeml version="5">
+  <sequence id="sequence-1">
+    <name>${projectName}</name>
+    <duration>${sequenceFrames}</duration>
+    <rate>
+      <timebase>${rate}</timebase>
+      <ntsc>${ntsc}</ntsc>
+    </rate>
+    <timecode>
+      <rate>
+        <timebase>${rate}</timebase>
+        <ntsc>${ntsc}</ntsc>
+      </rate>
+      <string>00:00:00:00</string>
+      <frame>0</frame>
+      <displayformat>NDF</displayformat>
+    </timecode>
+    <media>
+      <video>
+        <format>
+          <samplecharacteristics>
+            <width>${width}</width>
+            <height>${height}</height>
+            <rate>
+              <timebase>${rate}</timebase>
+              <ntsc>${ntsc}</ntsc>
+            </rate>
+          </samplecharacteristics>
+        </format>
+        <track>
+${clipItems.join("\n")}
+        </track>
+      </video>
+      <audio>
+        <track>
+${clipItems.join("\n")}
+        </track>
+      </audio>
+    </media>
+  </sequence>
+</xmeml>
+`;
+}
+
 export function writeResolveTimeline(input = {}) {
   const outputPath = String(input.outputPath || "");
   if (!outputPath) throw new Error("请选择达芬奇时间线保存位置。");
@@ -1212,7 +1332,9 @@ export function writeResolveTimeline(input = {}) {
   const srt = buildResolveSrt(input.captions || [], input);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, xml, "utf8");
-  const base = outputPath.replace(/\.fcpxml$/i, "");
+  const base = outputPath.replace(/\.fcpxml$/i, "").replace(/\.xml$/i, "");
+  const xmemlPath = `${base}-fcp7.xml`;
+  fs.writeFileSync(xmemlPath, buildResolveXmeml(input), "utf8");
   const srtPath = `${base}.srt`;
   const ttmlPath = `${base}.ttml`;
   const dfxpPath = `${base}.dfxp`;
@@ -1263,6 +1385,7 @@ export function writeResolveTimeline(input = {}) {
     );
   return {
     xmlPath: outputPath,
+    xmemlPath,
     srtPath: srt.trim() ? srtPath : "",
     ttmlPath: srt.trim() ? ttmlPath : "",
     dfxpPath: srt.trim() ? dfxpPath : "",

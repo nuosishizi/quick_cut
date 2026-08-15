@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   analyzePauseFrames,
@@ -2790,8 +2790,48 @@ function listFontFiles(root, results, limit = 500) {
 
 export function localFonts() {
   const fonts = [];
+  const seenFamilies = new Set();
+
+  if (process.platform === "win32") {
+    try {
+      const stdout = execSync(
+        `reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"`,
+        { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      );
+      for (const rawLine of stdout.split("\n")) {
+        const line = rawLine.trim();
+        const parts = line.split(/\s+REG_SZ\s+/i);
+        if (parts.length === 2) {
+          const rawName = parts[0].trim();
+          const fileName = parts[1].trim();
+          const cleanName = rawName.replace(/\s*\((?:TrueType|OpenType)\)\s*$/i, "").trim();
+          const baseFamily = cleanName.replace(
+            /\s*(?:Bold|Italic|Light|Medium|Regular|SemiBold|Black|ExtraBold|ExtraLight|Condensed|Semibold|Heavy|Oblique)\s*$/i,
+            "",
+          ).trim() || cleanName;
+          if (cleanName && !seenFamilies.has(cleanName)) {
+            seenFamilies.add(cleanName);
+            const absPath = path.isAbsolute(fileName)
+              ? fileName
+              : path.join(process.env.WINDIR || "C:\\Windows", "Fonts", fileName);
+            fonts.push({
+              id: absPath,
+              family: baseFamily,
+              fullName: cleanName,
+              postscriptName: cleanName.replace(/\s+/g, "-"),
+              subfamily: "Regular",
+              path: absPath,
+              installed: true,
+              source: "system",
+            });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   fontSearchRoots([path.join(supportRoot(), "fonts")]).forEach((root) =>
-    listFontFiles(root, fonts),
+    listFontFiles(root, fonts, 1500),
   );
   return fonts;
 }

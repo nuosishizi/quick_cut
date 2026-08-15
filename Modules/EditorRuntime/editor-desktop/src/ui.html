@@ -10057,7 +10057,7 @@
             }),
           );
           toast(
-            `已导出达芬奇时间线 ${result.clipCount} 段。用「文件 → 导入时间线」打开 fcpxml，画面、剪辑和字幕会一起进来。`,
+            `已导出达芬奇时间线 ${result.clipCount} 段。用「文件 → 导入时间线」打开 fcpxml。片头剪掉后会从 00:00:00 起铺，不要从素材时间码起。`,
           );
         } catch (error) {
           toast(error.message);
@@ -11952,7 +11952,7 @@
         const select = $("fontFamilySelect");
         if (!select) return;
         const current = currentStyle()?.fontFamily || state.captionStyle?.fontFamily || "Helvetica";
-        const systemFonts = [
+        const topRecommended = [
           { family: "Impact", fullName: "Impact (短视频爆款粗体)" },
           { family: "Arial Black", fullName: "Arial Black (超粗黑体)" },
           { family: "Arial", fullName: "Arial (经典无衬线)" },
@@ -11965,18 +11965,66 @@
           { family: "Source Han Sans CN", fullName: "思源黑体 (Source Han Sans)" },
           { family: "YouYuan", fullName: "幼圆 (YouYuan)" },
           { family: "KaiTi", fullName: "楷体 (KaiTi)" },
+          { family: "FangSong", fullName: "仿宋 (FangSong)" },
           { family: "SimSun", fullName: "宋体 (SimSun)" },
+          { family: "Segoe UI", fullName: "Segoe UI" },
+          { family: "Times New Roman", fullName: "Times New Roman" },
         ];
+
+        // Collect all system fonts
+        const allSystemFamilies = new Map();
+        (availableLocalFonts || []).forEach((font) => {
+          const fam = (font.family || font.fullName || "").trim();
+          if (fam && !allSystemFamilies.has(fam)) {
+            allSystemFamilies.set(fam, font.fullName || fam);
+          }
+        });
+
+        const sortedSystemFamilies = [...allSystemFamilies.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0], "zh-CN"));
+
         select.replaceChildren();
-        systemFonts.forEach((font) => {
+
+        // Group 1: 🌟 常用推荐
+        const groupTop = document.createElement("optgroup");
+        groupTop.label = "🌟 常用短视频推荐字体";
+        topRecommended.forEach((font) => {
           const option = document.createElement("option");
           option.value = font.family;
           option.textContent = font.fullName;
           option.dataset.family = font.family;
           option.style.fontFamily = `'${font.family}', sans-serif`;
           if (font.family === current) option.selected = true;
-          select.appendChild(option);
+          groupTop.appendChild(option);
         });
+        select.appendChild(groupTop);
+
+        // Group 2: 💻 全部电脑系统字体
+        if (sortedSystemFamilies.length > 0) {
+          const groupAll = document.createElement("optgroup");
+          groupAll.label = `💻 全部电脑系统字体 (${sortedSystemFamilies.length} 款)`;
+          sortedSystemFamilies.forEach(([family, fullName]) => {
+            const option = document.createElement("option");
+            option.value = family;
+            option.textContent = fullName !== family ? `${family} (${fullName})` : family;
+            option.dataset.family = family;
+            option.style.fontFamily = `'${family}', sans-serif`;
+            if (family === current) option.selected = true;
+            groupAll.appendChild(option);
+          });
+          select.appendChild(groupAll);
+        }
+
+        // If current font is custom or not in either list
+        if (![...select.options].some((opt) => opt.value === current || opt.dataset.family === current)) {
+          const customOpt = document.createElement("option");
+          customOpt.value = current;
+          customOpt.textContent = current;
+          customOpt.dataset.family = current;
+          customOpt.selected = true;
+          select.insertBefore(customOpt, select.firstChild);
+        }
+
         select.onchange = () => {
           const s = currentStyle() || state.captionStyle;
           if (!s) return;
@@ -12031,13 +12079,9 @@
       if ($("addNewCaptionFromSub")) $("addNewCaptionFromSub").onclick = handleAddNewCaption;
       async function loadLocalFonts() {
         try {
-          availableLocalFonts = unwrap(await window.native.localFonts()).slice(
-            0,
-            240,
-          );
+          availableLocalFonts = unwrap(await window.native.localFonts()) || [];
           localFontCatalogLoaded = true;
           renderFontFamilyOptions();
-          renderVisualFontBrowser();
         } catch (e) {
           console.warn(e);
         }
@@ -12610,15 +12654,14 @@
       installRangeSteppers();
       renderProjectHome([]);
       pollDrops();
+      renderFontFamilyOptions();
       waitNative()
         .then(async () => {
           await Promise.all([
             refreshHome(),
             loadCustomPresets(),
+            loadLocalFonts(),
           ]);
-          // Font folders can contain hundreds of files. Load them only when
-          // the user opens the font selector so startup and first edits stay
-          // responsive on every Apple Silicon Mac.
         })
         .catch((error) => showFatal(error.message));
     </script>
