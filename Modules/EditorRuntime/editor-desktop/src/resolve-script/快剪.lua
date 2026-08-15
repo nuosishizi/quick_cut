@@ -1211,7 +1211,17 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
   for index, item in ipairs(timelineItems) do
     local caption = captions[index] or {}
     local plainText = tostring(caption.text or "")
+    local start_seconds = tonumber(caption.start) or 0
+    local end_seconds = tonumber(caption["end"]) or (start_seconds + 1)
+    if end_seconds <= start_seconds then
+      end_seconds = start_seconds + 0.2
+    end
+    local clip_start = origin + math.floor(start_seconds * fps + 0.5)
+    local clip_end = origin + math.floor(end_seconds * fps + 0.5)
+
     local ok, err = pcall(function()
+      set_clip_span(item, clip_start, clip_end, root)
+
       local compCount = 0
       pcall(function() compCount = item:GetFusionCompCount() or 0 end)
       if compCount > 0 then
@@ -1224,11 +1234,29 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           end
 
           if autosubsTool and hasPreset then
-            -- 1. Set text on AutoSubs Macro first!
+            -- 1. Set text on AutoSubs Macro and sub-tools
             pcall(function() autosubsTool:SetInput("Text", plainText) end)
             pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
 
-            -- 2. Compile SetInputValues
+            local templateTool = comp:FindTool("Template")
+            if templateTool then
+              pcall(function() templateTool:SetInput("Text", plainText) end)
+              pcall(function() templateTool:SetInput("StyledText", plainText) end)
+            end
+
+            local follower = comp:FindTool("Follower1")
+            local clsTool = (follower and follower.Text and follower.Text:GetConnectedOutput() and follower.Text:GetConnectedOutput():GetTool()) or comp:FindTool("CharacterLevelStyling1")
+            if clsTool then
+              pcall(function() clsTool:SetInput("Text", plainText) end)
+              pcall(function() clsTool:SetInput("StyledText", plainText) end)
+            end
+
+            -- 2. Calculate frame-accurate word timing FIRST and store on tool
+            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
+            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+            autosubsTool:SetData("WordTiming", wordTiming)
+
+            -- 3. Compile and call SetInputValues
             if not fnSetInputValues then
               local setVals = autosubsTool:GetData("SetInputValues")
               if setVals and type(setVals) == "string" then
@@ -1242,7 +1270,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
               pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
             end
 
-            -- 3. Compile ApplyWordTiming
+            -- 4. Compile and call ApplyWordTiming
             if not fnApplyWordTiming then
               local applyWT = autosubsTool:GetData("ApplyWordTiming")
               if applyWT and type(applyWT) == "string" then
@@ -1252,10 +1280,6 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
                 end
               end
             end
-
-            -- 4. Calculate frame-accurate word timing and apply keyframes
-            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
-            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
             if fnApplyWordTiming then
               pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
             end
