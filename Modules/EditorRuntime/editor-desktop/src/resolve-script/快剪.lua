@@ -626,6 +626,58 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
+local function apply_background(comp, templateTool, followerTool, autosubsTool, style)
+  if not style or not style.backgroundEnabled then
+    if templateTool then pcall(function() templateTool:SetInput("Enabled4", 0) end) end
+    if followerTool then pcall(function() followerTool:SetInput("Enabled4", 0) end) end
+    if autosubsTool then pcall(function() autosubsTool:SetInput("BubbleEnabled", 0) end) end
+    return
+  end
+
+  local r = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0
+  local g = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0
+  local b = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0
+  local a = tonumber(style.backgroundOpacity) or 0.85
+  local extX = tonumber(style.backgroundExtendX) or 0.08
+  local extY = tonumber(style.backgroundExtendY) or 0.08
+  local round = tonumber(style.backgroundRound) or 0.25
+
+  local targets = {}
+  if templateTool then table.insert(targets, templateTool) end
+  if followerTool then table.insert(targets, followerTool) end
+
+  for _, tool in ipairs(targets) do
+    pcall(function()
+      tool:SetInput("Enabled4", 1)
+      tool:SetInput("ElementShape4", 2) -- Solid Box
+      tool:SetInput("Level4", 0) -- Line level (0 = Line, continuous background banner)
+      tool:SetInput("Red4", r)
+      tool:SetInput("Green4", g)
+      tool:SetInput("Blue4", b)
+      tool:SetInput("Alpha4", a)
+      tool:SetInput("Opacity4", a)
+      tool:SetInput("ExtendHorizontal4", extX)
+      tool:SetInput("ExtendVertical4", extY)
+      tool:SetInput("ExtendX4", extX)
+      tool:SetInput("ExtendY4", extY)
+      tool:SetInput("Round4", round)
+      tool:SetInput("Softness4", 0)
+    end)
+  end
+
+  if autosubsTool then
+    pcall(function()
+      autosubsTool:SetInput("BubbleEnabled", 1)
+      autosubsTool:SetInput("BubbleColorRed", r)
+      autosubsTool:SetInput("BubbleColorGreen", g)
+      autosubsTool:SetInput("BubbleColorBlue", b)
+      autosubsTool:SetInput("HighlightRound", round)
+      autosubsTool:SetInput("HighlightExtendHorizontal", extX)
+      autosubsTool:SetInput("HighlightExtendVertical", extY)
+    end)
+  end
+end
+
 local function set_clip_span(item, start_frame, end_frame, root)
   if not item then
     return
@@ -1042,11 +1094,16 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
         if comp then
           local autosubsTool = comp:FindTool("AutoSubs")
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
+          local followerTool = comp:FindTool("Follower1")
 
           -- 1. Apply full styling (font, size, center, fill, outline, shadow) to Text+ tool directly
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
+          if followerTool then
+            apply_style(comp, followerTool, caption, style)
+          end
+          apply_background(comp, templateTool, followerTool, autosubsTool, style)
 
           -- 2. If AutoSubs macro is present, configure dynamic animation and word timing
           if autosubsTool then
@@ -1121,21 +1178,8 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
               end
             end
 
-            -- Re-assert Shading 4 Solid Box background if enabled, so macro ApplyHighlight cannot wipe it
-            if style.backgroundEnabled and templateTool then
-              pcall(function()
-                templateTool:SetInput("Enabled4", 1)
-                templateTool:SetInput("ElementShape4", 2) -- Solid Box
-                templateTool:SetInput("Level4", 0) -- Line level (0 = Line, continuous box)
-                apply_rgb(templateTool, 4, style.backgroundColor, style.backgroundOpacity or 0.8)
-                set_number(templateTool, "ExtendHorizontal4", tonumber(style.backgroundExtendX) or 0.05)
-                set_number(templateTool, "ExtendVertical4", tonumber(style.backgroundExtendY) or 0.05)
-                set_number(templateTool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.05)
-                set_number(templateTool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.05)
-                set_number(templateTool, "Round4", tonumber(style.backgroundRound) or 0.25)
-                set_number(templateTool, "Softness4", 0)
-              end)
-            end
+            -- 3. Re-assert background on BOTH templateTool and followerTool after ApplyHighlight
+            apply_background(comp, templateTool, followerTool, autosubsTool, style)
           end
         end
       end
