@@ -562,6 +562,7 @@ local function apply_rgb(tool, channel, color, alpha)
   set_number(tool, "Opacity" .. channel, a)
 end
 
+-- WordTiming calculation for word-level timestamps
 local function to_word_timing(transcript_words, plainText, frameRate, segmentStart)
   local result = {}
   if type(transcript_words) ~= "table" or #transcript_words == 0 then
@@ -1180,37 +1181,31 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          local autosubsTool = comp:FindTool("AutoSubs")
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
-          local followerTool = comp:FindTool("Follower1")
           local clsTool = comp:FindTool("CharacterLevelStyling1")
+          local followerTool = comp:FindTool("Follower1")
+          local autosubsTool = comp:FindTool("AutoSubs")
 
-          -- 1. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
+          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText
+          if clsTool and templateTool then
+            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          end
+
+          -- 2. Delete interfering Follower1 & AutoSubs macro wrappers if present
+          if followerTool then
+            pcall(function() followerTool:Delete() end)
+          end
+          if autosubsTool then
+            pcall(function() autosubsTool:Delete() end)
+          end
+
+          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
           if templateTool then
             apply_style(comp, templateTool, caption, style)
           end
-          if followerTool then
-            apply_style(comp, followerTool, caption, style)
-          end
 
-          -- 2. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
+          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
           apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
-
-          -- 3. If AutoSubs macro is present, disable its animation overrides so it cannot corrupt the style
-          if autosubsTool then
-            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps
-            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-            pcall(function() autosubsTool:SetData("WordTiming", wordTiming) end)
-            pcall(function() autosubsTool:SetInput("FadeEnabled", 0) end)
-            pcall(function() autosubsTool:SetInput("PopInEnabled", 0) end)
-            pcall(function() autosubsTool:SetInput("SlideUpEnabled", 0) end)
-            pcall(function() autosubsTool:SetInput("HighlightEnabled", 0) end)
-
-            -- Re-assert native style onto templateTool
-            if templateTool then
-              apply_style(comp, templateTool, caption, style)
-            end
-          end
         end
       end
       pcall(function() item:SetName(string.format("快剪字幕 %03d", index)) end)
