@@ -1382,7 +1382,8 @@ local function place_captions(job, root)
         if styleOk then
           placed = placed + 1
           if index <= 3 then
-            append_log(root, "insert Fusion Title Text+ " .. describe_item(item))
+            local clipDesc = (item.GetName and item:GetName()) or ("item #" .. index)
+            append_log(root, "insert Fusion Title Text+ " .. clipDesc)
           end
         elseif not first_error then
           first_error = tostring(styleErr)
