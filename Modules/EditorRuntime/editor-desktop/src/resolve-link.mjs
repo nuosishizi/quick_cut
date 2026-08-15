@@ -214,6 +214,7 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
     ShadowColorGreen: shadowColorRgb[1],
     ShadowColorBlue: shadowColorRgb[2],
     HighlightEnabled: highlightEnabled,
+    HighlightStyle: 0,
     HighlightColorRed: highlightColorRgb[0],
     HighlightColorGreen: highlightColorRgb[1],
     HighlightColorBlue: highlightColorRgb[2],
@@ -251,7 +252,7 @@ export function buildResolveSendJob(input = {}) {
   const highlightEnabled = firstStyle.highlightEnabled !== false;
 
   const presetSettings = buildPresetSettings(
-    { ...firstStyle, fontFamily: fontName },
+    { ...firstStyle, fontFamily: fontName, highlightColor, highlightEnabled },
     canvas,
     center,
     stroke,
@@ -277,9 +278,9 @@ export function buildResolveSendJob(input = {}) {
       const end = Math.max(start + 0.04, Number(caption.end || start));
       const text = lines.join("\n");
 
-      let words = [];
+      let rawWords = [];
       if (Array.isArray(caption.words) && caption.words.length > 0) {
-        words = caption.words
+        rawWords = caption.words
           .map((w) => ({
             word: String(w.display || w.word || "").trim(),
             start: Math.max(start, Number(w.start || start)),
@@ -287,9 +288,48 @@ export function buildResolveSendJob(input = {}) {
           }))
           .filter((w) => w.word.length > 0);
       }
-      if (!words.length) {
-        words = tokenizeWordsFallback(text, start, end);
+      if (!rawWords.length) {
+        rawWords = tokenizeWordsFallback(text, start, end);
       }
+
+      const textChars = [...text];
+      let cursor = 0;
+      const words = rawWords.map((w) => {
+        const token = w.word;
+        const tokenChars = [...token];
+        let matchStart = -1;
+        for (let i = cursor; i <= textChars.length - tokenChars.length; i++) {
+          let matches = true;
+          for (let j = 0; j < tokenChars.length; j++) {
+            if (textChars[i + j] !== tokenChars[j]) {
+              matches = false;
+              break;
+            }
+          }
+          if (matches) {
+            matchStart = i;
+            break;
+          }
+        }
+        let startIdx = 0;
+        let endIdx = 0;
+        if (matchStart >= 0) {
+          startIdx = matchStart;
+          endIdx = matchStart + tokenChars.length - 1;
+          cursor = matchStart + tokenChars.length;
+        } else {
+          startIdx = cursor;
+          endIdx = startIdx + tokenChars.length - 1;
+          cursor = endIdx + 1;
+        }
+        return {
+          word: token,
+          startIndex: startIdx,
+          endIndex: endIdx,
+          start: w.start,
+          end: w.end,
+        };
+      });
 
       return {
         text,

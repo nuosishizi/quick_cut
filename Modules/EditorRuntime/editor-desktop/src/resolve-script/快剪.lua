@@ -913,27 +913,66 @@ local function ensure_caption_template(mediaPool, rootFolder, job, root)
   return template
 end
 
-local function to_word_timing(transcript_words, frameRate, segmentStart)
+local function to_word_timing(transcript_words, plainText, frameRate, segmentStart)
   local result = {}
-  local startIndex = 0
-  if type(transcript_words) ~= "table" then
+  if type(transcript_words) ~= "table" or #transcript_words == 0 then
     return result
   end
+  local text = tostring(plainText or "")
+  local text_chars = {}
+  for uchar in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+    table.insert(text_chars, uchar)
+  end
+
+  local cursor = 1
   for _, word in ipairs(transcript_words) do
     local token = tostring(word.word or word.display or word.text or "")
-    local w_len = utf8len(token)
-    if w_len > 0 then
-      local w_start = tonumber(word.start) or segmentStart
-      local w_end = tonumber(word["end"] or word.endFrame) or (w_start + 0.2)
-      local endIndex = startIndex + w_len - 1
-      table.insert(result, {
-        startIndex = startIndex,
-        endIndex   = endIndex,
-        startFrame = math.max(0, math.floor((w_start - segmentStart) * frameRate)),
-        endFrame   = math.max(1, math.floor((w_end - segmentStart) * frameRate)),
-      })
-      startIndex = endIndex + 1
+    local start_idx = tonumber(word.startIndex)
+    local end_idx = tonumber(word.endIndex)
+
+    if not start_idx or not end_idx then
+      local token_chars = {}
+      for uchar in token:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        table.insert(token_chars, uchar)
+      end
+      if #token_chars > 0 then
+        local match_start = nil
+        for i = cursor, #text_chars - #token_chars + 1 do
+          local matches = true
+          for j = 1, #token_chars do
+            if text_chars[i + j - 1] ~= token_chars[j] then
+              matches = false
+              break
+            end
+          end
+          if matches then
+            match_start = i
+            break
+          end
+        end
+        if match_start then
+          start_idx = match_start - 1
+          end_idx = match_start + #token_chars - 2
+          cursor = match_start + #token_chars
+        else
+          start_idx = math.max(0, cursor - 1)
+          end_idx = start_idx + #token_chars - 1
+          cursor = end_idx + 2
+        end
+      else
+        start_idx = 0
+        end_idx = 0
+      end
     end
+
+    local w_start = tonumber(word.start) or segmentStart
+    local w_end = tonumber(word["end"] or word.endFrame) or (w_start + 0.2)
+    table.insert(result, {
+      startIndex = start_idx,
+      endIndex   = end_idx,
+      startFrame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5)),
+      endFrame   = math.max(1, math.floor((w_end - segmentStart) * frameRate + 0.5)),
+    })
   end
   return result
 end
@@ -993,13 +1032,21 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           -- 2. If AutoSubs macro is present, configure dynamic animation and word timing
           if autosubsTool then
             local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps
-            local wordTiming = to_word_timing(caption.words, framerate, tonumber(caption.start) or 0)
+            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
             autosubsTool:SetData("WordTiming", wordTiming)
 
             local clsTool = comp:FindTool("CharacterLevelStyling1")
             if clsTool then
               pcall(function() clsTool:SetInput("StyledText", plainText) end)
               pcall(function() clsTool:SetInput("Text", plainText) end)
+            end
+
+            pcall(function() autosubsTool:SetInput("HighlightEnabled", 1) end)
+            pcall(function() autosubsTool:SetInput("HighlightStyle", 0) end)
+            if style.highlightColor and type(style.highlightColor) == "table" then
+              pcall(function() autosubsTool:SetInput("HighlightColorRed", tonumber(style.highlightColor[1]) or 1.0) end)
+              pcall(function() autosubsTool:SetInput("HighlightColorGreen", tonumber(style.highlightColor[2]) or 0.82) end)
+              pcall(function() autosubsTool:SetInput("HighlightColorBlue", tonumber(style.highlightColor[3]) or 0.0) end)
             end
 
             if hasPreset then
@@ -1022,6 +1069,22 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
                 if updateHl and updateHl ~= "" then
                   local f = loadstring(updateHl)
                   if f then pcall(f(), comp, autosubsTool) end
+                end
+              end
+            end
+
+            local applyHl = autosubsTool:GetData("ApplyHighlight")
+            if applyHl and applyHl ~= "" then
+              local hlFunc = loadstring(applyHl)
+              if hlFunc then
+                pcall(hlFunc(), comp, autosubsTool)
+              end
+            else
+              local updateHl = autosubsTool:GetData("UpdateHighlight")
+              if updateHl and updateHl ~= "" then
+                local hlFunc = loadstring(updateHl)
+                if hlFunc then
+                  pcall(hlFunc(), comp, autosubsTool)
                 end
               end
             end
