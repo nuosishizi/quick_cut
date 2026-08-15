@@ -2486,7 +2486,7 @@
               <label class="field"><span class="small">用谁听写</span>
                 <select class="select" id="speechEngine">
                   <option value="groq">Groq Whisper</option>
-                  <option value="gemini">Gemini 听写</option>
+                  <option value="gemini">Gemini / Vertex 听写</option>
                 </select>
               </label>
               <div id="groqSpeechSettings">
@@ -8625,13 +8625,13 @@
           if ($("groqSpeechSettings")) $("groqSpeechSettings").style.display = geminiOn ? "none" : "block";
           if ($("speechEngineHint")) {
             $("speechEngineHint").textContent = geminiOn
-              ? "Gemini 听写用纠正设置里的 Key，只上传音频。时间戳由模型估算。"
-              : "Groq 用 Whisper 听写，词级时间戳更稳。纠正仍用 Gemini。";
+              ? "听写走纠正设置里选的接口：Gemini API 或 Vertex。只上传音频。时间戳由模型估算。"
+              : "Groq 用 Whisper 听写，词级时间戳更稳。纠正仍用 Gemini / Vertex。";
           }
           const hint = s.groq?.hint ? `（${s.groq.hint}）` : "";
           if (s.engine === "gemini") {
             $("modelBox").className = "status good";
-            $("modelBox").textContent = `听写：Gemini（${s.gemini?.model || "gemini-3.7-flash"}）。纠正也用同一套凭证。`;
+            $("modelBox").textContent = `听写：Gemini / Vertex（${s.gemini?.model || "gemini-3.7-flash"}）。纠正也用同一套凭证。`;
           } else if (s.engine === "groq") {
             $("modelBox").className = "status good";
             $("modelBox").textContent = `听写：Groq。纠正：Gemini（纠正设置里选接口和模型）。经文说错会禁止导出。${hint}`;
@@ -8799,7 +8799,7 @@
           const model = unwrap(await window.native.modelStatus());
           if (!model.ready && !model.installed) {
             if ((model.preferredEngine || model.engine) === "gemini") {
-              toast("请先在纠正设置里保存 Gemini 或 Vertex 凭证");
+              toast("请先在纠正设置里保存 Gemini API Key，或改用 Vertex 并保存 Key / 服务账号");
               openReviewSettings();
             } else {
               toast("请先保存 Groq API Key，或把听写改成 Gemini");
@@ -11718,7 +11718,7 @@
       $("speechEngine").onchange = async () => {
         unwrap(await window.native.saveSpeechSettings({ engine: $("speechEngine").value }));
         await checkModel();
-        toast($("speechEngine").value === "gemini" ? "听写已改为 Gemini" : "听写已改为 Groq");
+        toast($("speechEngine").value === "gemini" ? "听写已改为 Gemini / Vertex" : "听写已改为 Groq");
       };
       $("groqKeyInput").addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
