@@ -1753,9 +1753,11 @@
         transform: translateY(-0.18em);
         color: var(--active, #60e7ff);
       }
-      .captionobject[data-animation="karaoke"] .word.past,
       .captionobject[data-animation="karaoke"] .word.active {
         color: var(--active, #ffd21f);
+      }
+      .captionobject[data-animation="karaoke"] .word.past {
+        color: inherit;
       }
       .captionobject[data-animation="underline"] .word.active {
         text-decoration: underline;

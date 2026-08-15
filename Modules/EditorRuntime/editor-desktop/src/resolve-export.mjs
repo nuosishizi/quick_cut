@@ -451,7 +451,7 @@ export function resolveCaptionEffect(animation, options = {}) {
   const highlightOn = options.highlightEnabled !== false;
   const effect = {
     highlightStyle: 0,
-    keepPast: name === "karaoke",
+    keepPast: false,
     hideFuture: name === "typewriter",
     motion: "none",
     wordLevel: false,
@@ -567,8 +567,7 @@ export function buildResolveCaptionCues(caption, input = {}) {
         const isPast = index < active;
         let highlight = false;
         if (highlightOn) {
-          if (animation === "karaoke") highlight = isActive || isPast;
-          else if (animation === "line-pulse") highlight = lineHot.has(index);
+          if (animation === "line-pulse") highlight = lineHot.has(index);
           else highlight = isActive;
         }
         pushCaptionRun(runs, display, {
@@ -585,7 +584,7 @@ export function buildResolveCaptionCues(caption, input = {}) {
         const gap = captionWordGap(display, applyCaptionTextCase(next.display, textCase));
         if (gap) {
           pushCaptionRun(runs, gap, {
-            highlight: animation === "karaoke" && highlightOn && (isActive || isPast),
+            highlight: false,
             grow: false,
             underline: false,
           });
