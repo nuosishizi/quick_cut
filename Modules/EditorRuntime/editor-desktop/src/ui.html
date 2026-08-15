@@ -634,6 +634,7 @@
         max-width: 92%;
         white-space: normal;
         overflow: visible;
+        contain: layout style;
         text-align: center;
         font-weight: 800;
         pointer-events: none;
@@ -6535,9 +6536,7 @@
                     caption.start +
                     ((caption.end - caption.start) * (index + 1)) / list.length,
                 }));
-        const breaks = Array.isArray(caption.lineBreaks) && caption.lineBreaks.length
-          ? caption.lineBreaks.filter((index) => index > 0 && index < words.length)
-          : captionLineBreaks(words, state.captionTransform.width, state.captionLines);
+        const breaks = captionLineBreaks(words, state.captionTransform.width, "display");
         const wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
             const index = localIndex + offset;
             const status =
@@ -6565,15 +6564,18 @@
       function estimatedCaptionWordWidth(display) {
         const fontSize = Number(state.captionStyle.fontSize || 54),
           letterSpacing = Number(state.captionStyle.letterSpacing || 0),
+          weight = Number(state.captionStyle.fontWeight || 400),
+          stroke = Math.max(0, Number(state.captionStyle.stroke || 0)),
+          weightScale = weight >= 800 ? 1.16 : weight >= 600 ? 1.08 : 1,
           text = String(display || "");
         let units = 0;
         for (const character of text) {
-          if (/[MW@%]/.test(character)) units += 0.82;
-          else if (/[ilI1'.,:;]/.test(character)) units += 0.3;
-          else if (/[A-Z0-9]/.test(character)) units += 0.61;
-          else units += 0.53;
+          if (/[MW@%]/.test(character)) units += 0.78;
+          else if (/[ilI1'.,:;]/.test(character)) units += 0.34;
+          else if (/[A-Z0-9]/.test(character)) units += 0.62;
+          else units += 0.58;
         }
-        return units * fontSize + Math.max(0, text.length - 1) * letterSpacing;
+        return units * fontSize * weightScale + Math.max(0, text.length - 1) * letterSpacing + stroke * 1.15;
       }
       function captionTwoLineBreak(words, requestedWidth) {
         const breaks = captionLineBreaks(words, requestedWidth, 2);
@@ -6581,14 +6583,17 @@
       }
       function captionLineBreaks(words, requestedWidth, lineMode) {
         if (!Array.isArray(words) || words.length < 2) return [];
-        const limit = captionWrapLineLimit(lineMode ?? state.captionLines);
+        const limit = lineMode === "display" ? 99 : captionWrapLineLimit(lineMode ?? state.captionLines);
         if (limit <= 1) return [];
         const gap = Number(state.captionStyle.wordSpacing || 0) +
             Number(state.captionStyle.fontSize || 54) * 0.28,
           padding = state.captionStyle.backgroundEnabled
             ? Number(state.captionStyle.backgroundWidth || 14) * 2
             : 0,
-          width = Math.max(1, Number(requestedWidth || state.width * 0.8) - padding),
+          width = Math.max(
+            80,
+            Math.min(state.width * 0.92, Number(requestedWidth || state.width * 0.8) - padding) * 0.94,
+          ),
           measures = words.map((word) => estimatedCaptionWordWidth(word.display)),
           total = measures.reduce((sum, value) => sum + value, 0) + gap * (words.length - 1);
         if (total <= width) return [];
@@ -6651,6 +6656,7 @@
         element.style.maxWidth = "none";
         element.style.boxSizing = "border-box";
         element.style.whiteSpace = "normal";
+        element.style.overflow = "visible";
         element.style.overflowWrap = "normal";
         element.style.wordBreak = "normal";
       }
@@ -11783,19 +11789,15 @@
         };
         const el = $(id);
         if (el) {
-          el.oninput = syncAndRefresh;
+          el.oninput = () => {
+            syncAndRefresh();
+            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled"].includes(id))
+              scheduleCaptionReflow();
+          };
           el.onchange = () => {
             syncAndRefresh();
-            if (
-              ["fontSize", "letterSpacing", "wordSpacing", "backgroundWidth", "backgroundEnabled"].includes(id) &&
-              (state.captions || []).length
-            ) {
-              void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
-                state.captions = captions;
-                renderAll();
-                queueAutosave();
-              });
-            }
+            if (["fontSize", "fontWeight", "letterSpacing", "wordSpacing", "stroke", "backgroundWidth", "backgroundEnabled"].includes(id))
+              scheduleCaptionReflow();
           };
         }
       }
@@ -11812,6 +11814,18 @@
         document.querySelectorAll("[data-caption-lines]").forEach((button) =>
           button.classList.toggle("active", normalizeCaptionLineMode(button.dataset.captionLines) === mode),
         );
+      }
+      let captionReflowTimer = 0;
+      function scheduleCaptionReflow() {
+        window.clearTimeout(captionReflowTimer);
+        captionReflowTimer = window.setTimeout(() => {
+          if (!(state.captions || []).length) return;
+          void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
+            state.captions = captions;
+            renderAll();
+            queueAutosave();
+          });
+        }, 80);
       }
       function captionLayoutPayload(mode) {
         return {

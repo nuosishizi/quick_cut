@@ -147,6 +147,9 @@ test("subtitle side handles change wrapping width without changing font scale", 
   assert.match(ui, /function captionTwoLineBreak\(/);
   assert.match(ui, /function captionLineBreaks\(/);
   assert.match(ui, /\.captionobject \.caption-line \{[\s\S]*white-space:\s*nowrap;/);
+  assert.match(ui, /contain:\s*layout style/);
+  assert.match(ui, /captionLineBreaks\(words, state\.captionTransform\.width, "display"\)/);
+  assert.match(ui, /function scheduleCaptionReflow\(/);
   assert.match(ui, /boxWidth: state\.captionTransform\?\.width/);
   assert.match(ui, /id="side-subtitle"[\s\S]*data-caption-lines="1"/);
   assert.match(ui, /function setCaptionLineMode\(/);
