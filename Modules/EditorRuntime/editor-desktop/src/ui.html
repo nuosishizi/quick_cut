@@ -864,7 +864,7 @@
       }
       .clip {
         position: absolute;
-        contain: layout paint style;
+        contain: layout style;
         backface-visibility: hidden;
         top: 4px;
         height: 32px;
@@ -877,6 +877,36 @@
         background: #176ec1;
         white-space: nowrap;
         text-overflow: ellipsis;
+        z-index: 2;
+      }
+      .clip-sticky {
+        position: sticky;
+        left: 6px;
+        z-index: 1;
+        max-width: calc(100% - 10px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        pointer-events: none;
+      }
+      .clip:hover { z-index: 18; }
+      .clip.narrow:hover {
+        overflow: visible;
+      }
+      .clip.narrow:hover .clip-sticky {
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 4px);
+        max-width: 280px;
+        padding: 3px 7px;
+        border-radius: 4px;
+        background: #2c3036;
+        border: 1px solid #5a616a;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+        pointer-events: none;
       }
       .trim-handle {
         position: absolute;
@@ -920,6 +950,7 @@
       .clip.selected {
         outline: 2px solid #fff;
         outline-offset: -2px;
+        z-index: 24;
       }
       .clip.audio {
         background: #19785c;
@@ -3087,7 +3118,7 @@
             max="180"
             data-button-step="5"
             value="60"
-          /><span class="small" id="durationLabel">00:00</span>
+          /><button class="btn" id="followPlayhead" title="播放时时间线跟随播放头，类似 Premiere">跟随</button><span class="small" id="durationLabel">00:00</span>
         </div>
         <div class="timelinebody">
           <div class="tracklabels" id="trackLabels"></div>
@@ -3396,6 +3427,7 @@
         mainVideoClipOffsets: {},
         mainAudioClipOffsets: {},
         currentTime: 0,
+        followPlayhead: true,
         zoom: 60,
         canvasZoom: 1,
         ratio: "9:16",
@@ -4399,6 +4431,7 @@
           mainVideoClipOffsets: {},
           mainAudioClipOffsets: {},
           currentTime: 0,
+          followPlayhead: true,
           zoom: 60,
           canvasZoom: 1,
           selected: { type: "video", id: "main" },
@@ -6902,13 +6935,13 @@
             ),
             info = trackInfo(key);
           let html = "";
+          let laneCount = 1;
+          const videoClipMarkup = (clip, trackId) =>
+            `<div class="clip video ${isSelected("video", clip.id) ? "selected" : ""}" data-type="video" data-id="${clip.id}" data-track-id="${trackId}" style="${clipGeometryStyle(clip)}"><i class="trim-handle start" data-trim="start"></i><span class="clip-sticky">${escapeHtml(state.video?.name || "视频")}</span><i class="trim-handle end" data-trim="end"></i></div>`;
           if (key === "video")
             html = mainClips()
               .filter((clip) => !state.mainVideoTrackMap?.[clip.id])
-              .map(
-                (clip) =>
-                  `<div class="clip video ${isSelected("video", clip.id) ? "selected" : ""}" data-type="video" data-id="${clip.id}" data-track-id="video" style="left:${clip.start * state.zoom}px;width:${Math.max(3, (clip.end - clip.start) * state.zoom)}px"><i class="trim-handle start" data-trim="start"></i>${escapeHtml(state.video?.name || "视频")}<i class="trim-handle end" data-trim="end"></i></div>`,
-              )
+              .map((clip) => videoClipMarkup(clip, "video"))
               .join("");
           else if (key === "audio")
             html =
@@ -6919,17 +6952,14 @@
               state.audioMutes
                 .map(
                   (range) =>
-                    `<div class="clip audiomute" title="静音区域" style="left:${range.start * state.zoom}px;width:${Math.max(3, (range.end - range.start) * state.zoom)}px"></div>`,
+                    `<div class="clip audiomute" title="静音区域" style="${clipGeometryStyle(range)}"></div>`,
                 )
                 .join("") +
               `<canvas class="wavecanvas" id="waveform" style="position:absolute;inset:0;z-index:3;pointer-events:none"></canvas>`;
           else if (info.kind === "video") {
             const mapped = mainClips()
               .filter((clip) => state.mainVideoTrackMap?.[clip.id] === key)
-              .map(
-                (clip) =>
-                  `<div class="clip video ${isSelected("video", clip.id) ? "selected" : ""}" data-type="video" data-id="${clip.id}" data-track-id="${key}" style="left:${clip.start * state.zoom}px;width:${Math.max(3, (clip.end - clip.start) * state.zoom)}px"><i class="trim-handle start" data-trim="start"></i>${escapeHtml(state.video?.name || "视频")}<i class="trim-handle end" data-trim="end"></i></div>`,
-              )
+              .map((clip) => videoClipMarkup(clip, key))
               .join("");
             html = mapped + state.videoLayers
               .filter((clip) => clip.trackId === key)
@@ -6945,18 +6975,25 @@
               .map((clip) => audioClipHtml(clip, "audioasset", key))
               .join("");
           } else {
-            const type =
-              info.kind;
-            html = trackItems(key)
-              .map((clip) =>
-                type === "audioasset"
-                  ? audioClipHtml(clip, type, key)
-                  : clipHtml(clip, type),
-              )
+            const type = info.kind;
+            const items = trackItems(key);
+            const stacked = assignOverlapLanes(items);
+            laneCount = stacked.laneCount;
+            html = items
+              .map((clip) => {
+                const lane = stacked.lanes.get(clip.id) || 0;
+                return type === "audioasset"
+                  ? audioClipHtml(clip, type, key, lane, laneCount)
+                  : clipHtml(clip, type, lane, laneCount);
+              })
               .join("");
           }
+          const laneHeight = laneCount > 1 ? `${6 + laneCount * 27}px` : "";
           row.innerHTML = `${html}<span class="trackend" style="left:${state.duration * state.zoom}px"></span>`;
           row.style.width = $("timelineContent").style.width;
+          row.style.height = laneHeight;
+          const label = $("trackLabels").querySelector(`[data-track-key="${key}"]`);
+          if (label) label.style.height = laneHeight;
         }
         $("playhead").style.left = `${state.currentTime * state.zoom}px`;
         drawWaveform();
@@ -7048,7 +7085,51 @@
           return state.audioAssets.find((item) => item.id === id) || null;
         return null;
       }
-      function audioClipHtml(clip, type, trackId) {
+      function assignOverlapLanes(items = []) {
+        const sorted = items
+          .map((item, index) => ({ item, index }))
+          .sort((a, b) => Number(a.item.start || 0) - Number(b.item.start || 0));
+        const laneEnds = [];
+        const lanes = new Map();
+        for (const { item, index } of sorted) {
+          const start = Number(item.start || 0);
+          const end = Math.max(start + 0.01, Number(item.end || start));
+          let lane = 0;
+          while (lane < laneEnds.length && start < laneEnds[lane] - 0.02) lane += 1;
+          if (lane === laneEnds.length) laneEnds.push(end);
+          else laneEnds[lane] = end;
+          lanes.set(item.id || `i${index}`, lane);
+        }
+        return { lanes, laneCount: Math.max(1, laneEnds.length) };
+      }
+      function clipGeometryStyle(clip, lane = 0, laneCount = 1) {
+        const start = Number(clip.start || 0);
+        const end = Math.max(start, Number(clip.end || start));
+        const layered = laneCount > 1 ? `top:${3 + lane * 27}px;height:24px;` : "";
+        return `left:${start * state.zoom}px;width:${Math.max(4, (end - start) * state.zoom)}px;${layered}`;
+      }
+      function keepPlayheadInView(mode = "edge") {
+        if (state.followPlayhead === false) return;
+        const scroll = $("timelineScroll");
+        if (!scroll || timelineDrag) return;
+        const x = Number(state.currentTime || 0) * Number(state.zoom || 60);
+        const viewLeft = scroll.scrollLeft;
+        const viewWidth = Math.max(1, scroll.clientWidth);
+        const viewRight = viewLeft + viewWidth;
+        if (mode === "center") {
+          scroll.scrollLeft = Math.max(0, x - viewWidth / 2);
+          return;
+        }
+        const rightMargin = Math.max(36, viewWidth * 0.14);
+        if (x > viewRight - rightMargin || x < viewLeft + 8)
+          scroll.scrollLeft = Math.max(0, x - viewWidth * 0.18);
+      }
+      function syncFollowPlayheadButton() {
+        const button = $("followPlayhead");
+        if (!button) return;
+        button.classList.toggle("primary", state.followPlayhead !== false);
+      }
+      function audioClipHtml(clip, type, trackId, lane = 0, laneCount = 1) {
         const settings =
             type === "audio" ? mainAudioSettings(clip) : clip,
           volume = settings?.muted ? 0 : clamp(Number(settings?.volume ?? 1), 0, 2),
@@ -7060,9 +7141,9 @@
           type === "audioasset" && Array.isArray(clip.waveform) && clip.waveform.length
             ? `<canvas class="assetwavecanvas" data-asset-waveform="${escapeHtml(clip.id)}"></canvas>`
             : "";
-        return `<div class="clip audio ${clip.previewUrl ? "has-wave-preview" : ""} ${isSelected(type, clip.id) ? "selected" : ""}" data-type="${type}" data-id="${clip.id}" data-track-id="${trackId}" style="left:${clip.start * state.zoom}px;width:${Math.max(3, (clip.end - clip.start) * state.zoom)}px;${preview}--wave-scale:${Math.max(0.03, volume / 2)}"><i class="trim-handle start" data-trim="start"></i>${waveformCanvas}<span class="clipname ellipsis">${escapeHtml(clip.name || "音频")}</span><i class="trim-handle end" data-trim="end"></i></div>`;
+        return `<div class="clip audio ${clip.previewUrl ? "has-wave-preview" : ""} ${isSelected(type, clip.id) ? "selected" : ""}" data-type="${type}" data-id="${clip.id}" data-track-id="${trackId}" style="${clipGeometryStyle(clip, lane, laneCount)}${preview}--wave-scale:${Math.max(0.03, volume / 2)}"><i class="trim-handle start" data-trim="start"></i>${waveformCanvas}<span class="clipname clip-sticky ellipsis">${escapeHtml(clip.name || "音频")}</span><i class="trim-handle end" data-trim="end"></i></div>`;
       }
-      function clipHtml(c, type) {
+      function clipHtml(c, type, lane = 0, laneCount = 1) {
         const visualType = type === "audioasset" ? "audio" : type;
         const issueClass = type === "review" ? ` ${c.type || "mismatch"}${c.scripture ? " scripture" : ""}` : "";
         const displayText = type === "review"
@@ -7078,6 +7159,8 @@
             ? `<button class="review-replace" data-focus-issue="${escapeHtml(c.issueId || c.id)}" title="音频里没有读出这段内容，需要补录或自行决定是否保留">需补录</button>`
             : ""
           : "";
+        const pixelWidth = Math.max(4, (Number(c.end || 0) - Number(c.start || 0)) * state.zoom);
+        const narrow = pixelWidth < 72 ? " narrow" : "";
         const captionWords = type === "caption"
           ? (Array.isArray(c.words) && c.words.length
               ? c.words
@@ -7111,7 +7194,10 @@
               .join("")
           : `<span class="clipname ellipsis"${type === "review" ? reviewAction === "missing" ? ` data-focus-issue="${escapeHtml(c.issueId || c.id)}" title="${escapeHtml(reviewClipTitle(c))}"` : reviewAction === "insert" ? ` data-insert-review="${escapeHtml(c.id)}" title="不改变原意的口语补充：点击插入正确字幕轨道"` : ` data-cut-review="${escapeHtml(c.id)}" title="${escapeHtml(reviewClipTitle(c))}"` : ""}>${escapeHtml(displayText)}</span>`;
         const actionClass = type === "review" ? ` ${reviewAction}` : "";
-        return `<div class="clip ${visualType}${issueClass}${actionClass} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}" title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="left:${c.start * state.zoom}px;width:${Math.max(3, (c.end - c.start) * state.zoom)}px"><i class="trim-handle start" data-trim="start"></i>${captionWords}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
+        const inner = type === "caption" || type === "review"
+          ? `<span class="clip-sticky">${captionWords}</span>`
+          : `<span class="clip-sticky">${captionWords}</span>`;
+        return `<div class="clip ${visualType}${issueClass}${actionClass}${narrow} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}" title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="${clipGeometryStyle(c, lane, laneCount)}"><i class="trim-handle start" data-trim="start"></i>${inner}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
       }
       function drawWaveform() {
         const canvas = $("waveform"),
@@ -7829,6 +7915,7 @@
         $("timecode").textContent =
           `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
         $("play").textContent = state.playing ? "❚❚" : "▶";
+        syncFollowPlayheadButton();
         queueAutosave();
       }
       function seekTimeline(time) {
@@ -7843,6 +7930,7 @@
         $("playhead").style.left = `${state.currentTime * state.zoom}px`;
         $("timecode").textContent =
           `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
+        keepPlayheadInView("edge");
       }
       let playbackAnimationFrame = 0;
       function startPlaybackAnimationLoop() {
@@ -7860,6 +7948,7 @@
           $("playhead").style.left = `${state.currentTime * state.zoom}px`;
           $("timecode").textContent =
             `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
+          keepPlayheadInView("edge");
           playbackAnimationFrame = requestAnimationFrame(tick);
         };
         playbackAnimationFrame = requestAnimationFrame(tick);
@@ -7884,6 +7973,7 @@
         }
         state.playing = true;
         await $("video").play();
+        keepPlayheadInView("edge");
         updateBeautyPreviewState();
         startPlaybackAnimationLoop();
         syncPreviewAudio();
@@ -10165,6 +10255,12 @@
       }
       $("timelineZoom").oninput = (e) =>
         setTimelineZoomAroundPlayhead(Number(e.target.value));
+      $("followPlayhead").onclick = () => {
+        state.followPlayhead = state.followPlayhead === false;
+        syncFollowPlayheadButton();
+        if (state.followPlayhead !== false) keepPlayheadInView("center");
+      };
+      syncFollowPlayheadButton();
       let timelineDrag = null,
         objectDrag = null;
       function applyObjectDragMove(clientX, clientY) {

@@ -80,6 +80,15 @@ test("timeline zoom stays anchored to the playhead", () => {
   assert.match(ui, /timelineZoom"\)\.oninput[\s\S]*?setTimelineZoomAroundPlayhead/);
 });
 
+test("timeline follows the playhead, stacks overlaps, and keeps clip names visible", () => {
+  assert.match(ui, /function keepPlayheadInView/);
+  assert.match(ui, /function assignOverlapLanes/);
+  assert.match(ui, /id="followPlayhead"/);
+  assert.match(ui, /startPlaybackAnimationLoop[\s\S]*keepPlayheadInView\("edge"\)/);
+  assert.match(ui, /clip-sticky/);
+  assert.match(ui, /laneCount > 1/);
+});
+
 test("subtitle side handles change wrapping width without changing font scale", () => {
   assert.match(ui, /data-width-handle="w"/);
   assert.match(ui, /data-width-handle="e"/);
