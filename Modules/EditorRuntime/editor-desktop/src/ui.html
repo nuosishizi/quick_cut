@@ -12046,26 +12046,9 @@
         const option = event.target.selectedOptions[0];
         if (!option) return;
         applyFontToSelection({
-          family: option.dataset.family || option.textContent,
+          family: option.dataset.family || option.value || option.textContent,
           path: option.dataset.path || "",
         });
-      };
-      $("fontFamilySelect").onpointerdown = async (event) => {
-        if (!localFontCatalogLoaded) await loadLocalFonts();
-        renderVisualFontBrowser();
-        $("fontVisualBrowser")?.classList.toggle("on");
-      };
-      $("loadFont").onclick = async () => {
-        try {
-          const fonts = (await nativeCall("installLocalFonts")) || [];
-          if (!fonts.length) return;
-          fonts.forEach(registerFontFace);
-          await loadLocalFonts();
-          applyFontToSelection(fonts[0]);
-          toast(`已加载 ${fonts.length} 个本地字体`);
-        } catch (error) {
-          toast(error.message);
-        }
       };
       $("pasteScript").onclick = async () => {
         try {

@@ -699,7 +699,7 @@ function titleBlock(name, clip, timebase, styled, start, end, textXml, styleXml,
   if (!span) return "";
   const offset = span.start - Number(clip.start || 0);
   const duration = span.end - span.start;
-  return `            <title ref="r3" name="${xmlName(name)}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" duration="${fcpxTime(duration, timebase)}" start="3600s">
+  return `            <title ref="r3" name="${xmlName(name)}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" duration="${fcpxTime(duration, timebase)}" start="0s">
               <param name="Position" key="9999/999166631/999166633/1/100/101" value="${styled.x.toFixed(1)} ${(-styled.y).toFixed(1)}"/>
               <param name="Alignment" key="9999/999166631/999166633/2/354/1002961760/401" value="1 (Center)"/>
               <text>
@@ -910,15 +910,43 @@ ${spots.join("\n")}
 `;
 }
 
-function clipTimeMap(clip, timebase) {
+function shiftTimelineItems(items, origin) {
+  if (!origin) return items;
+  return (items || []).map((item) => ({
+    ...item,
+    start: Number(item.start || 0) - origin,
+    end: Number(item.end || 0) - origin,
+  }));
+}
+
+export function alignExportToFirstClip(clips = [], extras = {}) {
+  const origin = clips.length ? Math.min(...clips.map((clip) => Number(clip.start || 0))) : 0;
+  const shift = origin > 0.02 ? origin : 0;
+  return {
+    origin: shift,
+    clips: shiftTimelineItems(clips, shift),
+    captions: shiftTimelineItems(extras.captions, shift),
+    videoLayers: shiftTimelineItems(extras.videoLayers, shift),
+    images: shiftTimelineItems(extras.images, shift),
+    titles: shiftTimelineItems(extras.titles, shift),
+    audioAssets: shiftTimelineItems(extras.audioAssets, shift),
+  };
+}
+
+function sourceTimeMap(clip, timebase) {
   const timeline = Number(clip.end) - Number(clip.start);
-  const source = Number(clip.sourceEnd) - Number(clip.sourceStart);
-  if (!Number.isFinite(timeline) || !Number.isFinite(source) || Math.abs(timeline - source) < 0.02) {
+  const sourceStart = Number(clip.sourceStart || 0);
+  const sourceEnd = Number(clip.sourceEnd || sourceStart + timeline);
+  if (
+    !Number.isFinite(timeline) ||
+    timeline <= 0 ||
+    (Math.abs(sourceStart) < 0.02 && Math.abs(sourceEnd - sourceStart - timeline) < 0.02)
+  ) {
     return "";
   }
   return `            <timeMap>
-              <timept time="0s" value="0s" interp="smooth2"/>
-              <timept time="${fcpxTime(timeline, timebase)}" value="${fcpxTime(source, timebase)}" interp="smooth2"/>
+              <timept time="0s" value="${fcpxTime(sourceStart, timebase)}" interp="smooth2"/>
+              <timept time="${fcpxTime(timeline, timebase)}" value="${fcpxTime(sourceEnd, timebase)}" interp="smooth2"/>
             </timeMap>`;
 }
 
@@ -954,11 +982,21 @@ function connectedClipXml(ref, item, parent, timebase, lane, extra = "") {
   const duration = span.end - span.start;
   const sourceStart = Math.max(0, Number(item.sourceStart || 0) + (span.start - Number(item.start || 0)));
   const name = xmlEscape(item.name || path.basename(String(item.path || "clip")));
-  const inner = [adjustTransformXml(item), extra].filter(Boolean).join("\n");
+  const timeMap = sourceTimeMap(
+    {
+      start: 0,
+      end: duration,
+      sourceStart,
+      sourceEnd: sourceStart + duration,
+    },
+    timebase,
+  );
+  const inner = [adjustTransformXml(item), extra, timeMap].filter(Boolean).join("\n");
+  const record = fcpxTime(offset, timebase);
   if (!inner) {
-    return `            <asset-clip ref="${ref}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" name="${name}" start="${fcpxTime(sourceStart, timebase)}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF"/>`;
+    return `            <asset-clip ref="${ref}" lane="${lane}" offset="${record}" name="${name}" start="${record}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF"/>`;
   }
-  return `            <asset-clip ref="${ref}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" name="${name}" start="${fcpxTime(sourceStart, timebase)}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF">
+  return `            <asset-clip ref="${ref}" lane="${lane}" offset="${record}" name="${name}" start="${record}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF">
 ${inner}
             </asset-clip>`;
 }
@@ -967,25 +1005,33 @@ export function buildResolveFcpxml(input = {}) {
   const videoPath = String(input.inputPath || "");
   if (!videoPath) throw new Error("没有可导出的视频素材。");
   const timebase = resolveTimebase(input.fps);
-  const clips = snapClipsToTimebase(normalizeTimelineClips(input), timebase);
-  if (!clips.length) throw new Error("时间线上没有可导出的剪辑。");
-  const captions = (input.captions || [])
-    .map((caption) => ({
-      text: String(caption.text || "").trim(),
-      start: Number(caption.start || 0),
-      end: Number(caption.end || 0),
-      words: caption.words,
-      style: caption.style,
-      width: caption.width,
-      scale: caption.scale,
-      x: caption.x,
-      y: caption.y,
-    }))
-    .filter((caption) => caption.text && caption.end > caption.start);
-  const videoLayers = (input.videoLayers || []).filter((item) => item?.path);
-  const images = (input.images || []).filter((item) => item?.path);
-  const textTitles = (input.titles || []).filter((item) => String(item?.text || "").trim());
-  const audioAssets = (input.audioAssets || []).filter((item) => item?.path);
+  const rawClips = snapClipsToTimebase(normalizeTimelineClips(input), timebase);
+  if (!rawClips.length) throw new Error("时间线上没有可导出的剪辑。");
+  const aligned = alignExportToFirstClip(rawClips, {
+    captions: (input.captions || [])
+      .map((caption) => ({
+        text: String(caption.text || "").trim(),
+        start: Number(caption.start || 0),
+        end: Number(caption.end || 0),
+        words: caption.words,
+        style: caption.style,
+        width: caption.width,
+        scale: caption.scale,
+        x: caption.x,
+        y: caption.y,
+      }))
+      .filter((caption) => caption.text && caption.end > caption.start),
+    videoLayers: (input.videoLayers || []).filter((item) => item?.path),
+    images: (input.images || []).filter((item) => item?.path),
+    titles: (input.titles || []).filter((item) => String(item?.text || "").trim()),
+    audioAssets: (input.audioAssets || []).filter((item) => item?.path),
+  });
+  const clips = aligned.clips;
+  const captions = aligned.captions;
+  const videoLayers = aligned.videoLayers;
+  const images = aligned.images;
+  const textTitles = aligned.titles;
+  const audioAssets = aligned.audioAssets;
   const width = Math.max(1, Number(input.width || 1080));
   const height = Math.max(1, Number(input.height || 1920));
   const formatName = resolveFormatName(width, height, timebase);
@@ -1112,7 +1158,7 @@ export function buildResolveFcpxml(input = {}) {
       if (xml) nested.push(xml);
     });
     if (item.kind === "clip") {
-      const mapped = clipTimeMap(item.clip, timebase);
+      const mapped = sourceTimeMap(item.clip, timebase);
       if (mapped) nested.push(mapped);
     }
     const inner = nested.length ? `\n${nested.join("\n")}\n          ` : "";
@@ -1122,7 +1168,8 @@ export function buildResolveFcpxml(input = {}) {
         : `          <gap name="空隙" offset="${fcpxTime(item.start, timebase)}" duration="${fcpxTime(item.end - item.start, timebase)}"/>`;
     }
     const clip = item.clip;
-    return `          <asset-clip ref="r2" offset="${fcpxTime(clip.start, timebase)}" name="${xmlEscape(clip.name)}" start="${fcpxTime(clip.sourceStart, timebase)}" duration="${fcpxTime(clip.end - clip.start, timebase)}" tcFormat="NDF" audioRole="dialogue">${inner}</asset-clip>`;
+    const record = fcpxTime(clip.start, timebase);
+    return `          <asset-clip ref="r2" offset="${record}" name="${xmlEscape(clip.name)}" start="${record}" duration="${fcpxTime(clip.end - clip.start, timebase)}" tcFormat="NDF" audioRole="dialogue">${inner}</asset-clip>`;
   });
 
   return `<?xml version="1.0" encoding="UTF-8"?>

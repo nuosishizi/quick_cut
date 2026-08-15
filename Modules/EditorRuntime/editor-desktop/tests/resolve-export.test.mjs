@@ -21,6 +21,7 @@ import {
   applyCaptionTextCase,
   isCaptionWordMotion,
   resolveFormatName,
+  alignExportToFirstClip,
 } from "../src/resolve-export.mjs";
 
 test("kept source segments skip removed rereads", () => {
@@ -56,8 +57,10 @@ test("FCPXML uses source in/out so Resolve can reopen the cut timeline", () => {
   assert.match(xml, /FFVideoFormat1080x1920p30/);
   assert.match(xml, /width="1080" height="1920"/);
   assert.match(xml, /audioRole="dialogue"/);
-  assert.match(xml, /start="0\/30s"/);
-  assert.match(xml, /start="105\/30s"/);
+  assert.match(xml, /offset="0\/30s"/);
+  assert.match(xml, /offset="60\/30s"/);
+  assert.match(xml, /value="105\/30s"/);
+  assert.match(xml, /value="225\/30s"/);
   assert.match(xml, /Why I say to you/);
   assert.match(xml, /All manner of sin/);
   assert.match(xml, /font="Montserrat"/);
@@ -322,6 +325,30 @@ test("drop-frame rates stay on a Resolve-friendly timebase", () => {
   assert.equal(resolveFormatName(1920, 1080, resolveTimebase(30)), "FFVideoFormat1080p30");
 });
 
+test("trimmed source in-point stays at timeline zero instead of leaving a hole", () => {
+  const sourceStart = 20 + 16 / 30;
+  const xml = buildResolveFcpxml({
+    inputPath: "C:\\Users\\newnew\\video.mp4",
+    sourceDuration: 80,
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    clips: [
+      { start: 20 + 16 / 30, end: 80, sourceStart, sourceEnd: 80, name: "take-a" },
+    ],
+    captions: [{ text: "hello", start: 21, end: 22 }],
+    captionStyle: { highlightEnabled: false },
+  });
+  assert.equal(alignExportToFirstClip([{ start: sourceStart, end: 80 }]).origin, sourceStart);
+  assert.match(xml, /offset="0\/30s"/);
+  assert.match(xml, /start="0\/30s"/);
+  assert.match(xml, /value="616\/30s"/);
+  assert.doesNotMatch(xml, /<gap name="空隙" offset="0\/30s"/);
+  const firstClip = xml.match(/<asset-clip ref="r2"[^>]*>/);
+  assert.ok(firstClip);
+  assert.doesNotMatch(firstClip[0], /start="616\/30s"/);
+});
+
 test("FCPXML splits captions across cuts and keeps titles inside the parent clip", () => {
   const xml = buildResolveFcpxml({
     inputPath: "C:\\Users\\newnew\\video.mp4",
@@ -355,8 +382,8 @@ test("FCPXML includes overlay video, image, text and audio as connected clips", 
     width: 1080,
     height: 1920,
     fps: 30,
-    clips: [{ start: 1, end: 5, sourceStart: 0, sourceEnd: 4, name: "main" }],
-    captions: [{ text: "hello", start: 1.2, end: 2 }],
+    clips: [{ start: 0, end: 4, sourceStart: 0, sourceEnd: 4, name: "main" }],
+    captions: [{ text: "hello", start: 0.2, end: 1 }],
     videoLayers: [
       { path: "C:\\Users\\newnew\\overlay.mp4", start: 2, end: 4, sourceStart: 0, name: "overlay" },
     ],
@@ -364,7 +391,6 @@ test("FCPXML includes overlay video, image, text and audio as connected clips", 
     titles: [{ text: "标题字", start: 1.5, end: 3, x: 0, y: -120 }],
     audioAssets: [{ path: "C:\\Users\\newnew\\music.mp3", start: 1, end: 5, volume: 0.5, name: "music" }],
   });
-  assert.match(xml, /<gap name="空隙" offset="0\/30s" duration="30\/30s"\/>/);
   assert.match(xml, /overlay\.mp4/);
   assert.match(xml, /logo\.png/);
   assert.match(xml, /music\.mp3/);
