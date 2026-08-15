@@ -16,7 +16,7 @@ import {
 import { mediaBinary, supportRoot } from "./media.mjs";
 import { mapSourceTime, mergeRanges } from "./pausecut.mjs";
 import { extractArchive, isWindows } from "./platform.mjs";
-import { reviewReady } from "./ai-settings.mjs";
+import { completeGeminiMedia, loadReviewSettings, reviewReady } from "./ai-settings.mjs";
 import {
   applyJudgeDecisions,
   blockingScriptureIssues,
@@ -62,6 +62,9 @@ const GROQ_STT_MODEL = "whisper-large-v3";
 const GROQ_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const GROQ_CHUNK_SECONDS = 480;
 const GROQ_CHUNK_OVERLAP = 1.2;
+const GEMINI_CHUNK_SECONDS = 360;
+const GEMINI_CHUNK_OVERLAP = 1.5;
+const GEMINI_MAX_INLINE_BYTES = 16 * 1024 * 1024;
 
 function groqKeyFile() {
   const directory = path.join(supportRoot(), "secrets");
@@ -120,7 +123,50 @@ export function localModelInstalled() {
   return modelFileComplete(modelPath());
 }
 
+function speechSettingsPath() {
+  const directory = path.join(supportRoot(), "secrets");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return path.join(directory, "speech-settings.json");
+}
+
+export function loadSpeechSettings() {
+  let stored = {};
+  try {
+    stored = JSON.parse(fs.readFileSync(speechSettingsPath(), "utf8"));
+  } catch {
+    stored = {};
+  }
+  return { engine: stored.engine === "gemini" ? "gemini" : "groq" };
+}
+
+export function saveSpeechSettings(input = {}) {
+  const current = loadSpeechSettings();
+  const next = {
+    engine: input.engine === "gemini" || input.engine === "groq" ? input.engine : current.engine,
+  };
+  fs.writeFileSync(speechSettingsPath(), JSON.stringify(next, null, 2), { mode: 0o600, encoding: "utf8" });
+  return speechStatus();
+}
+
+export function speechStatus() {
+  const settings = loadSpeechSettings();
+  const groq = groqKeyStatus();
+  const gemini = reviewReady();
+  const localInstalled = localModelInstalled();
+  const ready =
+    settings.engine === "gemini" ? gemini : groq.configured || localInstalled;
+  return {
+    engine: settings.engine,
+    groq,
+    gemini: { configured: gemini, model: loadReviewSettings().model || "gemini-3.7-flash" },
+    localInstalled,
+    ready,
+  };
+}
+
 export function canTranscribe() {
+  const settings = loadSpeechSettings();
+  if (settings.engine === "gemini") return reviewReady();
   return Boolean(getGroqApiKey()) || localModelInstalled();
 }
 
@@ -128,17 +174,23 @@ export function modelStatus() {
   const target = modelPath();
   const exists = fs.existsSync(target);
   const partial = `${target}.download`;
-  const groq = groqKeyStatus();
-  const localInstalled = exists && modelFileComplete(target);
-  const ready = groq.configured || localInstalled;
+  const speech = speechStatus();
+  const groq = speech.groq;
+  const localInstalled = speech.localInstalled;
+  const geminiReady = speech.engine === "gemini" && speech.gemini.configured;
+  const groqReady = speech.engine !== "gemini" && groq.configured;
+  const engine = geminiReady ? "gemini" : groqReady ? "groq" : localInstalled ? "local" : "none";
+  const ready = geminiReady || groqReady || localInstalled;
   return {
     installed: ready,
     localInstalled,
     ready,
-    engine: groq.configured ? "groq" : localInstalled ? "local" : "none",
+    engine,
+    preferredEngine: speech.engine,
     groq,
+    gemini: speech.gemini,
     path: target,
-    name: groq.configured ? "Groq Whisper" : "Whisper Turbo",
+    name: engine === "gemini" ? "Gemini 听写" : engine === "groq" ? "Groq Whisper" : "Whisper Turbo",
     expectedSize: "约 600MB",
     partialBytes: fs.existsSync(partial) ? fs.statSync(partial).size : 0,
   };
@@ -381,6 +433,176 @@ export function parseGroqTranscription(data, offset = 0) {
 
 function groqPrompt() {
   return "This is a clear spoken English Bible teaching.";
+}
+
+export function parseTimestampSeconds(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value || "").trim();
+  if (!text) return Number.NaN;
+  if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text);
+  const clock = text.match(/^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)$/);
+  if (clock) {
+    const hours = clock[1] ? Number(clock[1]) : 0;
+    return hours * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
+  }
+  const minutes = text.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (minutes) return Number(minutes[1]) * 60 + Number(minutes[2]);
+  return Number.NaN;
+}
+
+export function parseGeminiTranscription(data, offset = 0) {
+  const shift = Math.max(0, Number(offset || 0));
+  let payload = data;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = { text: payload };
+    }
+  }
+  const toSegment = (text, startValue, endValue) => {
+    const clean = String(text || "").trim();
+    const start = parseTimestampSeconds(startValue);
+    const end = parseTimestampSeconds(endValue);
+    if (!clean || !Number.isFinite(start)) return null;
+    return {
+      text: clean,
+      start: shift + start,
+      end: Math.max(shift + start + 0.04, shift + (Number.isFinite(end) ? end : start + 0.35)),
+      timebase: "seconds",
+    };
+  };
+  const rows = [
+    ...(payload?.segments || []),
+    ...(payload?.words || []),
+  ];
+  const output = [];
+  for (const row of rows) {
+    const words = Array.isArray(row?.words) ? row.words : [];
+    if (words.length >= 2) {
+      for (const word of words) {
+        const item = toSegment(word.text || word.word, word.start ?? word.start_time, word.end ?? word.end_time);
+        if (item) output.push(item);
+      }
+      continue;
+    }
+    const item = toSegment(
+      row?.text || row?.content || row?.word,
+      row?.start ?? row?.start_time ?? row?.timestamp,
+      row?.end ?? row?.end_time,
+    );
+    if (item) output.push(item);
+  }
+  if (output.length) return output;
+  const fallback = String(payload?.text || "").trim();
+  return fallback ? [toSegment(fallback, 0, 0.5)].filter(Boolean) : [];
+}
+
+const GEMINI_STT_SCHEMA = {
+  type: "object",
+  properties: {
+    text: { type: "string" },
+    segments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          start: { type: "number" },
+          end: { type: "number" },
+          text: { type: "string" },
+          words: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                text: { type: "string" },
+                start: { type: "number" },
+                end: { type: "number" },
+              },
+              required: ["text", "start", "end"],
+            },
+          },
+        },
+        required: ["start", "end", "text"],
+      },
+    },
+  },
+  required: ["segments"],
+};
+
+async function geminiTranscribeFile(filePath, { signal } = {}) {
+  if (!reviewReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
+  const bytes = await fs.promises.readFile(filePath);
+  if (bytes.length > GEMINI_MAX_INLINE_BYTES)
+    throw new Error("这段音频太大，请把视频剪短后再用 Gemini 听写。");
+  const raw = await completeGeminiMedia({
+    system:
+      "You are a speech-to-text engine. Transcribe English speech verbatim. Keep restarts, repeated words, false starts, and fillers. Do not summarize.",
+    input: [
+      {
+        type: "text",
+        text: "Transcribe this audio. Return JSON only with seconds as numbers: {\"text\":\"...\",\"segments\":[{\"start\":0,\"end\":1.2,\"text\":\"...\",\"words\":[{\"text\":\"...\",\"start\":0,\"end\":0.3}]}]}. Do not use MM:SS.",
+      },
+      {
+        type: "audio",
+        mime_type: String(filePath).toLowerCase().endsWith(".flac") ? "audio/flac" : "audio/wav",
+        data: bytes.toString("base64"),
+      },
+    ],
+    signal,
+    responseSchema: GEMINI_STT_SCHEMA,
+  });
+  return raw;
+}
+
+export async function transcribeWithGemini(
+  audioPath,
+  { duration = 0, job = null, signal = null } = {},
+) {
+  const totalDuration = Math.max(0.04, Number(duration || 0.04));
+  const size = fs.statSync(audioPath).size;
+  const needChunks =
+    size > GEMINI_MAX_INLINE_BYTES || totalDuration > GEMINI_CHUNK_SECONDS + 20;
+  if (!needChunks) {
+    if (job) job.progress = 0.22;
+    const raw = await geminiTranscribeFile(audioPath, { signal });
+    if (job) job.progress = 0.86;
+    const segments = parseGeminiTranscription(raw, 0);
+    return {
+      segments,
+      fallbackText: segments.map((item) => item.text).join(" "),
+    };
+  }
+  const segments = [];
+  const directory = path.dirname(audioPath);
+  let index = 0;
+  for (
+    let start = 0;
+    start < totalDuration;
+    start += GEMINI_CHUNK_SECONDS - GEMINI_CHUNK_OVERLAP, index += 1
+  ) {
+    if (signal?.aborted || job?.state === "cancelled") throw new Error("cancelled");
+    const length = Math.min(GEMINI_CHUNK_SECONDS, totalDuration - start);
+    if (length < 0.25) break;
+    const chunkPath = path.join(directory, `gemini-chunk-${index}.flac`);
+    await extractAudioSlice(audioPath, chunkPath, start, length);
+    if (job) job.progress = 0.14 + Math.min(0.7, (start / totalDuration) * 0.7);
+    try {
+      const raw = await geminiTranscribeFile(chunkPath, { signal });
+      segments.push(...parseGeminiTranscription(raw, start));
+    } finally {
+      try {
+        fs.unlinkSync(chunkPath);
+      } catch {
+        /* temp chunk */
+      }
+    }
+  }
+  if (job) job.progress = 0.88;
+  return {
+    segments,
+    fallbackText: segments.map((item) => item.text).join(" "),
+  };
 }
 
 function groqHttpError(status, body) {
@@ -862,6 +1084,49 @@ function watchTranscriptChild(job, child, { wavPath, duration, script, removals,
 }
 
 async function beginTranscription(job, context) {
+  const preferred = loadSpeechSettings().engine;
+  if (preferred === "gemini") {
+    if (!reviewReady()) {
+      job.state = "failed";
+      job.error = "听写选了 Gemini，请先在纠正设置里保存 Gemini 或 Vertex 凭证。";
+      context.cleanup();
+      return;
+    }
+    const controller = new AbortController();
+    job.controller = controller;
+    try {
+      job.progress = 0.1;
+      const transcribed = await transcribeWithGemini(context.wavPath, {
+        duration: context.duration,
+        job,
+        signal: controller.signal,
+      });
+      if (job.state === "cancelled") {
+        context.cleanup();
+        return;
+      }
+      context.cleanup();
+      job.child = null;
+      await finalizeScriptAnalysis(
+        job,
+        transcribed.segments,
+        transcribed.fallbackText,
+        context.duration,
+        context.script,
+        context.removals,
+      );
+      job.controller = null;
+    } catch (error) {
+      context.cleanup();
+      job.child = null;
+      job.controller = null;
+      if (job.state === "cancelled" || error?.name === "AbortError" || error?.message === "cancelled")
+        return;
+      job.state = "failed";
+      job.error = error.message;
+    }
+    return;
+  }
   if (getGroqApiKey()) {
     const controller = new AbortController();
     job.controller = controller;

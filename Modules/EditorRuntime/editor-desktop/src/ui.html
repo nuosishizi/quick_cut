@@ -2482,19 +2482,28 @@
                 </button>
               </div>
               <button class="btn wide" id="openReviewSettings" style="margin-top:7px">纠正设置</button>
-              <div class="sectiontitle" style="margin-top: 12px">Groq 云端识别</div>
-              <input
-                class="input"
-                id="groqKeyInput"
-                type="password"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="粘贴 Groq API Key（gsk_…）"
-              />
-              <div class="row" style="margin-top: 7px">
-                <button class="btn primary grow" id="saveGroqKey">保存 Key</button>
-                <button class="btn" id="clearGroqKey">清除</button>
+              <div class="sectiontitle" style="margin-top: 12px">听写引擎</div>
+              <label class="field"><span class="small">用谁听写</span>
+                <select class="select" id="speechEngine">
+                  <option value="groq">Groq Whisper</option>
+                  <option value="gemini">Gemini 听写</option>
+                </select>
+              </label>
+              <div id="groqSpeechSettings">
+                <input
+                  class="input"
+                  id="groqKeyInput"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="粘贴 Groq API Key（gsk_…）"
+                />
+                <div class="row" style="margin-top: 7px">
+                  <button class="btn primary grow" id="saveGroqKey">保存 Groq Key</button>
+                  <button class="btn" id="clearGroqKey">清除</button>
+                </div>
               </div>
+              <div class="small" id="speechEngineHint" style="margin-top:7px"></div>
               <div id="modelBox" class="status"></div>
               <div class="progress" id="modelProgress" style="display: none">
                 <span></span>
@@ -8610,16 +8619,31 @@
       async function checkModel() {
         try {
           const s = unwrap(await window.native.modelStatus());
+          const engine = s.preferredEngine || s.engine || "groq";
+          if ($("speechEngine")) $("speechEngine").value = engine;
+          const geminiOn = engine === "gemini";
+          if ($("groqSpeechSettings")) $("groqSpeechSettings").style.display = geminiOn ? "none" : "block";
+          if ($("speechEngineHint")) {
+            $("speechEngineHint").textContent = geminiOn
+              ? "Gemini 听写用纠正设置里的 Key，只上传音频。时间戳由模型估算。"
+              : "Groq 用 Whisper 听写，词级时间戳更稳。纠正仍用 Gemini。";
+          }
           const hint = s.groq?.hint ? `（${s.groq.hint}）` : "";
-          if (s.engine === "groq") {
+          if (s.engine === "gemini") {
+            $("modelBox").className = "status good";
+            $("modelBox").textContent = `听写：Gemini（${s.gemini?.model || "gemini-3.7-flash"}）。纠正也用同一套凭证。`;
+          } else if (s.engine === "groq") {
             $("modelBox").className = "status good";
             $("modelBox").textContent = `听写：Groq。纠正：Gemini（纠正设置里选接口和模型）。经文说错会禁止导出。${hint}`;
           } else if (s.localInstalled) {
             $("modelBox").className = "status good";
             $("modelBox").textContent = "本地 Whisper Turbo 已安装，可离线匹配。";
+          } else if (geminiOn) {
+            $("modelBox").className = "status warn";
+            $("modelBox").textContent = "听写选了 Gemini，请先在纠正设置里保存 Key。";
           } else {
             $("modelBox").className = "status warn";
-            $("modelBox").textContent = "还没有 Key。保存后即可匹配文案，不会下载 600MB 本地模型。";
+            $("modelBox").textContent = "还没有 Key。保存 Groq Key，或改用 Gemini 听写。";
           }
         } catch (e) {
           $("modelBox").className = "status error";
@@ -8774,8 +8798,13 @@
         try {
           const model = unwrap(await window.native.modelStatus());
           if (!model.ready && !model.installed) {
-            toast("请先保存 Groq API Key");
-            $("groqKeyInput")?.focus();
+            if ((model.preferredEngine || model.engine) === "gemini") {
+              toast("请先在纠正设置里保存 Gemini 或 Vertex 凭证");
+              openReviewSettings();
+            } else {
+              toast("请先保存 Groq API Key，或把听写改成 Gemini");
+              $("groqKeyInput")?.focus();
+            }
             return;
           }
           const btn = $("matchScript");
@@ -11686,6 +11715,11 @@
       $("reviewSettingsCancel").onclick = () => $("reviewSettingsModal").classList.remove("on");
       $("saveGroqKey").onclick = saveGroqKey;
       $("clearGroqKey").onclick = clearGroqKey;
+      $("speechEngine").onchange = async () => {
+        unwrap(await window.native.saveSpeechSettings({ engine: $("speechEngine").value }));
+        await checkModel();
+        toast($("speechEngine").value === "gemini" ? "听写已改为 Gemini" : "听写已改为 Groq");
+      };
       $("groqKeyInput").addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();

@@ -603,6 +603,113 @@ function textFromResult(result) {
   return extractGeminiOutputText(result.data);
 }
 
+async function postGeminiJson(url, headers, body, signal) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal,
+  });
+  const parsed = await readJsonResponse(response);
+  return { ok: response.ok, status: response.status, ...parsed };
+}
+
+function mediaPartsFromInput(input = []) {
+  return (Array.isArray(input) ? input : []).map((item) => {
+    if (item?.type === "audio" && item.data)
+      return { inlineData: { mimeType: item.mime_type || "audio/flac", data: item.data } };
+    return { text: String(item?.text || item || "") };
+  });
+}
+
+export async function completeGeminiMedia({
+  system = "",
+  input = [],
+  signal = null,
+  responseSchema = null,
+} = {}) {
+  if (!reviewReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
+  const settings = loadReviewSettings();
+  const model = settings.model || DEFAULTS.model;
+  const responseFormat = responseSchema
+    ? [{ type: "text", mime_type: "application/json", schema: responseSchema }]
+    : [{ type: "text", mime_type: "application/json" }];
+  const interactionBody = {
+    model,
+    input,
+    system_instruction: String(system || ""),
+    store: false,
+    generation_config: { temperature: 0 },
+    response_format: responseFormat,
+  };
+  const generateBody = {
+    systemInstruction: { parts: [{ text: String(system || "") }] },
+    contents: [{ role: "user", parts: mediaPartsFromInput(input) }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      ...(responseSchema ? { responseSchema } : {}),
+    },
+  };
+
+  const postGenerate = async () => {
+    const headers = { "Content-Type": "application/json" };
+    let url = "";
+    if (settings.provider === "vertex") {
+      if (vertexAuthMode() === "express-key")
+        url = buildVertexExpressGenerateContentUrl(model, vertexApiKey());
+      else if (vertexAuthMode() === "service-account") {
+        if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID。");
+        const location = settings.vertexLocation || "us-central1";
+        url = `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
+        Object.assign(headers, await vertexOAuthHeaders());
+      } else throw new Error("请先保存 Vertex Key，或导入服务账号 JSON。");
+    } else {
+      const key = geminiApiKey();
+      if (!key) throw new Error("请先保存 Gemini API Key。");
+      url = `${GEMINI_API_ROOT}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+      headers["x-goog-api-key"] = key;
+    }
+    return postGeminiJson(url, headers, generateBody, signal);
+  };
+
+  if (settings.provider === "vertex" && vertexAuthMode() === "express-key") {
+    const express = await postGenerate();
+    const text = textFromResult(express);
+    if (text) return text;
+    throw new Error(apiErrorMessage(express.data, express.raw, express.status));
+  }
+
+  const headers = { "Content-Type": "application/json" };
+  let url = `${GEMINI_API_ROOT}${INTERACTIONS_PATH}`;
+  if (settings.provider === "vertex") {
+    if (vertexAuthMode() !== "service-account") {
+      const express = await postGenerate();
+      const text = textFromResult(express);
+      if (text) return text;
+      throw new Error(apiErrorMessage(express.data, express.raw, express.status));
+    }
+    if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID。");
+    const location = settings.vertexLocation || "us-central1";
+    url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/interactions`;
+    Object.assign(headers, await vertexOAuthHeaders());
+  } else {
+    const key = geminiApiKey();
+    if (!key) throw new Error("请先保存 Gemini API Key。");
+    headers["x-goog-api-key"] = key;
+  }
+  const interaction = await postGeminiJson(url, headers, interactionBody, signal);
+  const interactionText = textFromResult(interaction);
+  if (interactionText) return interactionText;
+  if (!shouldFallbackToGenerateContent(interaction.status, interaction.data, interaction.raw)) {
+    throw new Error(apiErrorMessage(interaction.data, interaction.raw, interaction.status));
+  }
+  const legacy = await postGenerate();
+  const text = textFromResult(legacy);
+  if (!text) throw new Error(apiErrorMessage(legacy.data, legacy.raw, legacy.status));
+  return text;
+}
+
 export async function completeGeminiReview({
   system,
   user,

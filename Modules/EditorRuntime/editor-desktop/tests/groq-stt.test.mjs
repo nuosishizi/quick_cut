@@ -11,8 +11,11 @@ delete process.env.GROQ_API_KEY;
 const {
   clearGroqApiKey,
   groqKeyStatus,
+  parseGeminiTranscription,
   parseGroqTranscription,
+  parseTimestampSeconds,
   saveGroqApiKey,
+  saveSpeechSettings,
   modelStatus,
   canTranscribe,
 } = await import("../src/whisper.mjs");
@@ -83,4 +86,36 @@ test("Groq key is stored locally and never returned in full", () => {
 test("empty or short Groq keys are rejected", () => {
   assert.throws(() => saveGroqApiKey(""), /请粘贴/);
   assert.throws(() => saveGroqApiKey("gsk_short"), /不完整/);
+});
+
+test("Gemini timestamps parse seconds and clock strings", () => {
+  assert.equal(parseTimestampSeconds(12.5), 12.5);
+  assert.equal(parseTimestampSeconds("01:02"), 62);
+  assert.equal(parseTimestampSeconds("1:02:03"), 3723);
+  const segments = parseGeminiTranscription({
+    text: "hello world",
+    segments: [
+      {
+        start: 1.2,
+        end: 2.4,
+        text: "hello world",
+        words: [
+          { text: "hello", start: 1.2, end: 1.6 },
+          { text: "world", start: 1.7, end: 2.4 },
+        ],
+      },
+    ],
+  }, 10);
+  assert.equal(segments.length, 2);
+  assert.equal(segments[0].start, 11.2);
+  assert.equal(segments[1].text, "world");
+});
+
+test("speech engine can switch to Gemini without a Groq key", () => {
+  assert.equal(canTranscribe(), false);
+  const saved = saveSpeechSettings({ engine: "gemini" });
+  assert.equal(saved.engine, "gemini");
+  const status = modelStatus();
+  assert.equal(status.preferredEngine, "gemini");
+  assert.equal(status.engine === "gemini" || status.ready === false, true);
 });

@@ -364,6 +364,10 @@ test("preview workspace zoom, rotated selection and app context menus are wired"
 test("first script match automatically resumes and validates the speech model", () => {
   assert.match(ui, /if \(!model\.ready && !model\.installed\) \{[\s\S]*?groqKeyInput/);
   assert.match(ui, /id="groqKeyInput"/);
+  assert.match(ui, /id="speechEngine"/);
+  assert.match(ui, /Gemini 听写/);
+  assert.match(whisper, /transcribeWithGemini/);
+  assert.match(whisper, /v1beta\/interactions|completeGeminiMedia/);
   assert.match(ui, /saveGroqApiKey/);
   assert.match(ui, /id="aiReviewStrict"/);
   assert.match(ui, /id="openReviewSettings"/);
