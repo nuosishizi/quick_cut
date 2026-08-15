@@ -367,25 +367,93 @@
         color: var(--muted);
       }
       .presets {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .preset-group-title {
+        font-size: 12px;
+        font-weight: 750;
+        color: #d1d5db;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        margin-bottom: 2px;
+      }
+      .preset-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
       }
       .preset {
-        height: 66px;
+        position: relative;
+        height: 68px;
         border: 1px solid var(--line);
         border-radius: 9px;
-        background: linear-gradient(145deg, #292d32, #1d2024);
-        display: grid;
-        place-items: center;
+        background: linear-gradient(145deg, #24272c, #1a1c20);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         text-align: center;
         overflow: hidden;
-        padding: 6px;
+        padding: 5px 4px;
+        cursor: pointer;
+        transition: border-color 0.15s, transform 0.15s, background 0.15s;
       }
-      .preset:hover,
+      .preset:hover {
+        border-color: var(--blue);
+        background: linear-gradient(145deg, #2a3038, #1f242a);
+        transform: translateY(-1px);
+      }
       .preset.active {
         border-color: var(--blue);
-        background: linear-gradient(145deg, #303741, #22272d);
+        box-shadow: 0 0 0 1px var(--blue);
+      }
+      .preset .captionobject {
+        display: inline-block;
+        max-width: 96%;
+        font-size: 13px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transform: scale(0.90);
+      }
+      .preset .small {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 3px;
+        max-width: 90%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .preset-del-btn {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        color: #ff6b6b;
+        border: none;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        line-height: 1;
+        cursor: pointer;
+        z-index: 10;
+      }
+      .preset:hover .preset-del-btn {
+        display: flex;
+      }
+      .preset-del-btn:hover {
+        background: #ff4d4f;
+        color: #fff;
       }
       .filter-grid {
         display: grid;
@@ -3888,6 +3956,7 @@
       const presets = [
         {
           name: "粗体黑边高亮",
+          category: "主流爆款",
           style: {
             fontFamily: "Helvetica",
             fontSize: 58,
@@ -3904,6 +3973,7 @@
         },
         {
           name: "圆角黑底胶囊",
+          category: "主流爆款",
           style: {
             fontFamily: "Helvetica",
             fontSize: 56,
@@ -3921,7 +3991,103 @@
             backgroundMode: "block",
             backgroundWidth: 26,
             backgroundHeight: 14,
-            radius: 26,
+            radius: 20,
+            animation: "karaoke",
+          },
+        },
+        {
+          name: "综艺双层撞色",
+          category: "主流爆款",
+          style: {
+            fontFamily: "Helvetica",
+            fontSize: 58,
+            fontWeight: 900,
+            color: "#ffe600",
+            highlight: "#35f1ff",
+            highlightEnabled: true,
+            stroke: 5,
+            strokeColor: "#1a1200",
+            shadow: 3,
+            shadowColor: "#000000",
+            shadowOpacity: 0.9,
+            shadowBlur: 2,
+            shadowDistance: 3,
+            shadowAngle: 45,
+            backgroundEnabled: false,
+            animation: "karaoke",
+          },
+        },
+        {
+          name: "极简白字投影",
+          category: "主流爆款",
+          style: {
+            fontFamily: "Helvetica",
+            fontSize: 54,
+            fontWeight: 800,
+            color: "#ffffff",
+            highlight: "#7eeaff",
+            highlightEnabled: true,
+            stroke: 0,
+            strokeColor: "#000000",
+            shadow: 4,
+            shadowColor: "#000000",
+            shadowOpacity: 0.85,
+            shadowBlur: 6,
+            shadowDistance: 4,
+            shadowAngle: 45,
+            backgroundEnabled: false,
+            animation: "karaoke",
+          },
+        },
+        {
+          name: "小红书黑金质感",
+          category: "主流爆款",
+          style: {
+            fontFamily: "Helvetica",
+            fontSize: 54,
+            fontWeight: 800,
+            color: "#1c1c1e",
+            highlight: "#ffffff",
+            highlightEnabled: true,
+            stroke: 0,
+            strokeColor: "#000000",
+            shadow: 0,
+            backgroundEnabled: true,
+            background: "#f6d365",
+            backgroundOpacity: 0.96,
+            padding: 18,
+            backgroundMode: "block",
+            backgroundWidth: 24,
+            backgroundHeight: 14,
+            radius: 20,
+            animation: "karaoke",
+          },
+        },
+        {
+          name: "荧光赛博霓虹",
+          category: "主流爆款",
+          style: {
+            fontFamily: "Helvetica",
+            fontSize: 56,
+            fontWeight: 900,
+            color: "#4df0ff",
+            highlight: "#39ff88",
+            highlightEnabled: true,
+            stroke: 2,
+            strokeColor: "#091724",
+            shadow: 3,
+            shadowColor: "#00f0ff",
+            shadowOpacity: 0.6,
+            shadowBlur: 8,
+            shadowDistance: 2,
+            backgroundEnabled: true,
+            background: "#161026",
+            backgroundOpacity: 0.90,
+            padding: 18,
+            backgroundMode: "block",
+            backgroundWidth: 24,
+            backgroundHeight: 14,
+            radius: 18,
             animation: "karaoke",
           },
         },
@@ -7266,21 +7432,44 @@
           ? ["#ffffff", "#ffe15a", "#7eeaff", "#b8ffcf"][index % 4]
           : value;
       }
+      function renderPresetCard(p, i, isCustom = false) {
+        const bg = p.style.backgroundEnabled ? (p.style.background || "#131922") : "transparent";
+        const strokePx = Math.min(3, Math.max(0, Number(p.style.stroke || 0)));
+        const strokeCss = strokePx > 0 ? `-webkit-text-stroke:${strokePx}px ${p.style.strokeColor || "#000"};paint-order:stroke fill;` : "";
+        const shadowCss = Number(p.style.shadow || 0) > 0 ? `filter:drop-shadow(0 2px 4px rgba(0,0,0,0.85));` : "";
+        const customDel = isCustom
+          ? `<button type="button" class="preset-del-btn" data-del-preset="${i - presets.length}" title="删除自定义模板">✕</button>`
+          : "";
+        return `<button class="preset" data-preset="${i}" title="${escapeHtml(p.name)}">
+          ${customDel}
+          <span class="captionobject anim-enter" data-animation="${escapeHtml(p.style.animation || "fade")}" style="--active:${p.style.highlight || "#ffd21f"};font-family:'${p.style.fontFamily || "Helvetica"}',sans-serif;font-weight:${p.style.fontWeight || 700};color:${presetPreviewColor(p.style, i)};-webkit-text-stroke:${Math.min(3, Math.max(0, Number(p.style.stroke || 0)) * 2)}px ${presetPreviewStroke(p.style, i)};paint-order:stroke fill;${shadowCss}background:${bg};padding:3px 6px;border-radius:${Math.min(16, p.style.radius || 0)}px">
+            <span class="word">Amazing</span><span class="word active">Story</span>
+          </span>
+          <span class="small ellipsis">${escapeHtml(p.name)}</span>
+        </button>`;
+      }
       function renderPresets() {
-        $("presetList").innerHTML = allCaptionPresets()
-          .map(
-            (p, i) =>
-              `<button class="preset" data-preset="${i}" title="${escapeHtml(p.name)}"><span class="captionobject anim-enter" data-animation="${escapeHtml(p.style.animation || "fade")}" style="--active:${p.style.highlight || "#ffd21f"};font-family:'${p.style.fontFamily || "Helvetica"}';font-weight:${p.style.fontWeight || 700};color:${presetPreviewColor(p.style, i)};-webkit-text-stroke:${Math.min(3, Math.max(0, Number(p.style.stroke || 0)) * 2)}px ${presetPreviewStroke(p.style, i)};paint-order:stroke fill;background:${p.style.backgroundEnabled ? p.style.background : "transparent"};padding:3px 5px;border-radius:${p.style.radius || 0}px"><span class="word">Amazing</span><span class="word active">Story</span></span><span class="small ellipsis">${escapeHtml(p.name)}</span></button>`,
-          )
-          .join("");
+        const systemHtml = presets.map((p, i) => renderPresetCard(p, i, false)).join("");
+        const customHtml = customPresets.map((p, i) => renderPresetCard(p, presets.length + i, true)).join("");
+        $("presetList").innerHTML = `
+          <div class="preset-group-title">🌟 主流爆款预设</div>
+          <div class="preset-grid">${systemHtml}</div>
+          <div class="preset-group-title" style="margin-top:12px">🎨 我的自定义模板 (${customPresets.length})</div>
+          <div class="preset-grid">${customHtml || '<div class="small" style="grid-column:1/-1;color:var(--muted);padding:8px 4px">暂无自定义模板，可在右侧调整属性后点击下方按钮保存。</div>'}</div>
+        `;
       }
       async function loadCustomPresets() {
         try {
-          customPresets = (await nativeCall("customCaptionPresets")) || [];
-          renderPresets();
+          const stored = localStorage.getItem("quickcut_custom_caption_presets");
+          if (stored) {
+            customPresets = JSON.parse(stored) || [];
+          } else {
+            customPresets = (await nativeCall("customCaptionPresets")) || [];
+          }
         } catch (error) {
           console.warn(error);
         }
+        renderPresets();
       }
       function selectedAnimationObject() {
         return ["text", "image"].includes(state.selected.type)
@@ -10044,6 +10233,14 @@
               .forEach((x) =>
                 x.classList.toggle("active", x.id === `side-${b.dataset.side}`),
               );
+            if (b.dataset.side === "style" || b.dataset.side === "subtitle") {
+              if (state.selected.type !== "caption" && state.selected.type !== "text") {
+                state.selected = { type: "caption", id: state.captions[0]?.id || "caption-track" };
+              }
+              document.querySelectorAll(".tab[data-inspect]").forEach((x) => x.classList.toggle("active", x.dataset.inspect === "basic"));
+              document.querySelectorAll(".inspectbody>.sidepage").forEach((x) => x.classList.toggle("active", x.id === "inspect-basic"));
+              updateInspector();
+            }
           }),
       );
       document.querySelectorAll(".tab[data-inspect]").forEach(
@@ -11576,6 +11773,21 @@
         }
       };
       $("presetList").onclick = (e) => {
+        const delBtn = e.target.closest("[data-del-preset]");
+        if (delBtn) {
+          e.stopPropagation();
+          const customIdx = Number(delBtn.dataset.delPreset);
+          const target = customPresets[customIdx];
+          if (target && confirm(`确定要删除自定义模板「${target.name}」吗？`)) {
+            customPresets.splice(customIdx, 1);
+            try {
+              localStorage.setItem("quickcut_custom_caption_presets", JSON.stringify(customPresets));
+            } catch (err) {}
+            renderPresets();
+            toast("已删除自定义模板");
+          }
+          return;
+        }
         const b = e.target.closest("[data-preset]");
         if (!b) return;
         const preset = allCaptionPresets()[Number(b.dataset.preset)];
@@ -11583,13 +11795,13 @@
         snapshot();
         // Each preset is a complete state replacement, never a delta layered on the previous style.
         state.captionStyle = normalizedCaptionStyle(preset.style);
-        // Style presets are atomic. Layout-affecting style values come only from this preset/defaults,
-        // while user object transform (x/y/scale/rotation) remains unchanged.
         state.captionStyle.backgroundWidth = Number(preset.style?.backgroundWidth ?? state.captionStyle.padding ?? 14);
         state.captionStyle.backgroundHeight = Number(preset.style?.backgroundHeight ?? state.captionStyle.padding ?? 14);
+        state.captionStyle.radius = Number(preset.style?.radius ?? 20);
         previewSceneKey = "";
         renderAll();
-        toast("已完整替换整条字幕轨道样式");
+        updateInspector();
+        toast(`已套用「${preset.name}」样式`);
       };
       $("presetList").onpointerover = (event) => {
         const card = event.target.closest("[data-preset]");
@@ -11617,18 +11829,26 @@
       $("captionPresetConfirm").onclick = async () => {
         const name = $("captionPresetName").value.trim();
         if (!name) return;
+        const currentCapStyle = state.captionStyle || currentStyle() || {};
+        const newPreset = {
+          id: `custom_${Date.now()}`,
+          name,
+          isCustom: true,
+          style: JSON.parse(JSON.stringify(currentCapStyle)),
+        };
+        customPresets.unshift(newPreset);
         try {
-          const preset = await nativeCall("saveCaptionPreset", {
+          localStorage.setItem("quickcut_custom_caption_presets", JSON.stringify(customPresets));
+        } catch (e) {}
+        try {
+          await nativeCall("saveCaptionPreset", {
             name,
-            style: { ...state.captionStyle },
+            style: { ...currentCapStyle },
           });
-          customPresets.unshift(preset);
-          renderPresets();
-          $("captionPresetModal").classList.remove("on");
-          toast("字幕样式已保存");
-        } catch (error) {
-          toast(error.message);
-        }
+        } catch (error) {}
+        renderPresets();
+        $("captionPresetModal").classList.remove("on");
+        toast(`自定义模板「${name}」已保存！`);
       };
       const registeredFontPaths = new Set();
       let availableLocalFonts = [];
@@ -11655,9 +11875,17 @@
         const select = $("fontFamilySelect"),
           current = currentStyle()?.fontFamily || "Helvetica",
           preferredSystem = [
-            { family: "Helvetica", path: "", source: "system" },
-            { family: "Arial", path: "", source: "system" },
-            { family: "PingFang SC", path: "", source: "system" },
+            { family: "Impact", fullName: "Impact (短视频爆款粗体)", path: "", source: "system" },
+            { family: "Arial Black", fullName: "Arial Black (超粗黑体)", path: "", source: "system" },
+            { family: "Arial", fullName: "Arial (经典无衬线)", path: "", source: "system" },
+            { family: "Helvetica", fullName: "Helvetica", path: "", source: "system" },
+            { family: "Montserrat", fullName: "Montserrat", path: "", source: "system" },
+            { family: "Microsoft YaHei", fullName: "微软雅黑 (Microsoft YaHei)", path: "", source: "system" },
+            { family: "SimHei", fullName: "黑体 (SimHei)", path: "", source: "system" },
+            { family: "PingFang SC", fullName: "苹方 (PingFang SC)", path: "", source: "system" },
+            { family: "HarmonyOS Sans SC", fullName: "鸿蒙黑体 (HarmonyOS Sans)", path: "", source: "system" },
+            { family: "Source Han Sans CN", fullName: "思源黑体 (Source Han Sans)", path: "", source: "system" },
+            { family: "YouYuan", fullName: "幼圆 (YouYuan)", path: "", source: "system" },
           ],
           seen = new Set();
         const unique = (items) => items.filter((font) => {
