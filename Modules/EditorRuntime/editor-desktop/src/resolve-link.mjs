@@ -127,7 +127,7 @@ export function fusionStroke(stroke, fontSize) {
   const px = Math.max(0, Number(stroke) || 0);
   if (px <= 0) return 0;
   const size = Math.max(10, Number(fontSize) || 58);
-  return Math.max(0.02, Math.min(0.22, (px / size) * 0.38));
+  return Math.max(0.035, Math.min(0.35, (px / size) * 0.95));
 }
 
 export function fusionShadow(style = {}) {
@@ -222,7 +222,9 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
 
   const isPopIn = anim === "pop-in" || anim === "popin" || anim.startsWith("word-pop") || anim.startsWith("word-bounce") || anim === "zoom" || !!firstStyle.popIn ? 1 : 0;
   const isSlideUp = anim === "slide-up" || anim === "slideup" || anim.startsWith("word-lift") || anim.startsWith("word-rise") ? 1 : 0;
-  const isFade = anim === "fade" || anim === "typewriter" || (!isPopIn && !isSlideUp) ? 1 : 0;
+  const isFade = anim === "fade" || anim === "typewriter" ? 1 : 0;
+  const isSequentialWordAnim = isPopIn || isSlideUp || isFade;
+  const animationLevel = isSequentialWordAnim ? 1 : 0;
 
   return {
     Font: pickResolveFont(firstStyle.fontFamily, ""),
@@ -254,6 +256,8 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
     HighlightRound: background.round || 0.25,
     HighlightExtendHorizontal: background.extendX || 0.04,
     HighlightExtendVertical: background.extendY || 0.04,
+    AnimationLevel: animationLevel,
+    AnimationMode: 2,
     PopInEnabled: isPopIn,
     FadeEnabled: isFade,
     SlideUpEnabled: isSlideUp,

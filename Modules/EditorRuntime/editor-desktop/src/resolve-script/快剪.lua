@@ -710,7 +710,7 @@ local function apply_style(comp, tool, item, style)
   -- Text Stroke / Outline (Element 2)
   local hasStroke = (style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0)) and not style.backgroundEnabled
   if hasStroke then
-    local strokeThick = math.max(0.015, tonumber(style.stroke) or 0.025)
+    local strokeThick = math.max(0.035, tonumber(style.stroke) or 0.08)
     local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
     local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
     local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
@@ -1200,6 +1200,9 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
   local placed = 0
   local hasPreset = presetSettings ~= nil and type(presetSettings) == "table"
 
+  local fnSetInputValues = nil
+  local fnApplyWordTiming = nil
+
   for index, item in ipairs(timelineItems) do
     local caption = captions[index] or {}
     local plainText = tostring(caption.text or "")
@@ -1210,27 +1213,36 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
         local comp = item:GetFusionCompByIndex(1)
         if comp then
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
-          local clsTool = comp:FindTool("CharacterLevelStyling1")
-          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
           local autosubsTool = comp:FindTool("AutoSubs")
 
           if autosubsTool and hasPreset then
-            local setVals = autosubsTool:GetData("SetInputValues")
-            if setVals and type(setVals) == "string" then
-              local okVal, fn = pcall(loadstring(setVals))
-              if okVal and type(fn) == "function" then
-                pcall(function() fn(comp, autosubsTool, presetSettings) end)
+            if not fnSetInputValues then
+              local setVals = autosubsTool:GetData("SetInputValues")
+              if setVals and type(setVals) == "string" then
+                local okVal, fn = pcall(loadstring(setVals))
+                if okVal and type(fn) == "function" then
+                  fnSetInputValues = fn
+                end
+              end
+            end
+            if fnSetInputValues then
+              pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
+            end
+
+            if not fnApplyWordTiming then
+              local applyWT = autosubsTool:GetData("ApplyWordTiming")
+              if applyWT and type(applyWT) == "string" then
+                local okWT, fn = pcall(loadstring(applyWT))
+                if okWT and type(fn) == "function" then
+                  fnApplyWordTiming = fn
+                end
               end
             end
 
             local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
             local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-            local applyWT = autosubsTool:GetData("ApplyWordTiming")
-            if applyWT and type(applyWT) == "string" then
-              local okWT, fnWT = pcall(loadstring(applyWT))
-              if okWT and type(fnWT) == "function" then
-                pcall(function() fnWT(comp, autosubsTool, wordTiming) end)
-              end
+            if fnApplyWordTiming then
+              pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
             end
 
             pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
