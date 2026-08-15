@@ -632,7 +632,8 @@
       .captionobject {
         z-index: 8;
         max-width: 92%;
-        white-space: nowrap;
+        white-space: normal;
+        overflow: visible;
         text-align: center;
         font-weight: 800;
         pointer-events: none;
@@ -2024,6 +2025,7 @@
       .captionobject .caption-line {
         display: block;
         white-space: nowrap;
+        overflow: visible;
       }
       .captionobject[data-animation="line-pulse"] .caption-line {
         transform-origin: center;
@@ -6335,6 +6337,17 @@
         element.style.clipPath = visual.clipPath;
         element.style.mixBlendMode = item.blendMode || "normal";
       }
+      function captionAtTime(time = state.currentTime) {
+        const t = Number(time || 0);
+        const covering = (state.captions || []).filter(
+          (item) =>
+            state.trackVisibility[item.trackId || "caption"] !== false &&
+            t >= Number(item.start) &&
+            t <= Number(item.end),
+        );
+        if (!covering.length) return null;
+        return covering.sort((left, right) => Number(right.start) - Number(left.start))[0];
+      }
       function renderPreviewObjects(force = true) {
         ensureIndependentTransforms();
         const layer = $("visualLayer");
@@ -6356,18 +6369,7 @@
                 state.currentTime >= item.start && state.currentTime <= item.end,
             )
             .filter((item) => state.trackVisibility[item.trackId] !== false),
-          caption = state.captions
-            .filter(
-              (item) =>
-                state.trackVisibility[item.trackId || "caption"] !== false &&
-                state.currentTime >= item.start &&
-                state.currentTime <= item.end,
-            )
-            .sort(
-              (left, right) =>
-                visualZ(right.trackId || "caption") -
-                visualZ(left.trackId || "caption"),
-            )[0],
+          caption = captionAtTime(state.currentTime),
           review = state.reviewCaptions.find(
             (item) =>
               state.currentTime >= item.start && state.currentTime <= item.end,
@@ -11479,10 +11481,7 @@
         e.preventDefault();
       };
       $("captionPreview").onpointerdown = (e) => {
-        const caption = state.captions.find(
-          (item) =>
-            state.currentTime >= item.start && state.currentTime <= item.end,
-        );
+        const caption = captionAtTime(state.currentTime);
         if (!caption) return;
         selectItem("caption", caption.id, false, false);
         if (!guardUnlocked("caption", caption.id)) return;
@@ -11677,7 +11676,7 @@
         const style = currentStyle() || state.captionStyle;
         if (!style) return;
         if (state.selected.type === "caption" || state.captions.length) {
-          const caption = state.captions.find((item) => state.currentTime >= item.start && state.currentTime <= item.end) ||
+          const caption = captionAtTime(state.currentTime) ||
             state.captions.find((item) => item.id === state.selected.id) ||
             state.captions[0];
           const preview = $("captionPreview");

@@ -15,16 +15,22 @@ export function wordGap(style, fontSize) {
 
 export function estimatedWordWidth(word, style, fontSize, scale = 1) {
   const chars = Array.from(String(word || ""));
+  const size = Math.max(10, Number(fontSize || 54));
   const letterSpacing = Number(style?.letterSpacing || 0) * Math.max(0.2, Number(scale || 1));
-  // Geometry contract only. Actual glyph outlines remain libass/CoreText responsibilities.
+  const weight = Number(style?.fontWeight || 400);
+  const weightScale = weight >= 800 ? 1.16 : weight >= 600 ? 1.08 : 1;
+  const stroke = Math.max(0, Number(style?.stroke || 0));
   const glyphWidth = chars.reduce((sum, ch) => {
     if (/\s/.test(ch)) return sum;
-    if (/[MW@#%&]/.test(ch)) return sum + fontSize * 0.72;
-    if (/[ilI1'`.,:;!|]/.test(ch)) return sum + fontSize * 0.30;
-    if (/[A-Z0-9]/.test(ch)) return sum + fontSize * 0.57;
-    return sum + fontSize * 0.53;
+    if (/[MW@#%&]/.test(ch)) return sum + size * 0.78;
+    if (/[ilI1'`.,:;!|]/.test(ch)) return sum + size * 0.34;
+    if (/[A-Z0-9]/.test(ch)) return sum + size * 0.62;
+    return sum + size * 0.58;
   }, 0);
-  return Math.max(fontSize * 0.25, glyphWidth + Math.max(0, chars.length - 1) * letterSpacing);
+  return Math.max(
+    size * 0.28,
+    glyphWidth * weightScale + Math.max(0, chars.length - 1) * letterSpacing + stroke * 1.15,
+  );
 }
 
 export function normalizeCaptionLines(value) {
@@ -56,7 +62,8 @@ export function captionSafeBoxWidth(input = {}) {
     : 0;
   const requested = Number(input.boxWidth || input.captionWidth);
   const usable = Number.isFinite(requested) && requested > 0 ? requested : canvas * 0.8;
-  return Math.max(120, Math.min(canvas * 0.92, usable) - pad);
+  const boxed = Math.max(120, Math.min(canvas * 0.92, usable) - pad);
+  return Math.max(80, boxed * 0.94);
 }
 
 export function packWordsIntoLines(words = [], style = {}, maxWidth = 860, scale = 1) {

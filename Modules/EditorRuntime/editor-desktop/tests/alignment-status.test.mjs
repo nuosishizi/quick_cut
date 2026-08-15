@@ -4,6 +4,7 @@ import {
   alignScript,
   buildCaptions,
   buildReviewCaptions,
+  endsCaptionSentence,
   flattenCaptionWords,
   manuscriptCaptionWords,
   regroupCaptions,
@@ -332,6 +333,24 @@ test("two-line captions stay within the safe box width and never pack a third li
     flattenCaptionWords(two).map((word) => word.display),
     words.map((word) => word.display),
   );
+});
+
+test("switching line mode keeps every manuscript word including contractions", () => {
+  const words = "The Bible doesn't just say God dislikes these sins."
+    .split(/\s+/)
+    .map((display, index) => ({ display, start: index * 0.18, end: index * 0.18 + 0.16 }));
+  const style = { fontFamily: "Helvetica", fontSize: 58, fontWeight: 900, stroke: 5 };
+  const packed = [{ start: 0, end: 2, text: words.map((word) => word.display).join(" "), words }];
+  const one = regroupProjectCaptions(packed, { captionLines: 1, boxWidth: 720, canvasWidth: 1080, style });
+  const two = regroupProjectCaptions(one, { captionLines: 2, boxWidth: 720, canvasWidth: 1080, style });
+  const multi = regroupProjectCaptions(two, { captionLines: "multi", boxWidth: 720, canvasWidth: 1080, style });
+  const expected = words.map((word) => word.display);
+  assert.deepEqual(flattenCaptionWords(one).map((word) => word.display), expected);
+  assert.deepEqual(flattenCaptionWords(two).map((word) => word.display), expected);
+  assert.deepEqual(flattenCaptionWords(multi).map((word) => word.display), expected);
+  assert.equal(endsCaptionSentence("doesn't"), false);
+  for (let index = 0; index < one.length - 1; index += 1)
+    assert.ok(one[index].end <= one[index + 1].start + 1e-6);
 });
 
 test("an interrupted realtime transcript recovers later speech instead of losing all captions", () => {

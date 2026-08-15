@@ -395,7 +395,9 @@ export function scriptWords(script) {
 }
 
 export function endsCaptionSentence(display) {
-  return /[.!?…]["'”’)\]]*$/.test(String(display || "").trim());
+  const text = String(display || "").trim();
+  if (!/[.!?…]/.test(text)) return false;
+  return /[.!?…][\"”’')\]]*$/.test(text);
 }
 
 export function captionLineCharLimit(mode, lineChars = 34) {
@@ -461,7 +463,7 @@ function captionFromGroup(group, style, maxWidth, scale) {
   return {
     id: crypto.randomUUID(),
     start: group[0].start,
-    end: Math.max(group.at(-1).end, group[0].start + 0.25),
+    end: Math.max(Number(group.at(-1).end), Number(group[0].start) + 0.04),
     text: formatDisplayWords(group),
     words: group.map(captionWordRecord),
     lineBreaks: packed.slice(1).map((line) => line.startIndex),
@@ -517,6 +519,12 @@ export function regroupCaptions(words, options = {}) {
     if (linesNeeded(mergedWords) > maxLines) continue;
     captions.splice(index - 1, 2, captionFromGroup(mergedWords, style, maxWidth, scale));
     index -= 1;
+  }
+  for (let index = 0; index < captions.length - 1; index += 1) {
+    const nextStart = Number(captions[index + 1].start);
+    if (Number(captions[index].end) > nextStart) {
+      captions[index].end = nextStart;
+    }
   }
   return captions;
 }

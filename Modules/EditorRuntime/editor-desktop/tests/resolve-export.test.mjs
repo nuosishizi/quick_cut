@@ -123,7 +123,7 @@ test("quoted caption titles stay well-formed after name truncation", () => {
     ],
     captionStyle: { fontSize: 58, highlight: "#ffd21f", highlightEnabled: true },
   });
-  assert.match(xml, /name="&quot;&quot;I only stretched the truth a · &quot;&quot;I"/);
+  assert.match(xml, /name="&quot;&quot;I only stretched the · &quot;&quot;I"/);
   assert.doesNotMatch(xml, /&(?:quot|amp|lt|gt)(?!;)/);
   for (const name of [...xml.matchAll(/\bname="([^"]*)"/g)].map((match) => match[1])) {
     assert.doesNotMatch(
