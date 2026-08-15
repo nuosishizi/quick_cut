@@ -1733,13 +1733,22 @@ function buildExportGraph(config, info) {
       Number(clip.sourceEnd || sourceStart + (end - start) * speed),
     );
     const settings = clip.settings || {},
+      cropTop = Math.max(0, Math.min(95, Number(settings.cropTop || 0))),
+      cropBottom = Math.max(0, Math.min(95, Number(settings.cropBottom || 0))),
+      cropLeft = Math.max(0, Math.min(95, Number(settings.cropLeft || 0))),
+      cropRight = Math.max(0, Math.min(95, Number(settings.cropRight || 0))),
       clipScale = Math.max(0.05, Number(settings.scale || 1)),
       rotation = Math.max(-360, Math.min(360, Number(settings.rotation || 0))),
       opacity = Math.max(0, Math.min(1, Number(settings.opacity ?? 1))),
       transformFilters = [
         ...oriented.filters,
-        `scale=iw*${clipScale.toFixed(5)}:ih*${clipScale.toFixed(5)}:flags=lanczos+accurate_rnd`,
       ];
+    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
+      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
+      transformFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
+    }
+    transformFilters.push(`scale=iw*${clipScale.toFixed(5)}:ih*${clipScale.toFixed(5)}:flags=lanczos+accurate_rnd`);
     if (Math.abs(rotation) > 0.001)
       transformFilters.push(
         `rotate=${rotation.toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`,
@@ -1943,15 +1952,25 @@ function buildExportGraph(config, info) {
   } else mainTrackLabels.set(mainTrackIds[0] || "video", "[main]");
   const consumedMainTracks = new Set();
   const preparedVideos = (config.videoLayers || []).map((video, index) => {
+    const cropTop = Math.max(0, Math.min(95, Number(video.cropTop || 0)));
+    const cropBottom = Math.max(0, Math.min(95, Number(video.cropBottom || 0)));
+    const cropLeft = Math.max(0, Math.min(95, Number(video.cropLeft || 0)));
+    const cropRight = Math.max(0, Math.min(95, Number(video.cropRight || 0)));
     const videoScale = Math.max(0.03, Number(video.scale || 1));
     const clipDuration = Math.max(
       0.04,
       Number(video.end || 0) - Number(video.start || 0),
     );
     const sourceDuration = clipDuration * speed;
-    const videoFilters = [
+    const videoFilters = [];
+    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
+      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
+      videoFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
+    }
+    videoFilters.push(
       `scale=w=${Math.max(8, Math.round(width * videoScale))}:h=${Math.max(8, Math.round(height * videoScale))}:force_original_aspect_ratio=decrease:flags=lanczos+accurate_rnd`,
-    ];
+    );
     if (Math.abs(Number(video.rotation || 0)) > 0.001)
       videoFilters.push(
         `rotate=${Number(video.rotation).toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`,
@@ -1967,11 +1986,21 @@ function buildExportGraph(config, info) {
     return { video, label: `[overlayv${index}]` };
   });
   const preparedImages = (config.images || []).map((image, index) => {
+    const cropTop = Math.max(0, Math.min(95, Number(image.cropTop || 0)));
+    const cropBottom = Math.max(0, Math.min(95, Number(image.cropBottom || 0)));
+    const cropLeft = Math.max(0, Math.min(95, Number(image.cropLeft || 0)));
+    const cropRight = Math.max(0, Math.min(95, Number(image.cropRight || 0)));
     const imageScale = Math.max(0.03, Number(image.scale || 0.35));
     const imageWidth = Math.max(8, Math.round(width * imageScale));
-    const imageFilters = image.pixelExact
-      ? []
-      : [`scale=${imageWidth}:-1:flags=lanczos+accurate_rnd`];
+    const imageFilters = [];
+    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
+      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
+      imageFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
+    }
+    if (!image.pixelExact) {
+      imageFilters.push(`scale=${imageWidth}:-1:flags=lanczos+accurate_rnd`);
+    }
     if (Math.abs(Number(image.rotation || 0)) > 0.001)
       imageFilters.push(
         `rotate=${Number(image.rotation).toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`,

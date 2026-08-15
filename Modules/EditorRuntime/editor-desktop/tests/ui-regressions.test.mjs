@@ -434,11 +434,17 @@ test("per-clip visual transforms, track locks and smooth animation playback are 
   assert.match(ui, /function mainVideoSettings\(/);
   assert.match(ui, /rotation:\s*x\.rotation \|\| 0/);
   assert.match(ui, /blendMode:\s*x\.blendMode \|\| "normal"/);
+  assert.match(ui, /id="cropTop"/);
+  assert.match(ui, /id="cropBottom"/);
+  assert.match(ui, /id="cropLeft"/);
+  assert.match(ui, /id="cropRight"/);
+  assert.match(ui, /id="resetCropBtn"/);
   assert.match(ui, /<button class="tracklock \$\{locked \? "on" : ""\}"/);
   assert.match(ui, /function selectionIsLocked\(/);
   assert.match(ui, /playbackAnimationFrame = requestAnimationFrame\(tick\)/);
   assert.doesNotMatch(ui, /scheduleAutoSave\(/);
   assert.match(media, /lanczos\+accurate_rnd/);
+  assert.match(media, /crop=w=iw\*/);
 });
 
 test("add menu creates a real independent text item and animation cards stay visible", () => {

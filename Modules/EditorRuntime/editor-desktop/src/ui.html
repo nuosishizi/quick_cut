@@ -2799,6 +2799,28 @@
                       <option value="difference">差值</option><option value="exclusion">排除</option>
                     </select>
                   </label>
+                  <div id="cropProperties" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                      <span style="font-weight:600;font-size:13px;">画面裁剪</span>
+                      <button class="btn small" id="resetCropBtn" style="padding:2px 8px;font-size:11px;">重置裁剪</button>
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>上裁剪</span><output id="cropTopOut">0%</output></div>
+                      <input class="range" id="cropTop" type="range" min="0" max="95" step="1" value="0" data-default="0" />
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>下裁剪</span><output id="cropBottomOut">0%</output></div>
+                      <input class="range" id="cropBottom" type="range" min="0" max="95" step="1" value="0" data-default="0" />
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>左裁剪</span><output id="cropLeftOut">0%</output></div>
+                      <input class="range" id="cropLeft" type="range" min="0" max="95" step="1" value="0" data-default="0" />
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>右裁剪</span><output id="cropRightOut">0%</output></div>
+                      <input class="range" id="cropRight" type="range" min="0" max="95" step="1" value="0" data-default="0" />
+                    </div>
+                  </div>
                 </div>
                 <div class="row field">
                   <button class="btn grow" id="fitObject">适应画布</button
@@ -4783,6 +4805,10 @@
           rotation: Number(source.rotation || 0),
           opacity: clamp(Number(source.opacity ?? 1), 0, 1),
           blendMode: source.blendMode || "normal",
+          cropTop: Math.max(0, Math.min(95, Number(source.cropTop || 0))),
+          cropBottom: Math.max(0, Math.min(95, Number(source.cropBottom || 0))),
+          cropLeft: Math.max(0, Math.min(95, Number(source.cropLeft || 0))),
+          cropRight: Math.max(0, Math.min(95, Number(source.cropRight || 0))),
         };
       }
       function activeMainVideoClip() {
@@ -6371,7 +6397,15 @@
         element.style.transform = `${baseTransform}${visual.suffix}`;
         element.style.opacity = visual.opacity;
         element.style.filter = visual.filter;
-        element.style.clipPath = visual.clipPath;
+        const cropTop = Number(item.cropTop || 0),
+          cropBottom = Number(item.cropBottom || 0),
+          cropLeft = Number(item.cropLeft || 0),
+          cropRight = Number(item.cropRight || 0);
+        if (cropTop || cropBottom || cropLeft || cropRight) {
+          element.style.clipPath = `inset(${cropTop}% ${cropRight}% ${cropBottom}% ${cropLeft}%)`;
+        } else {
+          element.style.clipPath = visual.clipPath;
+        }
         element.style.mixBlendMode = item.blendMode || "normal";
       }
       function captionAtTime(time = state.currentTime) {
@@ -6466,6 +6500,13 @@
         video.style.transform = `translate(${activeTransform.x * px}px,${activeTransform.y * py}px) rotate(${activeTransform.rotation || 0}deg) scale(${activeTransform.scale})`;
         video.style.opacity = activeTransform.opacity ?? 1;
         video.style.mixBlendMode = activeTransform.blendMode || "normal";
+        const mainCropTop = Number(activeTransform.cropTop || 0),
+          mainCropBottom = Number(activeTransform.cropBottom || 0),
+          mainCropLeft = Number(activeTransform.cropLeft || 0),
+          mainCropRight = Number(activeTransform.cropRight || 0);
+        video.style.clipPath = (mainCropTop || mainCropBottom || mainCropLeft || mainCropRight)
+          ? `inset(${mainCropTop}% ${mainCropRight}% ${mainCropBottom}% ${mainCropLeft}%)`
+          : "none";
         for (const item of activeVideoLayers) {
           const el = retainedVideos.get(item.id) || document.createElement("video");
           if (el.src !== item.url) el.src = item.url;
@@ -6475,6 +6516,13 @@
           el.style.transform = `translate(calc(-50% + ${item.x * px}px),calc(-50% + ${item.y * py}px)) rotate(${Number(item.rotation || 0)}deg) scale(${item.scale || 1})`;
           el.style.opacity = item.opacity ?? 1;
           el.style.mixBlendMode = item.blendMode || "normal";
+          const layerCropTop = Number(item.cropTop || 0),
+            layerCropBottom = Number(item.cropBottom || 0),
+            layerCropLeft = Number(item.cropLeft || 0),
+            layerCropRight = Number(item.cropRight || 0);
+          el.style.clipPath = (layerCropTop || layerCropBottom || layerCropLeft || layerCropRight)
+            ? `inset(${layerCropTop}% ${layerCropRight}% ${layerCropBottom}% ${layerCropLeft}%)`
+            : "none";
           el.dataset.type = "videolayer";
           el.dataset.id = item.id;
           el.style.zIndex = String(visualZ(item.trackId));
@@ -7635,6 +7683,16 @@
         $("objectOpacity").value = Math.round(Number(obj.opacity ?? 1) * 100);
         $("opacityOut").textContent = `${$("objectOpacity").value}%`;
         $("objectBlendMode").value = obj.blendMode || "normal";
+        if ($("cropTop")) {
+          $("cropTop").value = Math.round(Number(obj.cropTop || 0));
+          $("cropTopOut").textContent = `${$("cropTop").value}%`;
+          $("cropBottom").value = Math.round(Number(obj.cropBottom || 0));
+          $("cropBottomOut").textContent = `${$("cropBottom").value}%`;
+          $("cropLeft").value = Math.round(Number(obj.cropLeft || 0));
+          $("cropLeftOut").textContent = `${$("cropLeft").value}%`;
+          $("cropRight").value = Math.round(Number(obj.cropRight || 0));
+          $("cropRightOut").textContent = `${$("cropRight").value}%`;
+        }
         $("textProperties").style.display = ["text", "caption"].includes(
           state.selected.type,
         )
@@ -10259,6 +10317,10 @@
               opacity: x.opacity ?? 1,
               rotation: x.rotation || 0,
               blendMode: x.blendMode || "normal",
+              cropTop: Number(x.cropTop || 0),
+              cropBottom: Number(x.cropBottom || 0),
+              cropLeft: Number(x.cropLeft || 0),
+              cropRight: Number(x.cropRight || 0),
               volume: x.volume ?? 1,
               trackId: x.trackId,
             })),
@@ -10297,6 +10359,10 @@
                 opacity: x.opacity,
                 rotation: x.rotation || 0,
                 blendMode: x.blendMode || "normal",
+                cropTop: Number(x.cropTop || 0),
+                cropBottom: Number(x.cropBottom || 0),
+                cropLeft: Number(x.cropLeft || 0),
+                cropRight: Number(x.cropRight || 0),
                 trackId: x.trackId,
                 enterAnimation: x.enterAnimation || "",
                 exitAnimation: x.exitAnimation || "",
@@ -11704,6 +11770,45 @@
         renderPreviewObjects();
         queueAutosave();
       };
+      for (const [id, key] of [
+        ["cropTop", "cropTop"],
+        ["cropBottom", "cropBottom"],
+        ["cropLeft", "cropLeft"],
+        ["cropRight", "cropRight"],
+      ]) {
+        if ($(id)) {
+          $(id).oninput = (e) => {
+            const o = currentObject();
+            if (!o || !guardUnlocked()) return;
+            o[key] = Math.max(0, Math.min(95, Number(e.target.value) || 0));
+            $(`${id}Out`).textContent = `${o[key]}%`;
+            renderPreviewObjects();
+            queueAutosave();
+          };
+        }
+      }
+      if ($("resetCropBtn")) {
+        $("resetCropBtn").onclick = () => {
+          const o = currentObject();
+          if (!o || !guardUnlocked()) return;
+          o.cropTop = 0;
+          o.cropBottom = 0;
+          o.cropLeft = 0;
+          o.cropRight = 0;
+          if ($("cropTop")) {
+            $("cropTop").value = 0;
+            $("cropTopOut").textContent = "0%";
+            $("cropBottom").value = 0;
+            $("cropBottomOut").textContent = "0%";
+            $("cropLeft").value = 0;
+            $("cropLeftOut").textContent = "0%";
+            $("cropRight").value = 0;
+            $("cropRightOut").textContent = "0%";
+          }
+          renderPreviewObjects();
+          queueAutosave();
+        };
+      }
       $("centerObject").onclick = () => {
         const o = currentObject();
         if (o && guardUnlocked()) {
