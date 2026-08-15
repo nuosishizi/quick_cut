@@ -815,19 +815,19 @@ end
 
 local function call_insert(timeline, kind, name)
   local ok, result = pcall(function()
-    if kind == "fusion_title" then
+    if kind == "fusion_title" and type(timeline.InsertFusionTitleIntoTimeline) == "function" then
       return timeline:InsertFusionTitleIntoTimeline(name)
     end
-    if kind == "title" and timeline.InsertTitleIntoTimeline then
+    if kind == "title" and type(timeline.InsertTitleIntoTimeline) == "function" then
       return timeline:InsertTitleIntoTimeline(name)
     end
-    if kind == "fusion_gen" and timeline.InsertFusionGeneratorIntoTimeline then
+    if kind == "fusion_gen" and type(timeline.InsertFusionGeneratorIntoTimeline) == "function" then
       return timeline:InsertFusionGeneratorIntoTimeline(name)
     end
-    if kind == "generator" and timeline.InsertGeneratorIntoTimeline then
+    if kind == "generator" and type(timeline.InsertGeneratorIntoTimeline) == "function" then
       return timeline:InsertGeneratorIntoTimeline(name)
     end
-    if kind == "fusion_comp" then
+    if kind == "fusion_comp" and type(timeline.InsertFusionCompositionIntoTimeline) == "function" then
       return timeline:InsertFusionCompositionIntoTimeline()
     end
     return nil
@@ -1321,18 +1321,18 @@ local function process_job(root)
   local result_path = join_path(root, "result.json")
   local raw = read_all(job_path)
   if not raw or raw == "" then
-    return false
-  end
-  os.remove(working_path)
-  if not os.rename(job_path, working_path) then
-    raw = read_all(job_path)
+    if not read_all(result_path) then
+      raw = read_all(working_path)
+    end
     if not raw or raw == "" then
       return false
     end
-    write_all(working_path, raw)
-    os.remove(job_path)
   else
-    raw = read_all(working_path) or raw
+    os.remove(working_path)
+    if not os.rename(job_path, working_path) then
+      write_all(working_path, raw)
+      os.remove(job_path)
+    end
   end
 
   local ok, job = pcall(decode_json, raw)

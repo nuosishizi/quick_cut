@@ -495,10 +495,16 @@ export async function sendToResolve(input = {}, options = {}) {
   const job = buildResolveSendJob(input);
   const jobPath = path.join(root, "job.json");
   const resultPath = path.join(root, "result.json");
+  const workingPath = path.join(root, "job.working.json");
   try {
     if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath);
   } catch {
     /* old result can stay if locked */
+  }
+  try {
+    if (fs.existsSync(workingPath)) fs.unlinkSync(workingPath);
+  } catch {
+    /* old working job can stay if locked */
   }
   writeResolveProgress({
     phase: "waiting",
