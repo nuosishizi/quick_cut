@@ -718,26 +718,38 @@ local function apply_style(comp, tool, item, style)
 
     set_number(tool, "Enabled3", 0)
   elseif style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0) then
-    -- Text Stroke / Outline (Element 3)
-    local strokeThick = math.max(0.015, (tonumber(style.stroke) or 0.025))
-    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.08
-    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.08
-    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.08
+    -- Text Stroke / Outline (Element 2)
+    local strokeThick = math.max(0.035, (tonumber(style.stroke) or 0.08))
+    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
+    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
+    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
 
-    set_number(tool, "SelectElement", 3)
-    set_number(tool, "Enabled3", 1)
-    set_number(tool, "Type3", 1) -- 1 = Outline / Border
-    set_number(tool, "Red3", sR)
-    set_number(tool, "Green3", sG)
-    set_number(tool, "Blue3", sB)
-    set_number(tool, "Alpha3", 1.0)
-    set_number(tool, "Opacity3", 1.0)
-    set_number(tool, "Thickness3", strokeThick)
-    set_number(tool, "JoinStyle3", 1) -- 1 = Round Join
-    set_number(tool, "Softness3", 0)
+    set_number(tool, "SelectElement", 2)
+    set_number(tool, "Enabled2", 1)
+    set_number(tool, "Element2", 1) -- 1 = Text Outline
+    set_number(tool, "Type2", 0) -- 0 = Solid Color
+    set_number(tool, "Red2", sR)
+    set_number(tool, "Green2", sG)
+    set_number(tool, "Blue2", sB)
+    set_number(tool, "Alpha2", 1.0)
+    set_number(tool, "Opacity2", 1.0)
+    set_number(tool, "Thickness2", strokeThick)
+    set_number(tool, "JoinStyle2", 1) -- 1 = Round Join
+    set_number(tool, "LineStyle2", 0) -- 0 = Solid Line
+    set_number(tool, "Softness2", 0)
+    pcall(function()
+      tool:SetInput("Color2Red", sR)
+      tool:SetInput("Color2Green", sG)
+      tool:SetInput("Color2Blue", sB)
+      tool:SetInput("OutlineEnabled", 1)
+      tool:SetInput("OutlineThickness", strokeThick)
+      tool:SetInput("OutlineColorRed", sR)
+      tool:SetInput("OutlineColorGreen", sG)
+      tool:SetInput("OutlineColorBlue", sB)
+    end)
 
     set_number(tool, "Enabled4", 0)
-    set_number(tool, "Enabled2", 0)
+    set_number(tool, "Enabled3", 0)
   elseif style.shadowEnabled then
     -- Text Shadow (Element 4)
     local shR = tonumber(style.shadowColor and style.shadowColor[1]) or 0.0

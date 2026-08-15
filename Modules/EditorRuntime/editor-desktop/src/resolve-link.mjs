@@ -127,7 +127,7 @@ export function fusionStroke(stroke, fontSize) {
   const px = Math.max(0, Number(stroke) || 0);
   if (px <= 0) return 0;
   const size = Math.max(10, Number(fontSize) || 58);
-  return Math.max(0.02, Math.min(0.22, (px / size) * 0.38));
+  return Math.max(0.035, Math.min(0.35, (px / size) * 0.95));
 }
 
 export function fusionShadow(style = {}) {
