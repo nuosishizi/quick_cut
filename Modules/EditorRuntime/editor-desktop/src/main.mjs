@@ -70,7 +70,7 @@ import {
   sendToResolve,
 } from "./resolve-link.mjs";
 import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
-import { buildCaptions, spokenCaptionWords } from "./alignment.mjs";
+import { buildCaptions, regroupProjectCaptions, spokenCaptionWords } from "./alignment.mjs";
 import { captionMatchLineLimit } from "./text-layout.mjs";
 import {
   createProject,
@@ -1460,6 +1460,13 @@ nativeMethods = {
   modelDownloadStatus: safe((jobId) => modelDownloadStatus(jobId)),
   cancelModelDownload: safe((jobId) => cancelModelDownload(jobId)),
   startScriptAnalysis: safe((input) => startScriptAnalysis(input)),
+  regroupCaptions: safe((input) =>
+    regroupProjectCaptions(input?.captions || [], {
+      captionLines: input?.captionLines ?? 2,
+      lineChars: input?.lineChars,
+      maxChars: input?.maxChars,
+    }),
+  ),
   scriptAnalysisStatus: safe((jobId) => scriptAnalysisStatus(jobId)),
   cancelScriptAnalysis: safe((jobId) => cancelScriptAnalysis(jobId)),
   reviewScriptIssues: safe((input) => reviewScriptIssues(input || {})),

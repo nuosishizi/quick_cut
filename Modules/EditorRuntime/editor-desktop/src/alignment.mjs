@@ -389,6 +389,127 @@ export function scriptWords(script) {
   return collapsed;
 }
 
+export function endsCaptionSentence(display) {
+  return /[.!?…]["'”’)\]]*$/.test(String(display || "").trim());
+}
+
+export function captionLineCharLimit(mode, lineChars = 34) {
+  const chars = Math.max(12, Number(lineChars) || 34);
+  const raw = String(mode ?? 2).trim().toLowerCase();
+  if (raw === "1" || raw === "one" || raw === "single") return chars;
+  if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return chars * 6;
+  return chars * 2;
+}
+
+export function flattenCaptionWords(captions = []) {
+  const words = [];
+  for (const caption of captions || []) {
+    if (Array.isArray(caption.words) && caption.words.length) {
+      for (const word of caption.words) {
+        const display = String(word?.display || "").trim();
+        if (!display) continue;
+        words.push({
+          display,
+          start: Number(word.start ?? caption.start ?? 0),
+          end: Math.max(
+            Number(word.start ?? caption.start ?? 0) + 0.04,
+            Number(word.end ?? caption.end ?? 0),
+          ),
+          matchType: word.matchType || "",
+          issueType: word.issueType || "",
+          expectedDisplay: word.expectedDisplay || "",
+          issueId: word.issueId || "",
+          action: word.action || "",
+          keepWithPrevious: !!word.keepWithPrevious,
+        });
+      }
+      continue;
+    }
+    const tokens = String(caption?.text || "").split(/\s+/).filter(Boolean);
+    const start = Number(caption?.start || 0);
+    const end = Math.max(start + 0.04, Number(caption?.end || start));
+    tokens.forEach((display, index) => {
+      words.push({
+        display,
+        start: start + ((end - start) * index) / Math.max(1, tokens.length),
+        end: start + ((end - start) * (index + 1)) / Math.max(1, tokens.length),
+      });
+    });
+  }
+  return words;
+}
+
+export function regroupCaptions(words, options = {}) {
+  const maxChars = Math.max(
+    12,
+    Number(options.maxChars || captionLineCharLimit(options.captionLines ?? options.maxLines, options.lineChars)),
+  );
+  const captions = [];
+  let group = [];
+  const flush = () => {
+    if (!group.length) return;
+    captions.push({
+      id: crypto.randomUUID(),
+      start: group[0].start,
+      end: Math.max(group.at(-1).end, group[0].start + 0.25),
+      text: formatDisplayWords(group),
+      words: group.map((word) => ({
+        display: word.display,
+        start: word.start,
+        end: word.end,
+        matchType: word.matchType || "match",
+        issueType: word.issueType || "",
+        expectedDisplay: word.expectedDisplay || "",
+        issueId: word.issueId || "",
+        action: word.action || "",
+        keepWithPrevious: !!word.keepWithPrevious,
+      })),
+    });
+    group = [];
+  };
+  for (const word of words || []) {
+    const display = String(word?.display || "").trim();
+    if (!display) continue;
+    const start = Number(word.start || 0);
+    const end = Math.max(start + 0.04, Number(word.end || start));
+    const item = { ...word, display, start, end };
+    const prior = group.at(-1);
+    const candidate = formatDisplayWords([...group, item]);
+    if (
+      group.length &&
+      !item.keepWithPrevious &&
+      (endsCaptionSentence(prior?.display) || candidate.length > maxChars)
+    ) {
+      flush();
+    }
+    group.push(item);
+  }
+  flush();
+  for (let index = 0; index < captions.length; index += 1) {
+    const caption = captions[index];
+    if (caption.words.length >= 2) continue;
+    const previous = captions[index - 1];
+    if (!previous || endsCaptionSentence(previous.words.at(-1)?.display)) continue;
+    const mergedWords = [...previous.words, ...caption.words];
+    if (formatDisplayWords(mergedWords).length > maxChars) continue;
+    captions.splice(index - 1, 2, {
+      id: previous.id,
+      start: mergedWords[0].start,
+      end: mergedWords.at(-1).end,
+      words: mergedWords,
+      text: formatDisplayWords(mergedWords),
+    });
+    index -= 1;
+  }
+  return captions;
+}
+
+export function regroupProjectCaptions(captions = [], options = {}) {
+  const words = flattenCaptionWords(captions);
+  if (!words.length) return Array.isArray(captions) ? captions : [];
+  return regroupCaptions(words, options);
+}
+
 export function formatDisplayWords(words = []) {
   return words
     .map((word) => word?.display || "")

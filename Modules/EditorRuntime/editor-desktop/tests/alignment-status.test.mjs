@@ -4,7 +4,10 @@ import {
   alignScript,
   buildCaptions,
   buildReviewCaptions,
+  flattenCaptionWords,
   manuscriptCaptionWords,
+  regroupCaptions,
+  regroupProjectCaptions,
   spokenCaptionWords,
 } from "../src/alignment.mjs";
 import {
@@ -277,7 +280,7 @@ test("sentence punctuation stays behind and no final word is orphaned into the n
   assert.ok(!captions.some((caption) => caption.words.length === 1));
 });
 
-test("caption line mode changes how matching groups a sentence", () => {
+test("caption grouping can switch by punctuation and character limit without rematching", () => {
   const words = [
     ["We're", 0, 0.2],
     ["treating", 0.2, 0.5],
@@ -287,13 +290,28 @@ test("caption line mode changes how matching groups a sentence", () => {
     ["He", 1.35, 1.5],
     ["calls", 1.5, 1.75],
     ["holy.", 1.75, 2.1],
+    ["Don't", 2.2, 2.4],
+    ["treat", 2.4, 2.65],
+    ["it", 2.65, 2.8],
+    ["casually.", 2.8, 3.2],
   ].map(([display, start, end]) => ({ display, start, end }));
-  const one = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 1 });
-  const two = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 2 });
-  const multi = buildCaptions(words, { maxWords: 10, maxChars: 18, maxLines: 6 });
-  assert.ok(one.length >= two.length);
-  assert.ok(multi.length <= two.length);
-  assert.ok(one.every((caption) => caption.text.length <= 18 || caption.words.length === 1));
+  const packed = [
+    {
+      start: 0,
+      end: 3.2,
+      text: "We're treating as ordinary something He calls holy. Don't treat it casually.",
+      words,
+    },
+  ];
+  const one = regroupCaptions(words, { captionLines: 1, lineChars: 18 });
+  const two = regroupProjectCaptions(packed, { captionLines: 2, lineChars: 18 });
+  const multi = regroupProjectCaptions(two, { captionLines: "multi", lineChars: 18 });
+  assert.deepEqual(flattenCaptionWords(one).map((word) => word.display), words.map((word) => word.display));
+  assert.ok(one.length > two.length);
+  assert.equal(multi.length, 2);
+  assert.match(multi[0].text, /holy\.$/);
+  assert.match(multi[1].text, /casually\.$/);
+  assert.ok(one.every((caption) => caption.text.length <= 18 || /[.!?]$/.test(caption.text) || caption.words.length === 1));
 });
 
 test("an interrupted realtime transcript recovers later speech instead of losing all captions", () => {

@@ -146,10 +146,11 @@ test("subtitle side handles change wrapping width without changing font scale", 
   assert.match(ui, /objectDrag\.obj\.width = nextWidth/);
   assert.match(ui, /function captionTwoLineBreak\(/);
   assert.match(ui, /function captionLineBreaks\(/);
-  assert.match(ui, /data-caption-lines="1"/);
-  assert.match(ui, /data-caption-lines="2"/);
-  assert.match(ui, /data-caption-lines="multi"/);
-  assert.match(ui, /captionLines: state\.captionStyle\.captionLines/);
+  assert.match(ui, /id="side-subtitle"[\s\S]*data-caption-lines="1"/);
+  assert.match(ui, /function setCaptionLineMode\(/);
+  assert.match(ui, /nativeCall\("regroupCaptions"/);
+  assert.doesNotMatch(ui, /id="textProperties"[\s\S]*data-caption-lines="1"/);
+  assert.match(main, /regroupCaptions: safe/);
   assert.match(ui, /scheduleObjectDragMove\(e\.clientX, e\.clientY\)/);
 });
 
@@ -259,6 +260,7 @@ test("text inspector owns fonts, spacing, and every range has step buttons", () 
   assert.match(ui, /id="letterSpacing"/);
   assert.match(ui, /id="lineHeight"/);
   assert.match(ui, /id="captionLinesButtons"/);
+  assert.match(ui, /字幕切句/);
   assert.doesNotMatch(ui, /data-side="font"|id="side-font"|id="localFonts"/);
   assert.match(ui, /function installRangeSteppers\(/);
   assert.match(ui, /data-button-step="5"/);

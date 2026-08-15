@@ -2575,6 +2575,14 @@
                   自然流畅
                 </button>
               </div>
+              <div class="field" style="margin-top:10px">
+                <div class="fieldhead"><span>字幕切句</span></div>
+                <div class="align-buttons" id="captionLinesButtons">
+                  <button class="btn" type="button" data-caption-lines="1" title="按标点和单行字数上限切句，随时可改，不用重新匹配">单行</button>
+                  <button class="btn active" type="button" data-caption-lines="2" title="按标点和两行字数上限切句">2行</button>
+                  <button class="btn" type="button" data-caption-lines="multi" title="主要按句号问号切，字数上限更宽">多行</button>
+                </div>
+              </div>
               <button class="btn wide" id="openReviewSettings" style="margin-top:7px">纠正设置</button>
               <div class="sectiontitle" style="margin-top: 12px">听写引擎</div>
               <label class="field"><span class="small">用谁听写</span>
@@ -2850,14 +2858,6 @@
                       <span>行间距</span><output id="lineHeightOut">115%</output>
                     </div>
                     <input class="range" id="lineHeight" type="range" min="80" max="250" step="5" value="115" />
-                  </div>
-                  <div class="field">
-                    <div class="fieldhead"><span>字幕行数</span></div>
-                    <div class="align-buttons" id="captionLinesButtons">
-                      <button class="btn" type="button" data-caption-lines="1" title="匹配和画面都保持一行">单行</button>
-                      <button class="btn active" type="button" data-caption-lines="2" title="最多两行，和现在一样">2行</button>
-                      <button class="btn" type="button" data-caption-lines="multi" title="按框宽自动换行，不限两行">多行</button>
-                    </div>
                   </div>
                   <div class="field">
                     <div class="fieldhead"><span>文字对齐</span></div>
@@ -3604,6 +3604,7 @@
         trackLocks: {},
         avLinked: true,
         snapping: true,
+        captionLines: 2,
         captionStyle: {
           fontFamily: "Helvetica",
           fontSize: 58,
@@ -3614,7 +3615,6 @@
           letterSpacing: 0,
           wordSpacing: 0,
           lineHeight: 1.15,
-          captionLines: 2,
           textAlign: "center",
           verticalAlign: "middle",
           color: "#ffffff",
@@ -3721,7 +3721,6 @@
           letterSpacing: Number(style?.letterSpacing ?? captionStyleDefaults.letterSpacing),
           wordSpacing: Number(style?.wordSpacing ?? captionStyleDefaults.wordSpacing),
           lineHeight: Number(style?.lineHeight ?? captionStyleDefaults.lineHeight),
-          captionLines: normalizeCaptionLineMode(style?.captionLines ?? captionStyleDefaults.captionLines),
           stroke: Number(style?.stroke ?? captionStyleDefaults.stroke),
           shadow: Number(style?.shadow ?? captionStyleDefaults.shadow),
           shadowOpacity: Number(style?.shadowOpacity ?? captionStyleDefaults.shadowOpacity),
@@ -4334,6 +4333,7 @@
           trackLocks: {},
           avLinked: true,
           snapping: true,
+          captionLines: 2,
           captionStyle: {
             fontFamily: "Helvetica",
             fontSize: 58,
@@ -4344,7 +4344,6 @@
           letterSpacing: 0,
           wordSpacing: 0,
           lineHeight: 1.15,
-          captionLines: 2,
           textAlign: "center",
           verticalAlign: "middle",
             color: "#ffffff",
@@ -6533,7 +6532,7 @@
                     caption.start +
                     ((caption.end - caption.start) * (index + 1)) / list.length,
                 }));
-        const breaks = captionLineBreaks(words, state.captionTransform.width, state.captionStyle.captionLines);
+        const breaks = captionLineBreaks(words, state.captionTransform.width, state.captionLines);
         const wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
             const index = localIndex + offset;
             const status =
@@ -6577,7 +6576,7 @@
       }
       function captionLineBreaks(words, requestedWidth, lineMode) {
         if (!Array.isArray(words) || words.length < 2) return [];
-        const limit = captionWrapLineLimit(lineMode ?? state.captionStyle.captionLines);
+        const limit = captionWrapLineLimit(lineMode ?? state.captionLines);
         if (limit <= 1) return [];
         const gap = Number(state.captionStyle.wordSpacing || 0) +
             Number(state.captionStyle.fontSize || 54) * 0.28,
@@ -6663,7 +6662,7 @@
         element.style.width = `${resolved * px}px`;
         element.style.maxWidth = "none";
         element.style.boxSizing = "border-box";
-        element.style.whiteSpace = captionWrapLineLimit(state.captionStyle.captionLines) <= 1 ? "nowrap" : "normal";
+        element.style.whiteSpace = element.id === "captionPreview" && captionWrapLineLimit(state.captionLines) <= 1 ? "nowrap" : "normal";
         element.style.overflowWrap = "normal";
         element.style.wordBreak = "normal";
       }
@@ -6708,7 +6707,7 @@
         el.style.letterSpacing = `${Number(s.letterSpacing || 0) * px}px`;
         el.style.wordSpacing = `${Number(s.wordSpacing || 0) * px}px`;
         el.style.lineHeight = String(Number(s.lineHeight || 1.15));
-        el.style.whiteSpace = captionWrapLineLimit(s.captionLines ?? state.captionStyle.captionLines) <= 1
+        el.style.whiteSpace = el.id === "captionPreview" && captionWrapLineLimit(state.captionLines) <= 1
           ? "nowrap"
           : "pre-line";
         el.style.textAlign = s.textAlign || "center";
@@ -7628,10 +7627,6 @@
           $("wordSpacingOut").textContent = `${Number(s.wordSpacing || 0)}px`;
           $("lineHeight").value = Math.round(Number(s.lineHeight || 1.15) * 100);
           $("lineHeightOut").textContent = `${$("lineHeight").value}%`;
-          const lineMode = normalizeCaptionLineMode(s.captionLines);
-          document.querySelectorAll("[data-caption-lines]").forEach((button) =>
-            button.classList.toggle("active", normalizeCaptionLineMode(button.dataset.captionLines) === lineMode),
-          );
           $("fontColor").value = s.color || "#ffffff";
           $("highlightColor").value = s.highlight || "#ffd21f";
           $("highlightEnabled").checked = s.highlightEnabled !== false;
@@ -7903,6 +7898,7 @@
         if (!beautyFrameRequest) beautyFrameRequest = requestAnimationFrame(drawBeautyPreview);
       }
       function renderAll() {
+        syncCaptionLineButtons();
         normalizeSelection();
         ensureIndependentTransforms();
         const primary = $("video");
@@ -8819,7 +8815,7 @@
               duration: state.sourceDuration,
               script: $("scriptText").value,
               removals: state.removals,
-              captionLines: state.captionStyle.captionLines,
+              captionLines: state.captionLines,
             }),
           );
           $("modelProgress").style.display = "block";
@@ -8834,7 +8830,7 @@
               state.matchIssues = (s.result.issues || []).map((issue) => ({ ...issue }));
               state.alignmentOperations = s.result.operations || [];
               state.alignmentDuration = Number(s.result.outputDuration || state.sourceDuration || 0);
-              state.captions = s.result.captions;
+              state.captions = await applyCaptionGrouping(s.result.captions, state.captionLines);
               state.reviewCaptions = (s.result.reviewCaptions || []).filter((item) =>
                 item.type === "missing" || item.action === "cut" || item.confirmedCut === true
               );
@@ -9682,6 +9678,7 @@
           trackLocks: state.trackLocks,
           avLinked: state.avLinked,
           snapping: state.snapping,
+          captionLines: state.captionLines,
           captionStyle: state.captionStyle,
           color: state.color,
           filterLook: state.filterLook,
@@ -9712,6 +9709,7 @@
             images: d.images || [],
             titles: d.titles || [],
             captions: d.captions || [],
+            captionLines: normalizeCaptionLineMode(d.captionLines ?? d.captionStyle?.captionLines ?? 2),
             reviewCaptions: d.reviewCaptions || [],
             issues: d.issues || [],
             removals: d.removals || [],
@@ -9926,7 +9924,7 @@
             y: state.captionTransform?.y,
             style: caption.style,
           })),
-          captionStyle: state.captionStyle,
+          captionStyle: { ...state.captionStyle, captionLines: state.captionLines },
           captionTransform: state.captionTransform,
         };
       }
@@ -10074,7 +10072,7 @@
                 x: state.captionTransform?.x,
                 y: state.captionTransform?.y,
               })),
-              captionStyle: state.captionStyle,
+              captionStyle: { ...state.captionStyle, captionLines: state.captionLines },
               captionTransform: state.captionTransform,
               removals: state.removals,
               videoLayers: (state.videoLayers || []).map((item) => ({
@@ -10286,7 +10284,7 @@
                 y: state.captionTransform.y,
                 scale: state.captionTransform.scale,
                 width: state.captionTransform.width,
-                style: state.captionStyle,
+                style: { ...state.captionStyle, captionLines: state.captionLines },
               }),
             ),
             quality: "high",
@@ -11813,14 +11811,39 @@
           renderAll();
         };
       });
+      function syncCaptionLineButtons() {
+        const mode = normalizeCaptionLineMode(state.captionLines);
+        document.querySelectorAll("[data-caption-lines]").forEach((button) =>
+          button.classList.toggle("active", normalizeCaptionLineMode(button.dataset.captionLines) === mode),
+        );
+      }
+      async function applyCaptionGrouping(captions, mode) {
+        const captionLines = normalizeCaptionLineMode(mode ?? state.captionLines);
+        if (!(captions || []).length) return captions || [];
+        try {
+          return await nativeCall("regroupCaptions", { captions, captionLines });
+        } catch {
+          return captions;
+        }
+      }
+      async function setCaptionLineMode(mode) {
+        const next = normalizeCaptionLineMode(mode);
+        if (next === normalizeCaptionLineMode(state.captionLines) && document.querySelector("[data-caption-lines].active")) {
+          syncCaptionLineButtons();
+          return;
+        }
+        snapshot();
+        state.captionLines = next;
+        if ((state.captions || []).length) {
+          state.captions = await applyCaptionGrouping(state.captions, next);
+        }
+        syncCaptionLineButtons();
+        renderAll();
+        queueAutosave();
+      }
       document.querySelectorAll("[data-caption-lines]").forEach((button) => {
         button.onclick = () => {
-          const mode = normalizeCaptionLineMode(button.dataset.captionLines);
-          state.captionStyle.captionLines = mode;
-          const style = currentStyle();
-          if (style) style.captionLines = mode;
-          renderAll();
-          queueAutosave();
+          void setCaptionLineMode(button.dataset.captionLines);
         };
       });
       $("fontBoldToggle").onclick = () => {

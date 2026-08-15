@@ -1235,28 +1235,61 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
-          local clsTool = comp:FindTool("CharacterLevelStyling1")
-          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
-
-          -- 1. Direct connect CharacterLevelStyling1 to Template.StyledText (bypasses Follower character delay)
-          if clsTool and templateTool then
-            pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+          local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
+          if not autosubsTool then
+            local tools = comp:GetToolList(false, "MacroOperator")
+            if tools and tools[1] then autosubsTool = tools[1] end
           end
 
-          -- 2. Direct connect Template output to MediaOut1
-          if mediaOut and templateTool then
-            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
-          end
+          if autosubsTool and hasPreset then
+            if not fnSetInputValues then
+              local setVals = autosubsTool:GetData("SetInputValues")
+              if setVals and type(setVals) == "string" then
+                local okVal, fn = pcall(loadstring(setVals))
+                if okVal and type(fn) == "function" then
+                  fnSetInputValues = fn
+                end
+              end
+            end
+            if fnSetInputValues then
+              pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
+            end
 
-          -- 3. Apply full native styling (Text fill, stroke with JoinStyle, or rounded capsule border)
-          if templateTool then
-            apply_style(comp, templateTool, caption, style)
-          end
+            if not fnApplyWordTiming then
+              local applyWT = autosubsTool:GetData("ApplyWordTiming")
+              if applyWT and type(applyWT) == "string" then
+                local okWT, fn = pcall(loadstring(applyWT))
+                if okWT and type(fn) == "function" then
+                  fnApplyWordTiming = fn
+                end
+              end
+            end
 
-          -- 4. Directly inject pristine active word spotlight keyframes into CharacterLevelStyling1
-          if clsTool then
-            apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
+            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+            if fnApplyWordTiming then
+              pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
+            end
+
+            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
+            pcall(function() autosubsTool:SetInput("Text", plainText) end)
+          else
+            local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
+            local clsTool = comp:FindTool("CharacterLevelStyling1")
+            local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+
+            if clsTool and templateTool then
+              pcall(function() templateTool:ConnectInput("StyledText", clsTool) end)
+            end
+            if mediaOut and templateTool then
+              pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
+            end
+            if templateTool then
+              apply_style(comp, templateTool, caption, style)
+            end
+            if clsTool then
+              apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+            end
           end
         end
       end
