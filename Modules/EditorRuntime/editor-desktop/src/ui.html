@@ -4811,9 +4811,7 @@
         if (state.selected.type === "text")
           return state.titles.find((x) => x.id === state.selected.id);
         if (state.selected.type === "caption")
-          return state.captions.some((item) => item.id === state.selected.id)
-            ? state.captionTransform
-            : null;
+          return state.captions.length ? state.captionTransform : null;
         if (state.selected.type === "review")
           return state.reviewCaptions.find((x) => x.id === state.selected.id);
         return null;
@@ -4837,7 +4835,25 @@
         return false;
       }
       function normalizeSelection() {
-        if (!state.selected?.type || currentObject()) return;
+        if (!state.selected?.type) {
+          state.selectedItems = [];
+          state.selected = state.video ? { type: "video", id: "main" } : { type: "", id: "" };
+          return;
+        }
+        if (state.selected.type === "caption") {
+          if (!state.captions.length) {
+            state.selectedItems = [];
+            state.selected = state.video ? { type: "video", id: "main" } : { type: "", id: "" };
+            return;
+          }
+          if (!state.captions.some((item) => item.id === state.selected.id)) {
+            const current = captionAtTime(state.currentTime) || state.captions[0];
+            state.selected = { type: "caption", id: current.id };
+            state.selectedItems = [{ type: "caption", id: current.id }];
+          }
+          return;
+        }
+        if (currentObject()) return;
         state.selectedItems = [];
         state.selected = state.video
           ? { type: "video", id: "main" }
@@ -6536,7 +6552,7 @@
                     caption.start +
                     ((caption.end - caption.start) * (index + 1)) / list.length,
                 }));
-        const breaks = captionLineBreaks(words, state.captionTransform.width, "display");
+        const breaks = captionLineBreaks(words, state.captionTransform.width, state.captionLines);
         const wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
             const index = localIndex + offset;
             const status =
@@ -6583,7 +6599,7 @@
       }
       function captionLineBreaks(words, requestedWidth, lineMode) {
         if (!Array.isArray(words) || words.length < 2) return [];
-        const limit = lineMode === "display" ? 99 : captionWrapLineLimit(lineMode ?? state.captionLines);
+        const limit = captionWrapLineLimit(lineMode ?? state.captionLines);
         if (limit <= 1) return [];
         const gap = Number(state.captionStyle.wordSpacing || 0) +
             Number(state.captionStyle.fontSize || 54) * 0.28,
@@ -11426,6 +11442,7 @@
           if (objectDrag.needsCaptionReflow) {
             void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
               state.captions = captions;
+              keepCaptionSelection();
               renderAll();
               queueAutosave();
             });
@@ -11822,6 +11839,7 @@
           if (!(state.captions || []).length) return;
           void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
             state.captions = captions;
+            keepCaptionSelection();
             renderAll();
             queueAutosave();
           });
@@ -11835,6 +11853,14 @@
           scale: state.captionTransform?.scale || 1,
           style: state.captionStyle,
         };
+      }
+      function keepCaptionSelection() {
+        if (state.selected?.type !== "caption") return;
+        if (!state.captions.length) return;
+        if (state.captions.some((item) => item.id === state.selected.id)) return;
+        const current = captionAtTime(state.currentTime) || state.captions[0];
+        state.selected = { type: "caption", id: current.id };
+        state.selectedItems = [{ type: "caption", id: current.id }];
       }
       async function applyCaptionGrouping(captions, mode) {
         if (!(captions || []).length) return captions || [];
@@ -11857,6 +11883,7 @@
         state.captionLines = next;
         if ((state.captions || []).length) {
           state.captions = await applyCaptionGrouping(state.captions, next);
+          keepCaptionSelection();
         }
         syncCaptionLineButtons();
         renderAll();
