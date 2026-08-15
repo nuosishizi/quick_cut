@@ -669,8 +669,8 @@ local function apply_style(comp, tool, item, style)
     tool:SetInput("Color1Blue", textB)
   end)
 
+  -- Background Box / Pill (Element 4)
   if style.backgroundEnabled then
-    -- Background Box / Pill (Element 4 & Element 2)
     local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
     local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
     local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
@@ -681,11 +681,11 @@ local function apply_style(comp, tool, item, style)
 
     set_number(tool, "SelectElement", 4)
     set_number(tool, "Enabled4", 1)
-    set_number(tool, "Element4", 2)
-    set_number(tool, "ElementShape4", 2)
-    set_number(tool, "Type4", 0)
+    set_number(tool, "Element4", 2) -- 2 = Border
+    set_number(tool, "ElementShape4", 2) -- 2 = Rounded Rectangle
+    set_number(tool, "Type4", 0) -- 0 = Solid fill
     set_number(tool, "Thickness4", 1.0)
-    set_number(tool, "Level4", 0)
+    set_number(tool, "Level4", 0) -- 0 = Line level
     set_number(tool, "Red4", bgR)
     set_number(tool, "Green4", bgG)
     set_number(tool, "Blue4", bgB)
@@ -697,71 +697,93 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "ExtendY4", extY)
     set_number(tool, "Round4", round)
     set_number(tool, "Softness4", 0)
+    pcall(function()
+      tool:SetInput("Color4Red", bgR)
+      tool:SetInput("Color4Green", bgG)
+      tool:SetInput("Color4Blue", bgB)
+    end)
+  else
+    set_number(tool, "SelectElement", 4)
+    set_number(tool, "Enabled4", 0)
+  end
+
+  -- Text Stroke / Outline (Element 2)
+  local hasStroke = (style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0)) and not style.backgroundEnabled
+  if hasStroke then
+    local strokeThick = math.max(0.015, tonumber(style.stroke) or 0.025)
+    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
+    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
+    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
 
     set_number(tool, "SelectElement", 2)
     set_number(tool, "Enabled2", 1)
-    set_number(tool, "Type2", 1) -- 1 = Text Border Box
-    set_number(tool, "Level2", 0) -- 0 = Line level
-    set_number(tool, "Red2", bgR)
-    set_number(tool, "Green2", bgG)
-    set_number(tool, "Blue2", bgB)
-    set_number(tool, "Alpha2", bgA)
-    set_number(tool, "Opacity2", bgA)
-    set_number(tool, "Extends2X", extX)
-    set_number(tool, "Extends2Y", extY)
-    set_number(tool, "ExtendHorizontal2", extX)
-    set_number(tool, "ExtendVertical2", extY)
-    set_number(tool, "Round2X", round)
-    set_number(tool, "Round2Y", round)
-    set_number(tool, "Round2", round)
+    set_number(tool, "Element2", 1) -- 1 = Text Outline
+    set_number(tool, "Type2", 0) -- 0 = Solid Color
+    set_number(tool, "Red2", sR)
+    set_number(tool, "Green2", sG)
+    set_number(tool, "Blue2", sB)
+    set_number(tool, "Alpha2", 1.0)
+    set_number(tool, "Opacity2", 1.0)
+    set_number(tool, "Thickness2", strokeThick)
+    set_number(tool, "JoinStyle2", 1) -- 1 = Round Join
+    set_number(tool, "LineStyle2", 0) -- 0 = Solid Line
     set_number(tool, "Softness2", 0)
-
-    set_number(tool, "Enabled3", 0)
-  elseif style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0) then
-    -- Text Stroke / Outline (Element 3)
-    local strokeThick = math.max(0.015, (tonumber(style.stroke) or 0.025))
-    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.08
-    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.08
-    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.08
-
-    set_number(tool, "SelectElement", 3)
-    set_number(tool, "Enabled3", 1)
-    set_number(tool, "Type3", 1) -- 1 = Outline / Border
-    set_number(tool, "Red3", sR)
-    set_number(tool, "Green3", sG)
-    set_number(tool, "Blue3", sB)
-    set_number(tool, "Alpha3", 1.0)
-    set_number(tool, "Opacity3", 1.0)
-    set_number(tool, "Thickness3", strokeThick)
-    set_number(tool, "JoinStyle3", 1) -- 1 = Round Join
-    set_number(tool, "Softness3", 0)
-
-    set_number(tool, "Enabled4", 0)
+    set_number(tool, "SoftnessOn2", 0)
+    pcall(function()
+      tool:SetInput("Color2Red", sR)
+      tool:SetInput("Color2Green", sG)
+      tool:SetInput("Color2Blue", sB)
+      tool:SetInput("OutlineEnabled", 1)
+      tool:SetInput("OutlineThickness", strokeThick)
+      tool:SetInput("OutlineColorRed", sR)
+      tool:SetInput("OutlineColorGreen", sG)
+      tool:SetInput("OutlineColorBlue", sB)
+    end)
+  else
+    set_number(tool, "SelectElement", 2)
     set_number(tool, "Enabled2", 0)
-  elseif style.shadowEnabled then
-    -- Text Shadow (Element 4)
+    pcall(function()
+      tool:SetInput("OutlineEnabled", 0)
+    end)
+  end
+
+  -- Text Shadow (Element 3)
+  local hasShadow = style.shadowEnabled and not style.backgroundEnabled
+  if hasShadow then
     local shR = tonumber(style.shadowColor and style.shadowColor[1]) or 0.0
     local shG = tonumber(style.shadowColor and style.shadowColor[2]) or 0.0
     local shB = tonumber(style.shadowColor and style.shadowColor[3]) or 0.0
-    set_number(tool, "SelectElement", 4)
-    set_number(tool, "Enabled4", 1)
-    set_number(tool, "Element4", 1) -- 1 = Shadow
-    set_number(tool, "Type4", 0)
-    set_number(tool, "Red4", shR)
-    set_number(tool, "Green4", shG)
-    set_number(tool, "Blue4", shB)
-    set_number(tool, "Alpha4", 0.85)
-    set_number(tool, "Opacity4", 0.85)
-    set_number(tool, "Softness4", 0.02)
-    set_number(tool, "OffsetX4", 0.005)
-    set_number(tool, "OffsetY4", -0.005)
 
-    set_number(tool, "Enabled3", 0)
-    set_number(tool, "Enabled2", 0)
+    set_number(tool, "SelectElement", 3)
+    set_number(tool, "Enabled3", 1)
+    set_number(tool, "Element3", 0) -- 0 = Text Fill Offset
+    set_number(tool, "Type3", 0) -- 0 = Solid Color
+    set_number(tool, "Red3", shR)
+    set_number(tool, "Green3", shG)
+    set_number(tool, "Blue3", shB)
+    set_number(tool, "Alpha3", 0.85)
+    set_number(tool, "Opacity3", 0.85)
+    set_number(tool, "Softness3", 0.02)
+    set_number(tool, "SoftnessOn3", 1)
+    set_number(tool, "OffsetX3", 0.005)
+    set_number(tool, "OffsetY3", -0.005)
+    set_number(tool, "Position3X", 0.005)
+    set_number(tool, "Position3Y", -0.005)
+    pcall(function()
+      tool:SetInput("Color3Red", shR)
+      tool:SetInput("Color3Green", shG)
+      tool:SetInput("Color3Blue", shB)
+      tool:SetInput("ShadowEnabled", 1)
+      tool:SetInput("ShadowColorRed", shR)
+      tool:SetInput("ShadowColorGreen", shG)
+      tool:SetInput("ShadowColorBlue", shB)
+    end)
   else
-    set_number(tool, "Enabled4", 0)
+    set_number(tool, "SelectElement", 3)
     set_number(tool, "Enabled3", 0)
-    set_number(tool, "Enabled2", 0)
+    pcall(function()
+      tool:SetInput("ShadowEnabled", 0)
+    end)
   end
 
   local plain = tostring(item.text or "")
