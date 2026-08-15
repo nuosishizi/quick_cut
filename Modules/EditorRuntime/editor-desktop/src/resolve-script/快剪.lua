@@ -985,15 +985,16 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
           local autosubsTool = comp:FindTool("AutoSubs")
           local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
 
+          -- 1. Apply full styling (font, size, center, fill, outline, shadow) to Text+ tool directly
+          if templateTool then
+            apply_style(comp, templateTool, caption, style)
+          end
+
+          -- 2. If AutoSubs macro is present, configure dynamic animation and word timing
           if autosubsTool then
             local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps
             local wordTiming = to_word_timing(caption.words, framerate, tonumber(caption.start) or 0)
             autosubsTool:SetData("WordTiming", wordTiming)
-
-            if templateTool then
-              pcall(function() templateTool:SetInput("StyledText", plainText) end)
-              pcall(function() templateTool:SetInput("Text", plainText) end)
-            end
 
             local clsTool = comp:FindTool("CharacterLevelStyling1")
             if clsTool then
@@ -1008,10 +1009,22 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
                 if setterFunc then
                   pcall(setterFunc(), comp, autosubsTool, presetSettings)
                 end
+              else
+                for k, v in pairs(presetSettings) do
+                  pcall(function() autosubsTool:SetInput(k, v) end)
+                end
+                local setAnims = autosubsTool:GetData("SetAnimations")
+                if setAnims and setAnims ~= "" then
+                  local f = loadstring(setAnims)
+                  if f then pcall(f(), comp, autosubsTool) end
+                end
+                local updateHl = autosubsTool:GetData("UpdateHighlight")
+                if updateHl and updateHl ~= "" then
+                  local f = loadstring(updateHl)
+                  if f then pcall(f(), comp, autosubsTool) end
+                end
               end
             end
-          elseif templateTool then
-            apply_style(comp, templateTool, caption, style)
           end
         end
       end

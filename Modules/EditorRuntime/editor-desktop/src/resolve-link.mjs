@@ -199,7 +199,7 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
     Font: pickResolveFont(firstStyle.fontFamily, ""),
     Style: fusionFontStyle(firstStyle),
     TextSize: fusionTextSize(firstStyle.fontSize, canvas),
-    TextPosition: { 1: center.centerX, 2: center.centerY },
+    TextPosition: [center.centerX, center.centerY],
     FillEnabled: 1,
     FillColorRed: colorRgb[0],
     FillColorGreen: colorRgb[1],
