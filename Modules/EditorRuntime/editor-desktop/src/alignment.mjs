@@ -1,4 +1,9 @@
 import crypto from "node:crypto";
+import {
+  captionSafeBoxWidth,
+  captionWrapLineLimit,
+  packWordsIntoLines,
+} from "./text-layout.mjs";
 
 const wordPattern = /[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
 const numberWords = new Map(
@@ -395,10 +400,8 @@ export function endsCaptionSentence(display) {
 
 export function captionLineCharLimit(mode, lineChars = 34) {
   const chars = Math.max(12, Number(lineChars) || 34);
-  const raw = String(mode ?? 2).trim().toLowerCase();
-  if (raw === "1" || raw === "one" || raw === "single") return chars;
-  if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return chars * 6;
-  return chars * 2;
+  const limit = captionWrapLineLimit(mode);
+  return chars * limit;
 }
 
 export function flattenCaptionWords(captions = []) {
@@ -439,32 +442,55 @@ export function flattenCaptionWords(captions = []) {
   return words;
 }
 
+function captionWordRecord(word) {
+  return {
+    display: word.display,
+    start: word.start,
+    end: word.end,
+    matchType: word.matchType || "match",
+    issueType: word.issueType || "",
+    expectedDisplay: word.expectedDisplay || "",
+    issueId: word.issueId || "",
+    action: word.action || "",
+    keepWithPrevious: !!word.keepWithPrevious,
+  };
+}
+
+function captionFromGroup(group, style, maxWidth, scale) {
+  const packed = packWordsIntoLines(group, style, maxWidth, scale);
+  return {
+    id: crypto.randomUUID(),
+    start: group[0].start,
+    end: Math.max(group.at(-1).end, group[0].start + 0.25),
+    text: formatDisplayWords(group),
+    words: group.map(captionWordRecord),
+    lineBreaks: packed.slice(1).map((line) => line.startIndex),
+    lineCount: packed.length,
+  };
+}
+
 export function regroupCaptions(words, options = {}) {
-  const maxChars = Math.max(
+  const style = options.style || {};
+  const scale = Math.max(0.2, Number(options.scale || 1));
+  const maxLines = captionWrapLineLimit(options.captionLines ?? options.maxLines ?? 2);
+  const requestedWidth = Number(options.maxWidth || options.boxWidth);
+  const useWidth = Number.isFinite(requestedWidth) && requestedWidth > 0;
+  const maxWidth = useWidth ? captionSafeBoxWidth(options) : 860;
+  const fallbackChars = Math.max(
     12,
     Number(options.maxChars || captionLineCharLimit(options.captionLines ?? options.maxLines, options.lineChars)),
   );
+  const linesNeeded = (group) => {
+    if (!group.length) return 0;
+    if (useWidth) return packWordsIntoLines(group, style, maxWidth, scale).length;
+    const text = formatDisplayWords(group);
+    return Math.max(1, Math.ceil(text.length / Math.max(12, fallbackChars / maxLines)));
+  };
   const captions = [];
   let group = [];
   const flush = () => {
     if (!group.length) return;
-    captions.push({
-      id: crypto.randomUUID(),
-      start: group[0].start,
-      end: Math.max(group.at(-1).end, group[0].start + 0.25),
-      text: formatDisplayWords(group),
-      words: group.map((word) => ({
-        display: word.display,
-        start: word.start,
-        end: word.end,
-        matchType: word.matchType || "match",
-        issueType: word.issueType || "",
-        expectedDisplay: word.expectedDisplay || "",
-        issueId: word.issueId || "",
-        action: word.action || "",
-        keepWithPrevious: !!word.keepWithPrevious,
-      })),
-    });
+    captions.push(captionFromGroup(group, style, maxWidth, scale));
     group = [];
   };
   for (const word of words || []) {
@@ -474,12 +500,9 @@ export function regroupCaptions(words, options = {}) {
     const end = Math.max(start + 0.04, Number(word.end || start));
     const item = { ...word, display, start, end };
     const prior = group.at(-1);
-    const candidate = formatDisplayWords([...group, item]);
-    if (
-      group.length &&
-      !item.keepWithPrevious &&
-      (endsCaptionSentence(prior?.display) || candidate.length > maxChars)
-    ) {
+    if (group.length && !item.keepWithPrevious && endsCaptionSentence(prior?.display)) {
+      flush();
+    } else if (group.length && !item.keepWithPrevious && linesNeeded([...group, item]) > maxLines) {
       flush();
     }
     group.push(item);
@@ -491,14 +514,8 @@ export function regroupCaptions(words, options = {}) {
     const previous = captions[index - 1];
     if (!previous || endsCaptionSentence(previous.words.at(-1)?.display)) continue;
     const mergedWords = [...previous.words, ...caption.words];
-    if (formatDisplayWords(mergedWords).length > maxChars) continue;
-    captions.splice(index - 1, 2, {
-      id: previous.id,
-      start: mergedWords[0].start,
-      end: mergedWords.at(-1).end,
-      words: mergedWords,
-      text: formatDisplayWords(mergedWords),
-    });
+    if (linesNeeded(mergedWords) > maxLines) continue;
+    captions.splice(index - 1, 2, captionFromGroup(mergedWords, style, maxWidth, scale));
     index -= 1;
   }
   return captions;

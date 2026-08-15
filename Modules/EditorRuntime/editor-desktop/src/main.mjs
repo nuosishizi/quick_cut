@@ -1463,6 +1463,10 @@ nativeMethods = {
   regroupCaptions: safe((input) =>
     regroupProjectCaptions(input?.captions || [], {
       captionLines: input?.captionLines ?? 2,
+      boxWidth: input?.boxWidth,
+      canvasWidth: input?.canvasWidth || input?.width,
+      scale: input?.scale,
+      style: input?.style || input?.captionStyle,
       lineChars: input?.lineChars,
       maxChars: input?.maxChars,
     }),

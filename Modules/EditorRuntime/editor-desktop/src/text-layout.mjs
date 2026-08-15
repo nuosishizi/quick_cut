@@ -45,10 +45,55 @@ export function captionWrapLineLimit(value) {
 }
 
 export function captionMatchLineLimit(value) {
-  const mode = normalizeCaptionLines(value);
-  if (mode === 1) return 1;
-  if (mode === 0) return 6;
-  return 2;
+  return captionWrapLineLimit(value);
+}
+
+export function captionSafeBoxWidth(input = {}) {
+  const canvas = Math.max(320, Number(input.canvasWidth || input.width || 1080));
+  const style = input.style || {};
+  const pad = style.backgroundEnabled
+    ? Math.max(0, Number(style.backgroundWidth ?? style.padding ?? 0) * 2)
+    : 0;
+  const requested = Number(input.boxWidth || input.captionWidth);
+  const usable = Number.isFinite(requested) && requested > 0 ? requested : canvas * 0.8;
+  return Math.max(120, Math.min(canvas * 0.92, usable) - pad);
+}
+
+export function packWordsIntoLines(words = [], style = {}, maxWidth = 860, scale = 1) {
+  const items = (words || [])
+    .map((word, index) => ({
+      index,
+      display: typeof word === "string" ? word : String(word?.display || "").trim(),
+      word: typeof word === "string" ? { display: word } : word,
+    }))
+    .filter((item) => item.display);
+  if (!items.length) return [];
+  const fontSize = Math.max(10, Number(style.fontSize || 54) * Math.max(0.2, Number(scale || 1)));
+  const gap = wordGap(style, fontSize);
+  const lines = [];
+  let start = 0;
+  let width = 0;
+  items.forEach((item, offset) => {
+    const wordWidth = estimatedWordWidth(item.display, style, fontSize, scale);
+    const candidate = offset > start ? width + gap + wordWidth : wordWidth;
+    if (offset > start && candidate > maxWidth) {
+      lines.push({
+        startIndex: start,
+        endIndex: offset,
+        words: items.slice(start, offset).map((entry) => entry.word),
+      });
+      start = offset;
+      width = wordWidth;
+    } else {
+      width = candidate;
+    }
+  });
+  lines.push({
+    startIndex: start,
+    endIndex: items.length,
+    words: items.slice(start).map((entry) => entry.word),
+  });
+  return lines;
 }
 
 export function wrapWords(text, style, maxWidth, maxLines = 2, scale = 1) {

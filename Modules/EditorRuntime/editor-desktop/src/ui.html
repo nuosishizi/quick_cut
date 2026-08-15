@@ -2023,6 +2023,7 @@
       }
       .captionobject .caption-line {
         display: block;
+        white-space: nowrap;
       }
       .captionobject[data-animation="line-pulse"] .caption-line {
         transform-origin: center;
@@ -6532,7 +6533,9 @@
                     caption.start +
                     ((caption.end - caption.start) * (index + 1)) / list.length,
                 }));
-        const breaks = captionLineBreaks(words, state.captionTransform.width, state.captionLines);
+        const breaks = Array.isArray(caption.lineBreaks) && caption.lineBreaks.length
+          ? caption.lineBreaks.filter((index) => index > 0 && index < words.length)
+          : captionLineBreaks(words, state.captionTransform.width, state.captionLines);
         const wordHtml = (slice, offset = 0) => slice.map((word, localIndex) => {
             const index = localIndex + offset;
             const status =
@@ -6587,37 +6590,20 @@
           measures = words.map((word) => estimatedCaptionWordWidth(word.display)),
           total = measures.reduce((sum, value) => sum + value, 0) + gap * (words.length - 1);
         if (total <= width) return [];
-        if (limit === 2) {
-          let best = 1,
-            bestScore = Infinity;
-          for (let index = 1; index < words.length; index += 1) {
-            if (words.length >= 4 && (index === 1 || index === words.length - 1)) continue;
-            const left = measures.slice(0, index).reduce((sum, value) => sum + value, 0) + gap * (index - 1),
-              right = measures.slice(index).reduce((sum, value) => sum + value, 0) + gap * (words.length - index - 1),
-              overflow = Math.max(0, left - width) + Math.max(0, right - width),
-              score = overflow * 8 + Math.abs(left - right);
-            if (score < bestScore) {
-              bestScore = score;
-              best = index;
-            }
-          }
-          return [best];
-        }
         const breaks = [];
-        let start = 0;
         let lineWidth = 0;
+        let lineStart = 0;
         for (let index = 0; index < words.length; index += 1) {
           const wordWidth = measures[index];
-          const candidate = lineWidth ? lineWidth + gap + wordWidth : wordWidth;
-          if (lineWidth && candidate > width && breaks.length < limit - 1) {
+          const candidate = index > lineStart ? lineWidth + gap + wordWidth : wordWidth;
+          if (index > lineStart && candidate > width && breaks.length < limit - 1) {
             breaks.push(index);
-            start = index;
+            lineStart = index;
             lineWidth = wordWidth;
           } else {
             lineWidth = candidate;
           }
         }
-        void start;
         return breaks;
       }
       function visualZ(key) {
@@ -6662,7 +6648,7 @@
         element.style.width = `${resolved * px}px`;
         element.style.maxWidth = "none";
         element.style.boxSizing = "border-box";
-        element.style.whiteSpace = element.id === "captionPreview" && captionWrapLineLimit(state.captionLines) <= 1 ? "nowrap" : "normal";
+        element.style.whiteSpace = "normal";
         element.style.overflowWrap = "normal";
         element.style.wordBreak = "normal";
       }
@@ -6707,9 +6693,7 @@
         el.style.letterSpacing = `${Number(s.letterSpacing || 0) * px}px`;
         el.style.wordSpacing = `${Number(s.wordSpacing || 0) * px}px`;
         el.style.lineHeight = String(Number(s.lineHeight || 1.15));
-        el.style.whiteSpace = el.id === "captionPreview" && captionWrapLineLimit(state.captionLines) <= 1
-          ? "nowrap"
-          : "pre-line";
+        el.style.whiteSpace = "normal";
         el.style.textAlign = s.textAlign || "center";
         el.style.color = s.color || "#fff";
         el.style.setProperty("--active", s.highlight || s.highlightColor || "#ffd21f");
@@ -11432,10 +11416,11 @@
           if (objectDrag.framePending) cancelAnimationFrame(objectDrag.framePending);
           applyObjectDragMove(e.clientX, e.clientY);
           if (objectDrag.needsCaptionReflow) {
-            const caption = state.captions.find(
-              (item) => state.currentTime >= item.start && state.currentTime <= item.end,
-            );
-            renderCaptionWords($("captionPreview"), caption);
+            void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
+              state.captions = captions;
+              renderAll();
+              queueAutosave();
+            });
           }
           updateTransformInspector(objectDrag.obj);
           $("centerGuide").classList.remove("on");
@@ -11800,7 +11785,19 @@
         const el = $(id);
         if (el) {
           el.oninput = syncAndRefresh;
-          el.onchange = syncAndRefresh;
+          el.onchange = () => {
+            syncAndRefresh();
+            if (
+              ["fontSize", "letterSpacing", "wordSpacing", "backgroundWidth", "backgroundEnabled"].includes(id) &&
+              (state.captions || []).length
+            ) {
+              void applyCaptionGrouping(state.captions, state.captionLines).then((captions) => {
+                state.captions = captions;
+                renderAll();
+                queueAutosave();
+              });
+            }
+          };
         }
       }
       document.querySelectorAll("[data-text-align]").forEach((button) => {
@@ -11817,11 +11814,22 @@
           button.classList.toggle("active", normalizeCaptionLineMode(button.dataset.captionLines) === mode),
         );
       }
+      function captionLayoutPayload(mode) {
+        return {
+          captionLines: normalizeCaptionLineMode(mode ?? state.captionLines),
+          boxWidth: state.captionTransform?.width,
+          canvasWidth: state.width,
+          scale: state.captionTransform?.scale || 1,
+          style: state.captionStyle,
+        };
+      }
       async function applyCaptionGrouping(captions, mode) {
-        const captionLines = normalizeCaptionLineMode(mode ?? state.captionLines);
         if (!(captions || []).length) return captions || [];
         try {
-          return await nativeCall("regroupCaptions", { captions, captionLines });
+          return await nativeCall("regroupCaptions", {
+            captions,
+            ...captionLayoutPayload(mode),
+          });
         } catch {
           return captions;
         }

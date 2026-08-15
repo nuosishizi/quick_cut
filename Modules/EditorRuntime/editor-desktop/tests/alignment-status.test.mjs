@@ -10,6 +10,7 @@ import {
   regroupProjectCaptions,
   spokenCaptionWords,
 } from "../src/alignment.mjs";
+import { packWordsIntoLines } from "../src/text-layout.mjs";
 import {
   normalizeTranscriptTimebase,
   recoverIncompleteSegments,
@@ -312,6 +313,25 @@ test("caption grouping can switch by punctuation and character limit without rem
   assert.match(multi[0].text, /holy\.$/);
   assert.match(multi[1].text, /casually\.$/);
   assert.ok(one.every((caption) => caption.text.length <= 18 || /[.!?]$/.test(caption.text) || caption.words.length === 1));
+});
+
+test("two-line captions stay within the safe box width and never pack a third line", () => {
+  const words = "Lying lips are abomination to the LORD but they that deal truly"
+    .split(" ")
+    .map((display, index) => ({ display, start: index * 0.2, end: index * 0.2 + 0.18 }));
+  const style = { fontFamily: "Helvetica", fontSize: 58, letterSpacing: 0, wordSpacing: 0 };
+  const boxWidth = 520;
+  const two = regroupCaptions(words, { captionLines: 2, boxWidth, canvasWidth: 1080, style });
+  assert.ok(two.length >= 2);
+  for (const caption of two) {
+    const packed = packWordsIntoLines(caption.words, style, boxWidth, 1);
+    assert.ok(packed.length <= 2, `${caption.text} wrapped to ${packed.length} lines`);
+    assert.ok((caption.lineCount || packed.length) <= 2);
+  }
+  assert.deepEqual(
+    flattenCaptionWords(two).map((word) => word.display),
+    words.map((word) => word.display),
+  );
 });
 
 test("an interrupted realtime transcript recovers later speech instead of losing all captions", () => {
