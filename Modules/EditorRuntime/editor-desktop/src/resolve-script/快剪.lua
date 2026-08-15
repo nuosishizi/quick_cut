@@ -1231,6 +1231,9 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
   local placed = 0
   local hasPreset = presetSettings ~= nil and type(presetSettings) == "table"
 
+  local fnSetInputValues = nil
+  local fnApplyWordTiming = nil
+
   for index, item in ipairs(timelineItems) do
     local caption = captions[index] or {}
     local plainText = tostring(caption.text or "")
@@ -1240,33 +1243,58 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          -- 1. Remove AutoSubs MacroOperator if present so it NEVER runs in the background
           local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
-          if autosubsTool then
-            pcall(function() autosubsTool:Delete() end)
+          if not autosubsTool then
+            local tools = comp:GetToolList(false, "MacroOperator")
+            if tools and tools[1] then autosubsTool = tools[1] end
           end
 
-          -- 2. Locate or create pure native TextPlus tool
-          local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus")
-          if not templateTool then
-            pcall(function() templateTool = comp:AddTool("TextPlus") end)
-          end
+          if autosubsTool and hasPreset then
+            -- 1. Set text on AutoSubs Macro
+            pcall(function() autosubsTool:SetInput("Text", plainText) end)
+            pcall(function() autosubsTool:SetInput("StyledText", plainText) end)
 
-          local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+            -- 2. Compile SetInputValues
+            if not fnSetInputValues then
+              local setVals = autosubsTool:GetData("SetInputValues")
+              if setVals and type(setVals) == "string" then
+                local okVal, fn = pcall(loadstring(setVals))
+                if okVal and type(fn) == "function" then
+                  fnSetInputValues = fn
+                end
+              end
+            end
+            if fnSetInputValues then
+              pcall(function() fnSetInputValues(comp, autosubsTool, presetSettings) end)
+            end
 
-          -- 3. Connect TextPlus output to MediaOut1.Input
-          if mediaOut and templateTool then
-            pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
-          end
+            -- 3. Compile ApplyWordTiming
+            if not fnApplyWordTiming then
+              local applyWT = autosubsTool:GetData("ApplyWordTiming")
+              if applyWT and type(applyWT) == "string" then
+                local okWT, fn = pcall(loadstring(applyWT))
+                if okWT and type(fn) == "function" then
+                  fnApplyWordTiming = fn
+                end
+              end
+            end
 
-          -- 4. Apply 100% accurate native styling (Yellow text, Heavy black stroke, Font, Position)
-          if templateTool then
-            apply_style(comp, templateTool, caption, style)
-          end
-
-          -- 5. Attach CharacterLevelStyling modifier and inject frame-accurate highlight keyframes
-          if templateTool then
-            apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
+            -- 4. Calculate frame-accurate word timing and apply keyframes
+            local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
+            local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+            if fnApplyWordTiming then
+              pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
+            end
+          else
+            local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
+            local mediaOut = comp:FindTool("MediaOut1") or comp:FindToolByID("MediaOut")
+            if mediaOut and templateTool then
+              pcall(function() mediaOut:ConnectInput("Input", templateTool) end)
+            end
+            if templateTool then
+              apply_style(comp, templateTool, caption, style)
+              apply_native_cls_keyframes(comp, templateTool, caption, plainText, fps, style)
+            end
           end
         end
       end
