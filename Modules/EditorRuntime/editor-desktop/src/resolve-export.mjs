@@ -33,6 +33,45 @@ export function resolveTimebase(fps = 30) {
   return { num: rounded, den: 1, name: `FFVideoFormat1080p${rounded}` };
 }
 
+export function resolveFormatName(width, height, timebase = resolveTimebase(30)) {
+  const w = Math.max(1, Number(width) || 1080);
+  const h = Math.max(1, Number(height) || 1920);
+  const rateLabel = String(timebase.name || "").replace("FFVideoFormat1080p", "") || String(timebase.num || 30);
+  if (w === 1920 && h === 1080 && timebase.name) return timebase.name;
+  return `FFVideoFormat${w}x${h}p${rateLabel}`;
+}
+
+function assetUid(filePath) {
+  const text = path.resolve(String(filePath || "asset"));
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const hex = (hash >>> 0).toString(16).padStart(8, "0");
+  const extra = String(text.length).padStart(4, "0").slice(-4);
+  return `${hex}-A11E-41C0-8000-${hex}${extra}`.slice(0, 36);
+}
+
+function assetElement(id, filePath, options = {}) {
+  const name = xmlEscape(options.name || path.basename(String(filePath || "media")));
+  const src = xmlEscape(fileUrl(filePath));
+  const hasVideo = options.hasVideo !== false;
+  const hasAudio = options.hasAudio !== false;
+  const extras = [];
+  if (options.audioRate) extras.push(`audioRate="${Number(options.audioRate)}"`);
+  if (options.audioChannels) extras.push(`audioChannels="${Number(options.audioChannels)}"`);
+  return `    <asset id="${id}" name="${name}" uid="${assetUid(filePath)}" src="${src}" start="0s" duration="${options.duration || "3600s"}" hasVideo="${hasVideo ? 1 : 0}" hasAudio="${hasAudio ? 1 : 0}" format="${options.format || "r1"}" videoSources="${hasVideo ? 1 : 0}" audioSources="${hasAudio ? 1 : 0}"${extras.length ? ` ${extras.join(" ")}` : ""}>
+      <media-rep kind="original-media" src="${src}"/>
+    </asset>`;
+}
+
+function overlapTimes(start, end, parent) {
+  const left = Math.max(Number(start || 0), Number(parent?.start || 0));
+  const right = Math.min(Number(end || 0), Number(parent?.end || 0));
+  return right - left > 0.02 ? { start: left, end: right } : null;
+}
+
 export function fcpxTime(seconds, timebase) {
   const frames = Math.max(0, Math.round(Number(seconds || 0) * timebase.num / timebase.den));
   return `${frames * timebase.den}/${timebase.num}s`;
@@ -655,10 +694,12 @@ function textStyleDef(id, styled, color) {
               </text-style-def>`;
 }
 
-function titleBlock(name, clip, timebase, styled, start, end, textXml, styleXml) {
-  const offset = Math.max(0, start - Number(clip.start || 0));
-  const duration = Math.max(0.04, end - start);
-  return `            <title ref="r3" name="${xmlName(name)}" lane="1" offset="${fcpxTime(offset, timebase)}" duration="${fcpxTime(duration, timebase)}" start="3600s">
+function titleBlock(name, clip, timebase, styled, start, end, textXml, styleXml, lane = 1) {
+  const span = overlapTimes(start, end, clip);
+  if (!span) return "";
+  const offset = span.start - Number(clip.start || 0);
+  const duration = span.end - span.start;
+  return `            <title ref="r3" name="${xmlName(name)}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" duration="${fcpxTime(duration, timebase)}" start="3600s">
               <param name="Position" key="9999/999166631/999166633/1/100/101" value="${styled.x.toFixed(1)} ${(-styled.y).toFixed(1)}"/>
               <param name="Alignment" key="9999/999166631/999166633/2/354/1002961760/401" value="1 (Center)"/>
               <text>
@@ -669,39 +710,41 @@ ${styleXml}
 }
 
 function titleXml(caption, clip, timebase, styleId, input) {
-  return captionCueWindows(caption, input).map((cue, index) => {
-    if (cue.activeIndex < 0) {
-      const text = xmlEscape(cue.styled.lines.join("\n")).replace(/\n/g, "&#13;");
+  return captionCueWindows(caption, input)
+    .map((cue, index) => {
+      if (cue.activeIndex < 0) {
+        const text = xmlEscape(cue.styled.lines.join("\n")).replace(/\n/g, "&#13;");
+        return titleBlock(
+          cue.styled.lines[0],
+          clip,
+          timebase,
+          cue.styled,
+          cue.start,
+          cue.end,
+          `                <text-style ref="${styleId}">${text}</text-style>`,
+          textStyleDef(styleId, cue.styled, cue.styled.color),
+        );
+      }
+      const spans = cue.words.map((item, wordIndex) => {
+        const ref = wordIndex === cue.activeIndex ? `${styleId}h${index}` : `${styleId}b${index}`;
+        const gap = item.breakAfter ? "&#13;" : wordIndex < cue.words.length - 1 ? " " : "";
+        return `                <text-style ref="${ref}">${xmlEscape(item.display)}${gap}</text-style>`;
+      });
       return titleBlock(
-        cue.styled.lines[0],
+        `${cue.styled.lines[0]} · ${cue.words[cue.activeIndex].display}`,
         clip,
         timebase,
         cue.styled,
         cue.start,
         cue.end,
-        `                <text-style ref="${styleId}">${text}</text-style>`,
-        textStyleDef(styleId, cue.styled, cue.styled.color),
+        spans.join("\n"),
+        [
+          textStyleDef(`${styleId}b${index}`, cue.styled, cue.styled.color),
+          textStyleDef(`${styleId}h${index}`, cue.styled, cue.highlight),
+        ].join("\n"),
       );
-    }
-    const spans = cue.words.map((item, wordIndex) => {
-      const ref = wordIndex === cue.activeIndex ? `${styleId}h${index}` : `${styleId}b${index}`;
-      const gap = item.breakAfter ? "&#13;" : wordIndex < cue.words.length - 1 ? " " : "";
-      return `                <text-style ref="${ref}">${xmlEscape(item.display)}${gap}</text-style>`;
-    });
-    return titleBlock(
-      `${cue.styled.lines[0]} · ${cue.words[cue.activeIndex].display}`,
-      clip,
-      timebase,
-      cue.styled,
-      cue.start,
-      cue.end,
-      spans.join("\n"),
-      [
-        textStyleDef(`${styleId}b${index}`, cue.styled, cue.styled.color),
-        textStyleDef(`${styleId}h${index}`, cue.styled, cue.highlight),
-      ].join("\n"),
-    );
-  });
+    })
+    .filter(Boolean);
 }
 
 function flattenCaptions(captions = [], input = {}) {
@@ -867,6 +910,59 @@ ${spots.join("\n")}
 `;
 }
 
+function clipTimeMap(clip, timebase) {
+  const timeline = Number(clip.end) - Number(clip.start);
+  const source = Number(clip.sourceEnd) - Number(clip.sourceStart);
+  if (!Number.isFinite(timeline) || !Number.isFinite(source) || Math.abs(timeline - source) < 0.02) {
+    return "";
+  }
+  return `            <timeMap>
+              <timept time="0s" value="0s" interp="smooth2"/>
+              <timept time="${fcpxTime(timeline, timebase)}" value="${fcpxTime(source, timebase)}" interp="smooth2"/>
+            </timeMap>`;
+}
+
+function adjustTransformXml(item = {}) {
+  const x = Number(item.x || 0);
+  const y = Number(item.y || 0);
+  const scale = Number(item.scale ?? 1);
+  const rotation = Number(item.rotation || 0);
+  const opacity = Number(item.opacity ?? 1);
+  const parts = [];
+  if (x || y || Math.abs(scale - 1) > 0.001 || rotation) {
+    parts.push(
+      `            <adjust-transform position="${x.toFixed(1)} ${(-y).toFixed(1)}" scale="${scale} ${scale}" rotation="${rotation}"/>`,
+    );
+  }
+  if (opacity < 0.999) {
+    parts.push(`            <adjust-blend amount="${Math.max(0, Math.min(1, opacity)).toFixed(3)}"/>`);
+  }
+  return parts.join("\n");
+}
+
+function volumeXml(item = {}) {
+  const volume = Number(item.volume ?? 1);
+  if (!Number.isFinite(volume) || Math.abs(volume - 1) < 0.01) return "";
+  const db = 20 * Math.log10(Math.max(0.0001, volume));
+  return `            <adjust-volume amount="${db.toFixed(1)}dB"/>`;
+}
+
+function connectedClipXml(ref, item, parent, timebase, lane, extra = "") {
+  const span = overlapTimes(item.start, item.end, parent);
+  if (!span) return "";
+  const offset = span.start - Number(parent.start || 0);
+  const duration = span.end - span.start;
+  const sourceStart = Math.max(0, Number(item.sourceStart || 0) + (span.start - Number(item.start || 0)));
+  const name = xmlEscape(item.name || path.basename(String(item.path || "clip")));
+  const inner = [adjustTransformXml(item), extra].filter(Boolean).join("\n");
+  if (!inner) {
+    return `            <asset-clip ref="${ref}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" name="${name}" start="${fcpxTime(sourceStart, timebase)}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF"/>`;
+  }
+  return `            <asset-clip ref="${ref}" lane="${lane}" offset="${fcpxTime(offset, timebase)}" name="${name}" start="${fcpxTime(sourceStart, timebase)}" duration="${fcpxTime(duration, timebase)}" tcFormat="NDF">
+${inner}
+            </asset-clip>`;
+}
+
 export function buildResolveFcpxml(input = {}) {
   const videoPath = String(input.inputPath || "");
   if (!videoPath) throw new Error("没有可导出的视频素材。");
@@ -886,44 +982,171 @@ export function buildResolveFcpxml(input = {}) {
       y: caption.y,
     }))
     .filter((caption) => caption.text && caption.end > caption.start);
+  const videoLayers = (input.videoLayers || []).filter((item) => item?.path);
+  const images = (input.images || []).filter((item) => item?.path);
+  const textTitles = (input.titles || []).filter((item) => String(item?.text || "").trim());
+  const audioAssets = (input.audioAssets || []).filter((item) => item?.path);
   const width = Math.max(1, Number(input.width || 1080));
   const height = Math.max(1, Number(input.height || 1920));
+  const formatName = resolveFormatName(width, height, timebase);
+  const audioRate = Math.max(8000, Math.round(Number(input.audioRate || 48000)));
+  const audioChannels = Math.max(1, Math.round(Number(input.audioChannels || 2)));
   const sourceDuration = Math.max(
     Number(input.sourceDuration || 0),
     ...clips.map((clip) => clip.sourceEnd),
   );
-  const sequenceDuration = Math.max(...clips.map((clip) => clip.end));
+  const sequenceDuration = Math.max(
+    0,
+    ...clips.map((clip) => clip.end),
+    ...captions.map((caption) => caption.end),
+    ...videoLayers.map((item) => Number(item.end || 0)),
+    ...images.map((item) => Number(item.end || 0)),
+    ...textTitles.map((item) => Number(item.end || 0)),
+    ...audioAssets.map((item) => Number(item.end || 0)),
+  );
   const projectName = xmlEscape(input.projectName || "快剪导出");
-  const assetName = xmlEscape(path.basename(videoPath));
-  const usedCaptions = new Set();
-  const clipXml = clips.map((clip, index) => {
+  const extraAssets = [];
+  let nextId = 4;
+  const assetByPath = new Map([[path.resolve(videoPath), "r2"]]);
+  const registerAsset = (filePath, options = {}) => {
+    const key = path.resolve(String(filePath || ""));
+    if (assetByPath.has(key)) return assetByPath.get(key);
+    const id = `r${nextId}`;
+    nextId += 1;
+    assetByPath.set(key, id);
+    extraAssets.push(
+      assetElement(id, filePath, {
+        name: options.name || path.basename(filePath),
+        duration: fcpxTime(Math.max(10, Number(options.sourceDuration || 60)), timebase),
+        hasVideo: options.hasVideo,
+        hasAudio: options.hasAudio,
+        audioRate: options.hasAudio ? audioRate : undefined,
+        audioChannels: options.hasAudio ? audioChannels : undefined,
+      }),
+    );
+    return id;
+  };
+  for (const layer of videoLayers) {
+    registerAsset(layer.path, {
+      hasVideo: true,
+      hasAudio: true,
+      sourceDuration: Number(layer.sourceEnd || layer.end || 60),
+    });
+  }
+  for (const image of images) {
+    registerAsset(image.path, { hasVideo: true, hasAudio: false, sourceDuration: 3600 });
+  }
+  for (const audio of audioAssets) {
+    registerAsset(audio.path, {
+      hasVideo: false,
+      hasAudio: true,
+      sourceDuration: Math.max(10, Number(audio.sourceEnd) || Number(audio.end || 0) - Number(audio.start || 0) || 60),
+    });
+  }
+
+  const spineItems = [];
+  let cursor = 0;
+  for (const clip of clips) {
+    if (clip.start > cursor + 0.02) spineItems.push({ kind: "gap", start: cursor, end: clip.start });
+    spineItems.push({ kind: "clip", start: clip.start, end: clip.end, clip });
+    cursor = clip.end;
+  }
+  if (sequenceDuration > cursor + 0.02) {
+    spineItems.push({ kind: "gap", start: cursor, end: sequenceDuration });
+  }
+
+  const spineXml = spineItems.map((item, spineIndex) => {
     const nested = [];
     captions.forEach((caption, captionIndex) => {
-      if (usedCaptions.has(captionIndex)) return;
-      const overlap =
-        Math.min(clip.end, caption.end) - Math.max(clip.start, caption.start);
-      if (overlap <= 0.02) return;
-      usedCaptions.add(captionIndex);
-      const titles = titleXml(caption, clip, timebase, `ts${captionIndex + 1}`, input);
-      if (titles.length) nested.push(...titles);
+      nested.push(
+        ...titleXml(caption, item, timebase, `s${spineIndex}c${captionIndex}`, input),
+      );
     });
+    textTitles.forEach((title, titleIndex) => {
+      const styled = normalizeCaptionStyle(title.style || input.captionStyle || {}, title, {
+        width,
+        height,
+      });
+      const block = titleBlock(
+        title.text,
+        item,
+        timebase,
+        styled,
+        title.start,
+        title.end,
+        `                <text-style ref="ot${spineIndex}t${titleIndex}">${xmlEscape(title.text).replace(/\n/g, "&#13;")}</text-style>`,
+        textStyleDef(`ot${spineIndex}t${titleIndex}`, styled, styled.color),
+        2,
+      );
+      if (block) nested.push(block);
+    });
+    videoLayers.forEach((layer, layerIndex) => {
+      const xml = connectedClipXml(
+        registerAsset(layer.path, { hasVideo: true, hasAudio: true }),
+        { ...layer, name: layer.name || path.basename(layer.path) },
+        item,
+        timebase,
+        3 + layerIndex,
+      );
+      if (xml) nested.push(xml);
+    });
+    images.forEach((image, imageIndex) => {
+      const xml = connectedClipXml(
+        registerAsset(image.path, { hasVideo: true, hasAudio: false }),
+        { ...image, name: image.name || path.basename(image.path) },
+        item,
+        timebase,
+        20 + imageIndex,
+      );
+      if (xml) nested.push(xml);
+    });
+    audioAssets.forEach((audio, audioIndex) => {
+      const xml = connectedClipXml(
+        registerAsset(audio.path, { hasVideo: false, hasAudio: true }),
+        { ...audio, name: audio.name || path.basename(audio.path) },
+        item,
+        timebase,
+        -(1 + audioIndex),
+        volumeXml(audio),
+      );
+      if (xml) nested.push(xml);
+    });
+    if (item.kind === "clip") {
+      const mapped = clipTimeMap(item.clip, timebase);
+      if (mapped) nested.push(mapped);
+    }
     const inner = nested.length ? `\n${nested.join("\n")}\n          ` : "";
-    return `          <asset-clip ref="r2" offset="${fcpxTime(clip.start, timebase)}" name="${xmlEscape(clip.name)}" start="${fcpxTime(clip.sourceStart, timebase)}" duration="${fcpxTime(clip.end - clip.start, timebase)}" tcFormat="NDF">${inner}</asset-clip>`;
+    if (item.kind === "gap") {
+      return inner
+        ? `          <gap name="空隙" offset="${fcpxTime(item.start, timebase)}" duration="${fcpxTime(item.end - item.start, timebase)}">${inner}</gap>`
+        : `          <gap name="空隙" offset="${fcpxTime(item.start, timebase)}" duration="${fcpxTime(item.end - item.start, timebase)}"/>`;
+    }
+    const clip = item.clip;
+    return `          <asset-clip ref="r2" offset="${fcpxTime(clip.start, timebase)}" name="${xmlEscape(clip.name)}" start="${fcpxTime(clip.sourceStart, timebase)}" duration="${fcpxTime(clip.end - clip.start, timebase)}" tcFormat="NDF" audioRole="dialogue">${inner}</asset-clip>`;
   });
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE fcpxml>
 <fcpxml version="1.9">
   <resources>
-    <format id="r1" name="${timebase.name}" frameDuration="${timebase.den}/${timebase.num}s" width="${width}" height="${height}" colorSpace="1-1-1 (Rec. 709)"/>
-    <asset id="r2" name="${assetName}" src="${xmlEscape(fileUrl(videoPath))}" start="0s" duration="${fcpxTime(sourceDuration, timebase)}" hasVideo="1" hasAudio="1" format="r1" videoSources="1" audioSources="1"/>
+    <format id="r1" name="${formatName}" frameDuration="${timebase.den}/${timebase.num}s" width="${width}" height="${height}" colorSpace="1-1-1 (Rec. 709)"/>
+${assetElement("r2", videoPath, {
+    name: path.basename(videoPath),
+    duration: fcpxTime(sourceDuration, timebase),
+    hasVideo: true,
+    hasAudio: true,
+    audioRate,
+    audioChannels,
+  })}
     <effect id="r3" name="Basic Title" uid=".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti"/>
+${extraAssets.join("\n")}
   </resources>
   <library>
     <event name="快剪">
       <project name="${projectName}">
         <sequence format="r1" duration="${fcpxTime(sequenceDuration, timebase)}" tcStart="0s" tcFormat="NDF">
           <spine>
-${clipXml.join("\n")}
+${spineXml.join("\n")}
           </spine>
         </sequence>
       </project>

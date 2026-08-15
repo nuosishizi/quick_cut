@@ -412,20 +412,26 @@
         box-shadow: 0 0 0 1px var(--blue);
       }
       .preset .captionobject {
-        display: inline-block;
-        max-width: 96%;
-        font-size: 13px;
-        line-height: 1.2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        max-width: 98%;
+        font-size: 11.5px;
+        line-height: 1.1;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        transform: scale(0.90);
+        overflow: visible;
+      }
+      .preset .captionobject .word {
+        display: inline-block;
+        white-space: nowrap;
+        margin-right: 0;
       }
       .preset .small {
         font-size: 11px;
         color: var(--muted);
-        margin-top: 3px;
-        max-width: 90%;
+        margin-top: 4px;
+        max-width: 96%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2525,7 +2531,7 @@
         <button class="btn" id="clearProjectCache">清理缓存</button>
         <button class="btn danger" id="resetProject">重置工程</button>
         <button class="btn" id="sendResolve" title="把当前字幕铺到达芬奇当前时间线。需先在达芬奇点 工作区 → 脚本 → 快剪">发送到达芬奇</button>
-        <button class="btn" id="exportResolve" title="导出达芬奇时间线文件和带颜色、字号、描边、换行、逐字高亮的字幕">导出达芬奇文件</button>
+        <button class="btn" id="exportResolve" title="导出达芬奇可直接导入的时间线（画面、剪辑、字幕和叠加轨）">导出达芬奇文件</button>
         <button class="btn primary" id="exportVideo">导出视频</button>
       </header>
       <section class="workspace">
@@ -2616,6 +2622,13 @@
               </div>
               <div class="divider"></div>
               <div class="sectiontitle">字幕断行列表</div>
+              <button
+                class="btn primary wide"
+                id="addNewCaptionFromSub"
+                style="margin-bottom: 8px; font-weight: 750;"
+              >
+                ➕ 在当前位置新建字幕
+              </button>
               <div class="row field">
                 <button class="btn grow" id="selectAllCaptions">全选</button>
                 <button class="btn primary grow" id="replaceCaptionsFromScript">按当前断行替换</button>
@@ -2624,6 +2637,13 @@
               <div class="caption-inspector-list" id="captionInspectorList"></div>
             </div>
             <div class="sidepage" id="side-style">
+              <button
+                class="btn primary wide"
+                id="addNewCaptionFromStyle"
+                style="margin-bottom: 12px; font-weight: 750;"
+              >
+                ➕ 在当前位置新建字幕
+              </button>
               <div class="sectiontitle">字幕样式</div>
               <div class="presets" id="presetList"></div>
               <button
@@ -2790,14 +2810,10 @@
                     >
                   </div>
                   <div class="field">
-                    <div class="fieldhead"><span>字体</span></div>
-                    <select class="select font-visual-select" id="fontFamilySelect">
+                    <div class="fieldhead"><span>系统字体</span></div>
+                    <select class="select" id="fontFamilySelect" style="font-size:13px;height:34px;">
                       <option value="Helvetica">Helvetica</option>
-                    </select><div id="fontVisualBrowser" class="font-visual-browser"></div>
-                    <div class="row" style="margin-top: 7px">
-                      <button class="btn wide" id="loadFont">本地加载（可多选）</button>
-                    </div>
-                    <div class="small" style="margin-top:6px">字体库分为“系统字体”和“本地加载”；可一次选择多个 TTF / OTF / TTC 字体。</div>
+                    </select>
                   </div>
                   <div class="field">
                     <div class="fieldhead"><span>字形</span></div>
@@ -6638,6 +6654,8 @@
         el.style.whiteSpace = "pre-line";
         el.style.textAlign = s.textAlign || "center";
         el.style.color = s.color || "#fff";
+        el.style.setProperty("--active", s.highlight || s.highlightColor || "#ffd21f");
+        el.classList.toggle("no-highlight", s.highlightEnabled === false);
         // CSS strokes are geometrically centred on the glyph.  Painting the
         // fill after a stroke that is twice as wide hides the inner half and
         // leaves the requested width entirely outside the character.
@@ -9979,6 +9997,8 @@
               width: state.width,
               height: state.height,
               fps: state.video.frameRate || 30,
+              audioRate: state.video.audioSampleRate || state.video.sampleRate || 48000,
+              audioChannels: state.video.audioChannels || 2,
               clips: mainClips(),
               captions: (state.captions || []).map((caption) => ({
                 text: caption.text,
@@ -9993,10 +10013,51 @@
               captionStyle: state.captionStyle,
               captionTransform: state.captionTransform,
               removals: state.removals,
+              videoLayers: (state.videoLayers || []).map((item) => ({
+                path: item.path,
+                name: item.name,
+                start: item.start,
+                end: item.end,
+                sourceStart: item.sourceStart || 0,
+                x: item.x || 0,
+                y: item.y || 0,
+                scale: item.scale || 1,
+                rotation: item.rotation || 0,
+                opacity: item.opacity ?? 1,
+              })),
+              images: (state.images || []).map((item) => ({
+                path: item.path,
+                name: item.name,
+                start: item.start,
+                end: item.end,
+                x: item.x || 0,
+                y: item.y || 0,
+                scale: item.scale || 1,
+                rotation: item.rotation || 0,
+                opacity: item.opacity ?? 1,
+              })),
+              titles: (state.titles || []).map((item) => ({
+                text: item.text,
+                start: item.start,
+                end: item.end,
+                x: item.x || 0,
+                y: item.y || 0,
+                width: item.width,
+                scale: item.scale || 1,
+                style: item.style,
+              })),
+              audioAssets: (state.audioAssets || []).map((item) => ({
+                path: item.path,
+                name: item.name,
+                start: item.start,
+                end: item.end,
+                sourceStart: item.sourceStart || 0,
+                volume: item.volume ?? 1,
+              })),
             }),
           );
           toast(
-            `已导出达芬奇时间线 ${result.clipCount} 段。时间线用 Import → Timeline 打开 fcpxml。字幕对话框请选 xml / ttml / dfxp（带颜色、字号、描边、换行和逐字高亮），不要选 srt 或 ass`,
+            `已导出达芬奇时间线 ${result.clipCount} 段。用「文件 → 导入时间线」打开 fcpxml，画面、剪辑和字幕会一起进来。`,
           );
         } catch (error) {
           toast(error.message);
@@ -11566,22 +11627,30 @@
         }
       };
       function refreshLiveTextStyle(reflow = true) {
-        const style = currentStyle();
+        const style = currentStyle() || state.captionStyle;
         if (!style) return;
         if (state.selected.type === "caption" || state.captions.length) {
-          const caption = state.captions.find((item) => item.id === state.selected.id) ||
-            state.captions.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
+          const caption = state.captions.find((item) => state.currentTime >= item.start && state.currentTime <= item.end) ||
+            state.captions.find((item) => item.id === state.selected.id) ||
+            state.captions[0];
           const preview = $("captionPreview");
-          if (caption && reflow) renderCaptionWords(preview, caption);
-          applyTextStyle(preview, state.captionStyle, ($("frame").clientWidth || 1) / Math.max(1, state.width));
-          applyTextBoxWidth(preview, state.captionTransform.width, ($("frame").clientWidth || 1) / Math.max(1, state.width));
+          if (preview) {
+            if (caption && reflow) renderCaptionWords(preview, caption);
+            if (caption) updateCaptionWordStates(preview);
+            preview.style.setProperty("--active", state.captionStyle.highlight || "#ffd21f");
+            preview.classList.toggle("no-highlight", state.captionStyle.highlightEnabled === false);
+            const px = ($("frame").clientWidth || 1) / Math.max(1, state.width);
+            applyTextStyle(preview, state.captionStyle, px);
+            applyTextBoxWidth(preview, state.captionTransform.width, px);
+          }
         }
         if (state.selected.type === "text") {
           const obj = currentObject();
           const el = $("frame").querySelector(`[data-type="text"][data-id="${state.selected.id}"]`);
           if (el && obj) {
-            applyTextStyle(el, obj.style || state.captionStyle, ($("frame").clientWidth || 1) / Math.max(1, state.width));
-            applyTextBoxWidth(el, obj.width, ($("frame").clientWidth || 1) / Math.max(1, state.width));
+            const px = ($("frame").clientWidth || 1) / Math.max(1, state.width);
+            applyTextStyle(el, obj.style || state.captionStyle, px);
+            applyTextBoxWidth(el, obj.width, px);
           }
         }
         updateSelectionBox();
@@ -11616,8 +11685,8 @@
         "backgroundY",
         "backgroundRadius",
       ]) {
-        $(id).oninput = () => {
-          const s = currentStyle();
+        const syncAndRefresh = () => {
+          const s = currentStyle() || state.captionStyle;
           if (!s) return;
           s.fontSize = Number($("fontSize").value);
           s.fontWeight = Number($("fontWeight").value);
@@ -11629,6 +11698,7 @@
           $("lineHeightOut").textContent = `${Math.round(s.lineHeight * 100)}%`;
           s.color = $("fontColor").value;
           s.highlight = $("highlightColor").value;
+          s.highlightColor = $("highlightColor").value;
           s.highlightEnabled = $("highlightEnabled").checked;
           s.strokeColor = $("strokeColor").value;
           s.stroke = Number($("stroke").value);
@@ -11648,6 +11718,7 @@
           $("glowOut").textContent = s.glow;
           s.backgroundEnabled = $("backgroundEnabled").checked;
           s.background = $("backgroundColor").value;
+          s.backgroundColor = $("backgroundColor").value;
           s.backgroundOpacity = Number($("backgroundOpacity").value) / 100;
           $("backgroundOpacityOut").textContent = `${Math.round(s.backgroundOpacity * 100)}%`;
           s.backgroundWidth = Number($("backgroundWidth").value);
@@ -11656,6 +11727,7 @@
           s.backgroundY = Number($("backgroundY").value);
           s.padding = Math.max(s.backgroundWidth, s.backgroundHeight);
           s.radius = Number($("backgroundRadius").value);
+          s.backgroundRadius = Number($("backgroundRadius").value);
           $("backgroundWidthOut").textContent = s.backgroundWidth;
           $("backgroundHeightOut").textContent = s.backgroundHeight;
           $("backgroundXOut").textContent = s.backgroundX;
@@ -11663,6 +11735,11 @@
           $("backgroundRadiusOut").textContent = s.radius;
           refreshLiveTextStyle(true);
         };
+        const el = $(id);
+        if (el) {
+          el.oninput = syncAndRefresh;
+          el.onchange = syncAndRefresh;
+        }
       }
       document.querySelectorAll("[data-text-align]").forEach((button) => {
         button.onclick = () => {
@@ -11872,96 +11949,86 @@
         toast(`${font.family} 已套用到当前文字属性`);
       }
       function renderFontFamilyOptions() {
-        const select = $("fontFamilySelect"),
-          current = currentStyle()?.fontFamily || "Helvetica",
-          preferredSystem = [
-            { family: "Impact", fullName: "Impact (短视频爆款粗体)", path: "", source: "system" },
-            { family: "Arial Black", fullName: "Arial Black (超粗黑体)", path: "", source: "system" },
-            { family: "Arial", fullName: "Arial (经典无衬线)", path: "", source: "system" },
-            { family: "Helvetica", fullName: "Helvetica", path: "", source: "system" },
-            { family: "Montserrat", fullName: "Montserrat", path: "", source: "system" },
-            { family: "Microsoft YaHei", fullName: "微软雅黑 (Microsoft YaHei)", path: "", source: "system" },
-            { family: "SimHei", fullName: "黑体 (SimHei)", path: "", source: "system" },
-            { family: "PingFang SC", fullName: "苹方 (PingFang SC)", path: "", source: "system" },
-            { family: "HarmonyOS Sans SC", fullName: "鸿蒙黑体 (HarmonyOS Sans)", path: "", source: "system" },
-            { family: "Source Han Sans CN", fullName: "思源黑体 (Source Han Sans)", path: "", source: "system" },
-            { family: "YouYuan", fullName: "幼圆 (YouYuan)", path: "", source: "system" },
-          ],
-          seen = new Set();
-        const unique = (items) => items.filter((font) => {
-          const key = `${font.family}\u0000${font.path || ""}`;
-          if (!font.family || seen.has(key)) return false;
-          seen.add(key); return true;
-        });
-        const systemFonts = unique([
-          ...preferredSystem,
-          ...availableLocalFonts.filter((font) => font.source !== "local"),
-        ]);
-        const localFontsOnly = unique(
-          availableLocalFonts.filter((font) => font.source === "local"),
-        );
+        const select = $("fontFamilySelect");
+        if (!select) return;
+        const current = currentStyle()?.fontFamily || state.captionStyle?.fontFamily || "Helvetica";
+        const systemFonts = [
+          { family: "Impact", fullName: "Impact (短视频爆款粗体)" },
+          { family: "Arial Black", fullName: "Arial Black (超粗黑体)" },
+          { family: "Arial", fullName: "Arial (经典无衬线)" },
+          { family: "Helvetica", fullName: "Helvetica (现代无衬线)" },
+          { family: "Montserrat", fullName: "Montserrat (时尚无衬线)" },
+          { family: "Microsoft YaHei", fullName: "微软雅黑 (Microsoft YaHei)" },
+          { family: "SimHei", fullName: "黑体 (SimHei)" },
+          { family: "PingFang SC", fullName: "苹方 (PingFang SC)" },
+          { family: "HarmonyOS Sans SC", fullName: "鸿蒙黑体 (HarmonyOS Sans)" },
+          { family: "Source Han Sans CN", fullName: "思源黑体 (Source Han Sans)" },
+          { family: "YouYuan", fullName: "幼圆 (YouYuan)" },
+          { family: "KaiTi", fullName: "楷体 (KaiTi)" },
+          { family: "SimSun", fullName: "宋体 (SimSun)" },
+        ];
         select.replaceChildren();
-        const appendGroup = (label, fonts, prefix) => {
-          const group = document.createElement("optgroup");
-          group.label = label;
-          fonts.forEach((font, index) => {
-            const option = document.createElement("option");
-            option.value = `${prefix}-${index}`;
-            option.textContent = font.fullName || font.family;
-            option.dataset.family = font.family;
-            option.dataset.path = font.path || "";
-            option.dataset.source = font.source || prefix;
-            option.style.fontFamily = `'${font.family}', sans-serif`;
-            group.appendChild(option);
-          });
-          if (fonts.length) select.appendChild(group);
-        };
-        appendGroup("系统字体", systemFonts, "system");
-        appendGroup("本地加载", localFontsOnly, "local");
-        syncFontFamilySelection({ fontFamily: current, fontFile: currentStyle()?.fontFile || "" });
-        const selectedFont = [...systemFonts, ...localFontsOnly].find((font) =>
-          font.family === current || (currentStyle()?.fontFile && font.path === currentStyle().fontFile));
-        if (selectedFont) registerFontFace(selectedFont);
-      }
-      function renderVisualFontBrowser() {
-        const browser = $("fontVisualBrowser");
-        if (!browser) return;
-        const fonts = availableLocalFonts.slice(0, 240);
-        browser.innerHTML = fonts.map((font, index) => {
-          registerFontFace(font);
-          const family = escapeHtml(font.family || font.fullName || "Font");
-          return `<button type="button" class="font-visual-item" data-font-index="${index}">
-            <span class="font-visual-name">${family}</span>
-            <span class="font-visual-sample" style="font-family:'${family}',sans-serif">Aa Faith Over Fear</span>
-          </button>`;
-        }).join("");
-        browser.querySelectorAll("[data-font-index]").forEach((button) => {
-          button.onclick = () => {
-            const font = availableLocalFonts[Number(button.dataset.fontIndex)];
-            if (font) applyFontToSelection(font);
-            browser.classList.remove("on");
-          };
+        systemFonts.forEach((font) => {
+          const option = document.createElement("option");
+          option.value = font.family;
+          option.textContent = font.fullName;
+          option.dataset.family = font.family;
+          option.style.fontFamily = `'${font.family}', sans-serif`;
+          if (font.family === current) option.selected = true;
+          select.appendChild(option);
         });
+        select.onchange = () => {
+          const s = currentStyle() || state.captionStyle;
+          if (!s) return;
+          s.fontFamily = select.value;
+          refreshLiveTextStyle(true);
+          renderAll();
+          toast(`已应用字体：${select.value}`);
+        };
       }
 
       function syncFontFamilySelection(style = currentStyle()) {
         const select = $("fontFamilySelect");
         if (!select || !style) return;
-        let option = [...select.options].find(
-          (item) => item.dataset.family === style.fontFamily,
+        const option = [...select.options].find(
+          (item) => item.value === style.fontFamily || item.dataset.family === style.fontFamily,
         );
-        if (!option) {
-          option = document.createElement("option");
-          option.value = `custom-${select.options.length}`;
-          option.textContent = style.fontFamily || "Helvetica";
-          option.dataset.family = style.fontFamily || "Helvetica";
-          option.dataset.path = style.fontFile || "";
-          option.style.fontFamily = `'${option.dataset.family}', sans-serif`;
-          select.appendChild(option);
+        if (option) {
+          select.value = option.value;
         }
-        select.value = option.value;
-        select.style.fontFamily = `'${option.dataset.family}', sans-serif`;
       }
+
+      function handleAddNewCaption() {
+        const curTime = Number(state.currentTime || 0);
+        const start = Math.max(0, curTime);
+        const end = Math.max(start + 0.1, start + 2.0);
+        const newCap = {
+          id: `cap_${Date.now()}`,
+          start,
+          end,
+          text: "点击输入字幕内容",
+          words: [
+            { word: "点击输入字幕内容", start, end, startIndex: 0, endIndex: 8 }
+          ],
+        };
+        state.captions.push(newCap);
+        state.captions.sort((a, b) => a.start - b.start);
+        state.selected = { type: "caption", id: newCap.id };
+        recomputeContentDuration();
+        renderTimeline();
+        renderPreviewObjects();
+        renderCaptionInspector(true);
+        updateInspector();
+        const objTextInput = $("objectText");
+        if (objTextInput) {
+          objTextInput.value = newCap.text;
+          objTextInput.focus();
+          objTextInput.select();
+        }
+        toast("已在当前播放位置新建字幕片段");
+      }
+      if ($("addNewCaptionFromStyle")) $("addNewCaptionFromStyle").onclick = handleAddNewCaption;
+      if ($("addNewCaptionFromSub")) $("addNewCaptionFromSub").onclick = handleAddNewCaption;
       async function loadLocalFonts() {
         try {
           availableLocalFonts = unwrap(await window.native.localFonts()).slice(
