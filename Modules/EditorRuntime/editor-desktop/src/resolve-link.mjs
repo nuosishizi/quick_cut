@@ -109,7 +109,7 @@ export function fusionTextSize(fontSize, canvas = {}) {
   const height = Math.max(320, Number(canvas.height) || 1920);
   const basis = Math.min(width, height);
   const size = Math.max(10, Number(fontSize) || 58);
-  return Math.max(0.028, Math.min(0.16, (size / basis) * 1.08));
+  return Math.max(0.040, Math.min(0.20, (size / basis) * 1.40));
 }
 
 export function fusionCenter(transform = {}, canvas = {}) {

@@ -644,7 +644,7 @@ local function apply_style(comp, tool, item, style)
       tool:SetInput("Style", style.fontStyle)
     end)
   end
-  set_number(tool, "Size", tonumber(style.size) or 0.065)
+  set_number(tool, "Size", tonumber(style.size) or 0.078)
   pcall(function()
     tool:SetInput("Center", { tonumber(style.centerX) or 0.5, tonumber(style.centerY) or 0.22 })
   end)
