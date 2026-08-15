@@ -559,6 +559,7 @@ local function apply_rgb(tool, channel, color, alpha)
   set_number(tool, "Green" .. channel, g)
   set_number(tool, "Blue" .. channel, b)
   set_number(tool, "Alpha" .. channel, a)
+  set_number(tool, "Opacity" .. channel, a)
 end
 
 local function apply_style(comp, tool, item, style)
@@ -592,6 +593,8 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "Enabled2", 1)
     apply_rgb(tool, 2, style.strokeColor, 1)
     set_number(tool, "Thickness2", tonumber(style.stroke) or 0.06)
+  else
+    set_number(tool, "Enabled2", 0)
   end
   if style.shadowEnabled then
     set_number(tool, "Enabled3", 1)
@@ -601,11 +604,13 @@ local function apply_style(comp, tool, item, style)
   end
   if style.backgroundEnabled then
     set_number(tool, "Enabled4", 1)
-    set_number(tool, "ElementShape4", 2) -- Solid Box
-    set_number(tool, "Level4", 0) -- Block level
+    set_number(tool, "ElementShape4", 2) -- 2 = Solid Box
+    set_number(tool, "Level4", 0) -- 0 = Line (full continuous box)
     apply_rgb(tool, 4, style.backgroundColor, style.backgroundOpacity or 0.8)
-    set_number(tool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.04)
-    set_number(tool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.04)
+    set_number(tool, "ExtendHorizontal4", tonumber(style.backgroundExtendX) or 0.05)
+    set_number(tool, "ExtendVertical4", tonumber(style.backgroundExtendY) or 0.05)
+    set_number(tool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.05)
+    set_number(tool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.05)
     set_number(tool, "Round4", tonumber(style.backgroundRound) or 0.25)
     set_number(tool, "Softness4", 0)
   else
@@ -1114,6 +1119,22 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
                   pcall(hlFunc(), comp, autosubsTool)
                 end
               end
+            end
+
+            -- Re-assert Shading 4 Solid Box background if enabled, so macro ApplyHighlight cannot wipe it
+            if style.backgroundEnabled and templateTool then
+              pcall(function()
+                templateTool:SetInput("Enabled4", 1)
+                templateTool:SetInput("ElementShape4", 2) -- Solid Box
+                templateTool:SetInput("Level4", 0) -- Line level (0 = Line, continuous box)
+                apply_rgb(templateTool, 4, style.backgroundColor, style.backgroundOpacity or 0.8)
+                set_number(templateTool, "ExtendHorizontal4", tonumber(style.backgroundExtendX) or 0.05)
+                set_number(templateTool, "ExtendVertical4", tonumber(style.backgroundExtendY) or 0.05)
+                set_number(templateTool, "ExtendX4", tonumber(style.backgroundExtendX) or 0.05)
+                set_number(templateTool, "ExtendY4", tonumber(style.backgroundExtendY) or 0.05)
+                set_number(templateTool, "Round4", tonumber(style.backgroundRound) or 0.25)
+                set_number(templateTool, "Softness4", 0)
+              end)
             end
           end
         end
