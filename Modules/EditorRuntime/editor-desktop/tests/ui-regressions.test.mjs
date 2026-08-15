@@ -365,8 +365,12 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /if \(!model\.ready && !model\.installed\) \{[\s\S]*?groqKeyInput/);
   assert.match(ui, /id="groqKeyInput"/);
   assert.match(ui, /id="speechEngine"/);
-  assert.match(ui, /Gemini 听写/);
+  assert.match(ui, /id="deepgramKeyInput"/);
+  assert.match(ui, /Deepgram Nova-3/);
+  assert.match(ui, /Gemini 听写|Gemini \/ Vertex 听写/);
   assert.match(whisper, /transcribeWithGemini/);
+  assert.match(whisper, /transcribeWithDeepgram/);
+  assert.match(whisper, /api\.deepgram\.com\/v1\/listen/);
   assert.match(whisper, /v1beta\/interactions|completeGeminiMedia/);
   assert.match(whisper, /tightenTranscriptWordTimes\(unique\)/);
   assert.match(ui, /saveGroqApiKey/);

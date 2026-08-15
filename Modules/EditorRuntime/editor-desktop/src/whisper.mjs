@@ -65,6 +65,10 @@ const GROQ_CHUNK_OVERLAP = 1.2;
 const GEMINI_CHUNK_SECONDS = 360;
 const GEMINI_CHUNK_OVERLAP = 1.5;
 const GEMINI_MAX_INLINE_BYTES = 16 * 1024 * 1024;
+const DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen";
+const DEEPGRAM_STT_MODEL = "nova-3";
+const DEEPGRAM_CHUNK_SECONDS = 480;
+const DEEPGRAM_CHUNK_OVERLAP = 1.2;
 
 function groqKeyFile() {
   const directory = path.join(supportRoot(), "secrets");
@@ -119,6 +123,58 @@ export function clearGroqApiKey() {
   return groqKeyStatus();
 }
 
+function deepgramKeyFile() {
+  const directory = path.join(supportRoot(), "secrets");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return path.join(directory, "deepgram-api-key.txt");
+}
+
+export function getDeepgramApiKey() {
+  const fromEnv = String(process.env.DEEPGRAM_API_KEY || "").trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return fs.readFileSync(deepgramKeyFile(), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function deepgramKeyStatus() {
+  const key = getDeepgramApiKey();
+  const configured = key.length >= 16;
+  return {
+    configured,
+    source: String(process.env.DEEPGRAM_API_KEY || "").trim()
+      ? "env"
+      : configured
+        ? "file"
+        : "none",
+    hint: configured ? maskSecret(key) : "",
+  };
+}
+
+export function saveDeepgramApiKey(value) {
+  const key = String(value || "").replace(/\s+/g, "").trim();
+  if (!key) throw new Error("请粘贴 Deepgram API Key。");
+  if (key.length < 16) throw new Error("Deepgram API Key 看起来不完整。");
+  fs.writeFileSync(deepgramKeyFile(), key, { mode: 0o600, encoding: "utf8" });
+  return deepgramKeyStatus();
+}
+
+export function clearDeepgramApiKey() {
+  try {
+    fs.unlinkSync(deepgramKeyFile());
+  } catch {
+    /* already absent */
+  }
+  return deepgramKeyStatus();
+}
+
+function normalizeSpeechEngine(value) {
+  if (value === "gemini" || value === "deepgram" || value === "groq") return value;
+  return "groq";
+}
+
 export function localModelInstalled() {
   return modelFileComplete(modelPath());
 }
@@ -136,13 +192,13 @@ export function loadSpeechSettings() {
   } catch {
     stored = {};
   }
-  return { engine: stored.engine === "gemini" ? "gemini" : "groq" };
+  return { engine: normalizeSpeechEngine(stored.engine) };
 }
 
 export function saveSpeechSettings(input = {}) {
   const current = loadSpeechSettings();
   const next = {
-    engine: input.engine === "gemini" || input.engine === "groq" ? input.engine : current.engine,
+    engine: input.engine ? normalizeSpeechEngine(input.engine) : current.engine,
   };
   fs.writeFileSync(speechSettingsPath(), JSON.stringify(next, null, 2), { mode: 0o600, encoding: "utf8" });
   return speechStatus();
@@ -151,13 +207,19 @@ export function saveSpeechSettings(input = {}) {
 export function speechStatus() {
   const settings = loadSpeechSettings();
   const groq = groqKeyStatus();
+  const deepgram = deepgramKeyStatus();
   const gemini = reviewReady();
   const localInstalled = localModelInstalled();
   const ready =
-    settings.engine === "gemini" ? gemini : groq.configured || localInstalled;
+    settings.engine === "gemini"
+      ? gemini
+      : settings.engine === "deepgram"
+        ? deepgram.configured
+        : groq.configured || localInstalled;
   return {
     engine: settings.engine,
     groq,
+    deepgram,
     gemini: { configured: gemini, model: loadReviewSettings().model || "gemini-3.7-flash" },
     localInstalled,
     ready,
@@ -167,6 +229,7 @@ export function speechStatus() {
 export function canTranscribe() {
   const settings = loadSpeechSettings();
   if (settings.engine === "gemini") return reviewReady();
+  if (settings.engine === "deepgram") return Boolean(getDeepgramApiKey());
   return Boolean(getGroqApiKey()) || localModelInstalled();
 }
 
@@ -176,21 +239,40 @@ export function modelStatus() {
   const partial = `${target}.download`;
   const speech = speechStatus();
   const groq = speech.groq;
+  const deepgram = speech.deepgram;
   const localInstalled = speech.localInstalled;
-  const geminiReady = speech.engine === "gemini" && speech.gemini.configured;
-  const groqReady = speech.engine !== "gemini" && groq.configured;
-  const engine = geminiReady ? "gemini" : groqReady ? "groq" : localInstalled ? "local" : "none";
-  const ready = geminiReady || groqReady || localInstalled;
+  const preferred = speech.engine;
+  const geminiReady = preferred === "gemini" && speech.gemini.configured;
+  const deepgramReady = preferred === "deepgram" && deepgram.configured;
+  const groqReady = preferred === "groq" && groq.configured;
+  const engine = geminiReady
+    ? "gemini"
+    : deepgramReady
+      ? "deepgram"
+      : groqReady
+        ? "groq"
+        : localInstalled && preferred === "groq"
+          ? "local"
+          : "none";
+  const ready = geminiReady || deepgramReady || groqReady || (localInstalled && preferred === "groq");
   return {
     installed: ready,
     localInstalled,
     ready,
     engine,
-    preferredEngine: speech.engine,
+    preferredEngine: preferred,
     groq,
+    deepgram,
     gemini: speech.gemini,
     path: target,
-    name: engine === "gemini" ? "Gemini 听写" : engine === "groq" ? "Groq Whisper" : "Whisper Turbo",
+    name:
+      engine === "gemini"
+        ? "Gemini / Vertex 听写"
+        : engine === "deepgram"
+          ? "Deepgram Nova-3"
+          : engine === "groq"
+            ? "Groq Whisper"
+            : "Whisper Turbo",
     expectedSize: "约 600MB",
     partialBytes: fs.existsSync(partial) ? fs.statSync(partial).size : 0,
   };
@@ -641,6 +723,130 @@ export async function transcribeWithGemini(
     segments,
     fallbackText: segments.map((item) => item.text).join(" "),
   };
+}
+
+export function parseDeepgramTranscription(data, offset = 0) {
+  const shift = Math.max(0, Number(offset || 0));
+  const toSegment = (text, start, end) => {
+    const clean = String(text || "").trim();
+    if (!clean || !Number.isFinite(Number(start))) return null;
+    return {
+      text: clean,
+      start: shift + Number(start),
+      end: Math.max(shift + Number(start) + 0.04, shift + Number(end || start)),
+      timebase: "seconds",
+    };
+  };
+  const alternative = data?.results?.channels?.[0]?.alternatives?.[0] || {};
+  const words = Array.isArray(alternative.words) ? alternative.words : [];
+  const utterances = Array.isArray(data?.results?.utterances) ? data.results.utterances : [];
+  if (words.length) {
+    const output = words
+      .map((word) =>
+        toSegment(word.punctuated_word || word.word || word.text, word.start, word.end),
+      )
+      .filter(Boolean);
+    if (output.length) return output;
+  }
+  if (utterances.length) {
+    const output = utterances
+      .map((row) => toSegment(row.transcript || row.text, row.start, row.end))
+      .filter(Boolean);
+    if (output.length) return output;
+  }
+  const fallback = String(alternative.transcript || data?.transcript || "").trim();
+  return fallback ? [toSegment(fallback, 0, 0.5)].filter(Boolean) : [];
+}
+
+function deepgramHttpError(status, body) {
+  let message = "";
+  try {
+    const parsed = JSON.parse(body);
+    message = String(parsed?.err_msg || parsed?.error || parsed?.message || "").trim();
+  } catch {
+    message = String(body || "").replace(/\s+/g, " ").trim().slice(0, 180);
+  }
+  if (status === 401 || status === 403)
+    return new Error("Deepgram API Key 无效或没有权限，请重新保存。");
+  if (status === 429) return new Error("Deepgram 请求过于频繁，请稍后再试。");
+  if (status === 413) return new Error("音频文件超过 Deepgram 上传限制，请把视频剪短后再匹配。");
+  return new Error(message || `Deepgram 识别失败（${status}）。`);
+}
+
+async function deepgramTranscribeFile(filePath, { signal } = {}) {
+  const key = getDeepgramApiKey();
+  if (!key) throw new Error("还没有保存 Deepgram API Key。");
+  const bytes = await fs.promises.readFile(filePath);
+  const type = String(filePath).toLowerCase().endsWith(".flac") ? "audio/flac" : "audio/wav";
+  const url = new URL(DEEPGRAM_LISTEN_URL);
+  url.searchParams.set("model", DEEPGRAM_STT_MODEL);
+  url.searchParams.set("smart_format", "true");
+  url.searchParams.set("punctuate", "true");
+  url.searchParams.set("utterances", "true");
+  url.searchParams.set("language", "en");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${key}`,
+      "Content-Type": type,
+    },
+    body: bytes,
+    signal,
+  });
+  const body = await response.text();
+  if (!response.ok) throw deepgramHttpError(response.status, body);
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error("Deepgram 返回了无法解析的识别结果。");
+  }
+}
+
+export async function transcribeWithDeepgram(
+  audioPath,
+  { duration = 0, job = null, signal = null } = {},
+) {
+  const totalDuration = Math.max(0.04, Number(duration || 0.04));
+  const needChunks = totalDuration > DEEPGRAM_CHUNK_SECONDS + 20;
+  if (!needChunks) {
+    if (job) job.progress = 0.22;
+    const data = await deepgramTranscribeFile(audioPath, { signal });
+    if (job) job.progress = 0.86;
+    return {
+      segments: parseDeepgramTranscription(data, 0),
+      fallbackText: String(data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || ""),
+    };
+  }
+  const segments = [];
+  const texts = [];
+  const directory = path.dirname(audioPath);
+  let index = 0;
+  for (
+    let start = 0;
+    start < totalDuration;
+    start += DEEPGRAM_CHUNK_SECONDS - DEEPGRAM_CHUNK_OVERLAP, index += 1
+  ) {
+    if (signal?.aborted || job?.state === "cancelled") throw new Error("cancelled");
+    const length = Math.min(DEEPGRAM_CHUNK_SECONDS, totalDuration - start);
+    if (length < 0.25) break;
+    const chunkPath = path.join(directory, `deepgram-chunk-${index}.flac`);
+    await extractAudioSlice(audioPath, chunkPath, start, length);
+    if (job) job.progress = 0.14 + Math.min(0.7, (start / totalDuration) * 0.7);
+    try {
+      const data = await deepgramTranscribeFile(chunkPath, { signal });
+      segments.push(...parseDeepgramTranscription(data, start));
+      const text = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+      if (text) texts.push(String(text));
+    } finally {
+      try {
+        fs.unlinkSync(chunkPath);
+      } catch {
+        /* temp chunk */
+      }
+    }
+  }
+  if (job) job.progress = 0.88;
+  return { segments, fallbackText: texts.join(" ") };
 }
 
 function groqHttpError(status, body) {
@@ -1136,6 +1342,48 @@ async function beginTranscription(job, context) {
     try {
       job.progress = 0.1;
       const transcribed = await transcribeWithGemini(context.wavPath, {
+        duration: context.duration,
+        job,
+        signal: controller.signal,
+      });
+      if (job.state === "cancelled") {
+        context.cleanup();
+        return;
+      }
+      context.cleanup();
+      job.child = null;
+      await finalizeScriptAnalysis(
+        job,
+        transcribed.segments,
+        transcribed.fallbackText,
+        context.duration,
+        context.script,
+        context.removals,
+      );
+      job.controller = null;
+    } catch (error) {
+      context.cleanup();
+      job.child = null;
+      job.controller = null;
+      if (job.state === "cancelled" || error?.name === "AbortError" || error?.message === "cancelled")
+        return;
+      job.state = "failed";
+      job.error = error.message;
+    }
+    return;
+  }
+  if (preferred === "deepgram") {
+    if (!getDeepgramApiKey()) {
+      job.state = "failed";
+      job.error = "听写选了 Deepgram，请先保存 Deepgram API Key。";
+      context.cleanup();
+      return;
+    }
+    const controller = new AbortController();
+    job.controller = controller;
+    try {
+      job.progress = 0.1;
+      const transcribed = await transcribeWithDeepgram(context.wavPath, {
         duration: context.duration,
         job,
         signal: controller.signal,

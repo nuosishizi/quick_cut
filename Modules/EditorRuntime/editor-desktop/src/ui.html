@@ -2486,6 +2486,7 @@
               <label class="field"><span class="small">用谁听写</span>
                 <select class="select" id="speechEngine">
                   <option value="groq">Groq Whisper</option>
+                  <option value="deepgram">Deepgram Nova-3</option>
                   <option value="gemini">Gemini / Vertex 听写</option>
                 </select>
               </label>
@@ -2501,6 +2502,20 @@
                 <div class="row" style="margin-top: 7px">
                   <button class="btn primary grow" id="saveGroqKey">保存 Groq Key</button>
                   <button class="btn" id="clearGroqKey">清除</button>
+                </div>
+              </div>
+              <div id="deepgramSpeechSettings" style="display:none">
+                <input
+                  class="input"
+                  id="deepgramKeyInput"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="粘贴 Deepgram API Key"
+                />
+                <div class="row" style="margin-top: 7px">
+                  <button class="btn primary grow" id="saveDeepgramKey">保存 Deepgram Key</button>
+                  <button class="btn" id="clearDeepgramKey">清除</button>
                 </div>
               </div>
               <div class="small" id="speechEngineHint" style="margin-top:7px"></div>
@@ -8622,28 +8637,39 @@
           const engine = s.preferredEngine || s.engine || "groq";
           if ($("speechEngine")) $("speechEngine").value = engine;
           const geminiOn = engine === "gemini";
-          if ($("groqSpeechSettings")) $("groqSpeechSettings").style.display = geminiOn ? "none" : "block";
+          const deepgramOn = engine === "deepgram";
+          if ($("groqSpeechSettings")) $("groqSpeechSettings").style.display = engine === "groq" ? "block" : "none";
+          if ($("deepgramSpeechSettings")) $("deepgramSpeechSettings").style.display = deepgramOn ? "block" : "none";
           if ($("speechEngineHint")) {
             $("speechEngineHint").textContent = geminiOn
               ? "听写走纠正设置里选的接口：Gemini API 或 Vertex。只上传音频。时间戳由模型估算。"
-              : "Groq 用 Whisper 听写，词级时间戳更稳。纠正仍用 Gemini / Vertex。";
+              : deepgramOn
+                ? "Deepgram Nova-3 词级时间戳，适合口播对齐。只上传音频。"
+                : "Groq 用 Whisper 听写。纠正仍用 Gemini / Vertex。";
           }
-          const hint = s.groq?.hint ? `（${s.groq.hint}）` : "";
+          const groqHint = s.groq?.hint ? `（${s.groq.hint}）` : "";
+          const deepgramHint = s.deepgram?.hint ? `（${s.deepgram.hint}）` : "";
           if (s.engine === "gemini") {
             $("modelBox").className = "status good";
             $("modelBox").textContent = `听写：Gemini / Vertex（${s.gemini?.model || "gemini-3.7-flash"}）。纠正也用同一套凭证。`;
+          } else if (s.engine === "deepgram") {
+            $("modelBox").className = "status good";
+            $("modelBox").textContent = `听写：Deepgram Nova-3。纠正：Gemini / Vertex。${deepgramHint}`;
           } else if (s.engine === "groq") {
             $("modelBox").className = "status good";
-            $("modelBox").textContent = `听写：Groq。纠正：Gemini（纠正设置里选接口和模型）。经文说错会禁止导出。${hint}`;
+            $("modelBox").textContent = `听写：Groq。纠正：Gemini（纠正设置里选接口和模型）。经文说错会禁止导出。${groqHint}`;
           } else if (s.localInstalled) {
             $("modelBox").className = "status good";
             $("modelBox").textContent = "本地 Whisper Turbo 已安装，可离线匹配。";
           } else if (geminiOn) {
             $("modelBox").className = "status warn";
             $("modelBox").textContent = "听写选了 Gemini，请先在纠正设置里保存 Key。";
+          } else if (deepgramOn) {
+            $("modelBox").className = "status warn";
+            $("modelBox").textContent = "听写选了 Deepgram，请先保存 Deepgram API Key。";
           } else {
             $("modelBox").className = "status warn";
-            $("modelBox").textContent = "还没有 Key。保存 Groq Key，或改用 Gemini 听写。";
+            $("modelBox").textContent = "还没有 Key。保存 Groq / Deepgram Key，或改用 Gemini 听写。";
           }
         } catch (e) {
           $("modelBox").className = "status error";
@@ -8742,6 +8768,26 @@
         await fillReviewSettings();
         toast("Vertex 设置已保存");
       }
+      async function saveDeepgramKey() {
+        try {
+          unwrap(await window.native.saveDeepgramApiKey($("deepgramKeyInput").value));
+          $("deepgramKeyInput").value = "";
+          await checkModel();
+          toast("Deepgram API Key 已保存");
+        } catch (e) {
+          toast(e.message);
+        }
+      }
+      async function clearDeepgramKey() {
+        try {
+          unwrap(await window.native.clearDeepgramApiKey());
+          $("deepgramKeyInput").value = "";
+          await checkModel();
+          toast("已清除 Deepgram Key");
+        } catch (e) {
+          toast(e.message);
+        }
+      }
       async function saveGroqKey() {
         try {
           unwrap(await window.native.saveGroqApiKey($("groqKeyInput").value));
@@ -8798,11 +8844,15 @@
         try {
           const model = unwrap(await window.native.modelStatus());
           if (!model.ready && !model.installed) {
-            if ((model.preferredEngine || model.engine) === "gemini") {
+            const preferred = model.preferredEngine || model.engine;
+            if (preferred === "gemini") {
               toast("请先在纠正设置里保存 Gemini API Key，或改用 Vertex 并保存 Key / 服务账号");
               openReviewSettings();
+            } else if (preferred === "deepgram") {
+              toast("请先保存 Deepgram API Key");
+              $("deepgramKeyInput")?.focus();
             } else {
-              toast("请先保存 Groq API Key，或把听写改成 Gemini");
+              toast("请先保存 Groq API Key，或把听写改成 Deepgram / Gemini");
               $("groqKeyInput")?.focus();
             }
             return;
@@ -11715,10 +11765,13 @@
       $("reviewSettingsCancel").onclick = () => $("reviewSettingsModal").classList.remove("on");
       $("saveGroqKey").onclick = saveGroqKey;
       $("clearGroqKey").onclick = clearGroqKey;
+      $("saveDeepgramKey").onclick = saveDeepgramKey;
+      $("clearDeepgramKey").onclick = clearDeepgramKey;
       $("speechEngine").onchange = async () => {
         unwrap(await window.native.saveSpeechSettings({ engine: $("speechEngine").value }));
         await checkModel();
-        toast($("speechEngine").value === "gemini" ? "听写已改为 Gemini / Vertex" : "听写已改为 Groq");
+        const labels = { gemini: "Gemini / Vertex", deepgram: "Deepgram", groq: "Groq" };
+        toast(`听写已改为 ${labels[$("speechEngine").value] || "Groq"}`);
       };
       $("groqKeyInput").addEventListener("keydown", (event) => {
         if (event.key === "Enter") {

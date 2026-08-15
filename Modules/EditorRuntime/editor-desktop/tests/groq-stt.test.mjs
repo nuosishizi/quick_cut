@@ -11,12 +11,15 @@ delete process.env.GROQ_API_KEY;
 const {
   clearGroqApiKey,
   groqKeyStatus,
+  parseDeepgramTranscription,
   parseGeminiTranscription,
   parseGroqTranscription,
   parseTimestampSeconds,
   tightenTranscriptWordTimes,
+  saveDeepgramApiKey,
   saveGroqApiKey,
   saveSpeechSettings,
+  clearDeepgramApiKey,
   modelStatus,
   canTranscribe,
 } = await import("../src/whisper.mjs");
@@ -121,6 +124,47 @@ test("Groq trailing silence is not kept on the previous sentence", () => {
   assert.ok(tightened[0].end <= 185.4);
   assert.ok(tightened[1].start < 185.7);
   assert.ok(tightened[1].start >= tightened[0].end);
+});
+
+test("Deepgram word timestamps become alignment segments", () => {
+  const segments = parseDeepgramTranscription(
+    {
+      results: {
+        channels: [
+          {
+            alternatives: [
+              {
+                transcript: "hello world",
+                words: [
+                  { word: "hello", punctuated_word: "Hello", start: 0.08, end: 0.32 },
+                  { word: "world", punctuated_word: "world.", start: 0.32, end: 0.8 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    10,
+  );
+  assert.equal(segments.length, 2);
+  assert.equal(segments[0].text, "Hello");
+  assert.equal(segments[0].start, 10.08);
+  assert.equal(segments[1].text, "world.");
+});
+
+test("Deepgram key can be selected as the speech engine", () => {
+  const saved = saveDeepgramApiKey("  dg_test_quickcut_deepgram_key  ");
+  assert.equal(saved.configured, true);
+  assert.match(saved.hint, /^dg_t••••/);
+  const switched = saveSpeechSettings({ engine: "deepgram" });
+  assert.equal(switched.engine, "deepgram");
+  assert.equal(canTranscribe(), true);
+  const status = modelStatus();
+  assert.equal(status.preferredEngine, "deepgram");
+  assert.equal(status.engine, "deepgram");
+  clearDeepgramApiKey();
+  assert.equal(canTranscribe(), false);
 });
 
 test("speech engine can switch to Gemini without a Groq key", () => {
