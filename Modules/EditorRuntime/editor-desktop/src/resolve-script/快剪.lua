@@ -672,9 +672,9 @@ local function apply_style(comp, tool, item, style)
     local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
     local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
     local bgA = tonumber(style.backgroundOpacity) or 0.94
-    local extX = tonumber(style.backgroundExtendX) or 0.12
-    local extY = tonumber(style.backgroundExtendY) or 0.06
-    local round = tonumber(style.backgroundRound) or 0.5
+    local extX = math.max(0.18, tonumber(style.backgroundExtendX) or 0.22)
+    local extY = math.max(0.08, tonumber(style.backgroundExtendY) or 0.12)
+    local round = math.min(0.28, tonumber(style.backgroundRound) or 0.22)
 
     set_number(tool, "SelectElement", 2)
     set_number(tool, "Enabled2", 1)

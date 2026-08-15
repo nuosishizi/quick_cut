@@ -168,9 +168,9 @@ export function fusionBackground(style = {}) {
     enabled: true,
     color,
     opacity,
-    extendX: Math.max(0.01, Math.min(0.35, (paddingX / fontSize) * 0.25)),
-    extendY: Math.max(0.01, Math.min(0.35, (paddingY / fontSize) * 0.25)),
-    round: Math.max(0, Math.min(1, radius / 28)),
+    extendX: Math.max(0.12, Math.min(0.40, (paddingX / fontSize) * 0.45)),
+    extendY: Math.max(0.06, Math.min(0.30, (paddingY / fontSize) * 0.30)),
+    round: Math.max(0, Math.min(0.30, (radius / 65))),
   };
 }
 
