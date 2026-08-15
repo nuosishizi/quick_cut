@@ -63,6 +63,43 @@ test("one wrong phrase becomes one exact delete gap and later words re-anchor", 
   assert.ok(review[0].end - review[0].start < 4);
 });
 
+test("mid-sentence reread with a timestamp hole is marked for cutting", () => {
+  const script = "We're treating as ordinary something He calls holy.";
+  const aligned = alignScript({
+    segments: [
+      { text: "We're treating", start: 0, end: 0.6 },
+      { text: "as ordinary something He calls holy", start: 2.1, end: 4.4 },
+    ],
+    script,
+    duration: 5,
+  });
+  const hole = aligned.issues.find(
+    (issue) => issue.falseStartGap || (issue.type === "repeat" && issue.confirmedCut && issue.start >= 0.5),
+  );
+  assert.ok(hole);
+  assert.equal(hole.confirmedCut, true);
+  assert.ok(hole.end - hole.start > 0.8);
+  const review = buildReviewCaptions(aligned.issues, aligned.expected, 5);
+  assert.ok(review.some((item) => item.action === "cut" && item.end - item.start > 0.8));
+});
+
+test("a partial reread of the previous words is a repeat", () => {
+  const aligned = alignScript({
+    segments: [{
+      text: "We're treating as We're treating as ordinary something He calls holy",
+      start: 0,
+      end: 5,
+    }],
+    script: "We're treating as ordinary something He calls holy.",
+    duration: 5,
+  });
+  assert.ok(
+    aligned.issues.some(
+      (issue) => issue.type === "repeat" || (issue.type === "extra" && issue.confirmedCut),
+    ),
+  );
+});
+
 test("a repeated phrase is removable without turning the rest of the manuscript red", () => {
   const aligned = alignScript({
     segments: [{

@@ -982,6 +982,85 @@ function recoverManuscriptFirstASR(operations) {
 }
 
 
+function phraseWordList(value) {
+  return String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function looksLikeRestart(phrase, before) {
+  const extra = phraseWordList(phrase);
+  const prev = phraseWordList(before);
+  if (extra.length < 2 || prev.length < 2) return false;
+  if (before.endsWith(phrase) || phrase.endsWith(before) || before.startsWith(phrase)) return true;
+  for (let count = Math.min(4, extra.length, prev.length); count >= 2; count -= 1) {
+    const tail = prev.slice(-count).join(" ");
+    const head = extra.slice(0, count).join(" ");
+    if (tail && (tail === head || phrase.startsWith(`${tail} `) || phrase.endsWith(` ${tail}`)))
+      return true;
+  }
+  return false;
+}
+
+function sentenceContinues(display) {
+  return !/[.!?…]["'”’)]*$/.test(String(display || "").trim());
+}
+
+function collectFalseStartGapIssues(operations = []) {
+  const issues = [];
+  let last = -1;
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (
+      !["match", "near"].includes(operation.type) ||
+      !operation.spoken ||
+      !operation.expected
+    )
+      continue;
+    if (last >= 0) {
+      const previous = operations[last];
+      const between = operations.slice(last + 1, index).some(
+        (item) =>
+          item.type !== "filler" &&
+          (item.spoken || (item.expected && item.type !== "missing")),
+      );
+      const gap =
+        Number(operation.spoken.start || 0) - Number(previous.spoken.end || 0);
+      if (
+        !between &&
+        gap >= 0.55 &&
+        gap <= 3.2 &&
+        sentenceContinues(previous.expected.display)
+      ) {
+        const start = Number(previous.spoken.end || 0);
+        const end = Number(operation.spoken.start || start + 0.04);
+        issues.push({
+          id: crypto.randomUUID(),
+          type: "repeat",
+          label: "没读完又重来",
+          spokenText: "没读完又重读",
+          expectedText: formatDisplayWords([previous.expected, operation.expected]),
+          start,
+          end: Math.max(start + 0.08, end),
+          suggested: true,
+          severity: "high",
+          strict: !!(previous.expected.strict || operation.expected.strict),
+          scripture: !!(previous.expected.strict || operation.expected.strict),
+          confirmedCut: true,
+          confirmedError: false,
+          repeatKeepLater: false,
+          earlierOperationIndexes: [],
+          laterOperationIndexes: [],
+          falseStartGap: true,
+        });
+      }
+    }
+    last = index;
+  }
+  return issues;
+}
+
 function joinedNorm(words = []) {
   return words.map((word) => String(word?.norm || "")).filter(Boolean).join(" ");
 }
@@ -1157,17 +1236,18 @@ export function alignScript({ segments, script, duration = 0 }) {
         // this spoken phrase belongs to the upcoming repeated manuscript text and
         // must be preserved, not treated as an accidental re-read.
         issueType = "semantic";
-      } else if (before.endsWith(phrase)) {
+      } else if (before.endsWith(phrase) || looksLikeRestart(phrase, before)) {
         issueType = "repeat";
-        if (before.endsWith(phrase)) {
-          const candidate = [];
-          for (let opIndex = start - 1; opIndex >= 0 && candidate.length < spokenGroup.length; opIndex -= 1) {
-            const op = operations[opIndex];
-            if (op.spoken && op.expected && ["match", "near"].includes(op.type)) candidate.unshift(opIndex);
-            else if (op.spoken && !["filler"].includes(op.type)) break;
-          }
-          const candidatePhrase = candidate.map((opIndex) => operations[opIndex].expected?.norm).filter(Boolean).join(" ");
-          if (candidate.length === spokenGroup.length && candidatePhrase === phrase) { repeatKeepLater = true; earlierOperationIndexes = candidate; }
+        const candidate = [];
+        for (let opIndex = start - 1; opIndex >= 0 && candidate.length < spokenGroup.length; opIndex -= 1) {
+          const op = operations[opIndex];
+          if (op.spoken && op.expected && ["match", "near"].includes(op.type)) candidate.unshift(opIndex);
+          else if (op.spoken && !["filler"].includes(op.type)) break;
+        }
+        const candidatePhrase = candidate.map((opIndex) => operations[opIndex].expected?.norm).filter(Boolean).join(" ");
+        if (candidate.length && (candidatePhrase === phrase || looksLikeRestart(phrase, candidatePhrase))) {
+          repeatKeepLater = true;
+          earlierOperationIndexes = candidate;
         }
       } else {
         const boundedBefore = operations
@@ -1281,6 +1361,7 @@ export function alignScript({ segments, script, duration = 0 }) {
     }
     issues.push(issue);
   }
+  issues.push(...collectFalseStartGapIssues(operations));
   return { spoken, expected, operations, issues };
 }
 
