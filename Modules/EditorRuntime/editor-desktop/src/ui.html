@@ -3496,42 +3496,47 @@
       </div>
     </div>
     <div class="modal" id="pauseCutModal">
-      <div class="dialog newdialog" style="max-width:480px">
-        <h2>✂ 剪辑气口设置（停顿与杂音切除）</h2>
-        <p class="small">参考专业剪辑引擎：智能识别讲话停顿、卡壳与持续环境底噪，一键切除并自动对齐音画。</p>
-        <label class="field"><span class="small">最小停顿阈值（超过此时长判定为气口）</span>
-          <div class="row">
-            <input class="range grow" id="pauseMinDuration" type="range" min="30" max="300" step="5" value="80" />
-            <output class="small" id="pauseMinDurationOut" style="min-width:54px; text-align:right">0.80 秒</output>
-          </div>
-          <span class="small" style="color:var(--text-muted)">建议 0.6 ~ 1.2 秒。长停顿、思考间隙将被精准切除。</span>
-        </label>
-        <label class="field" style="margin-top:10px"><span class="small">前后呼吸留白（句首句尾保留安全缓冲）</span>
-          <div class="row">
-            <input class="range grow" id="pauseBuffer" type="range" min="5" max="40" step="1" value="15" />
-            <output class="small" id="pauseBufferOut" style="min-width:54px; text-align:right">0.15 秒</output>
-          </div>
-          <span class="small" style="color:var(--text-muted)">保留自然呼吸起伏，防止切得太紧或吞字。</span>
-        </label>
-        <label class="field" style="margin-top:10px"><span class="small">环境底噪过滤灵敏度（自适应空调/风扇杂音）</span>
-          <div class="row">
-            <input class="range grow" id="pauseSensitivity" type="range" min="10" max="95" step="5" value="65" />
-            <output class="small" id="pauseSensitivityOut" style="min-width:54px; text-align:right">65%</output>
-          </div>
-          <span class="small" style="color:var(--text-muted)">即使停顿中有微弱房间底噪、麦克风电流或杂音，也能准确判定切除。</span>
-        </label>
-        <label class="field" style="display:flex; align-items:center; justify-content:space-between; margin-top:12px">
-          <div>
-            <span class="small" style="font-weight:500">同步剪除字幕间长空白停顿</span>
-            <div class="small" style="color:var(--text-muted)">对文稿匹配中两句之间的长无声/杂音区域一并波纹切除</div>
-          </div>
-          <input type="checkbox" id="pauseTrimCaptionGaps" checked style="width:18px; height:18px" />
-        </label>
-        <div id="pauseAnalysisSummary" class="status" style="display:none; margin-top:10px"></div>
-        <div class="dialogactions" style="margin-top:14px">
-          <button class="btn" id="pauseCutCancel">关闭</button>
-          <button class="btn" id="analyzePauseBtn">重新分析</button>
-          <button class="btn primary" id="applyPauseCutBtn">一键剪除气口</button>
+      <div class="dialog newdialog resolve-silence-dialog" style="max-width:440px; background:#1c1e22; border:1px solid #33383f; box-shadow:0 20px 48px rgba(0,0,0,0.6); padding:20px 24px">
+        <h2 style="font-size:16px; font-weight:600; color:#e1e5eb; margin-bottom:18px; letter-spacing:0.5px">移除无声部分</h2>
+        
+        <div class="resolve-param-row" style="display:grid; grid-template-columns:85px 1fr 72px 28px; align-items:center; gap:10px; margin-bottom:14px">
+          <span style="color:#b2b8c2; font-size:13px; text-align:right">阈值</span>
+          <input class="range" id="pauseThresholdDb" type="range" min="-60.0" max="-10.0" step="0.5" value="-25.0" style="margin:0" />
+          <input class="input" id="pauseThresholdDbInput" type="number" step="0.5" min="-60" max="-10" value="-25.0" style="text-align:right; padding:4px 8px; font-size:13px; height:28px; background:#131518; border:1px solid #383e46; border-radius:4px" />
+          <span style="color:#8a929e; font-size:13px">dB</span>
+        </div>
+
+        <div class="resolve-param-row" style="display:grid; grid-template-columns:85px 1fr 72px 28px; align-items:center; gap:10px; margin-bottom:14px">
+          <span style="color:#b2b8c2; font-size:13px; text-align:right">头部之前</span>
+          <input class="range" id="pauseHeadFrames" type="range" min="0" max="30" step="1" value="0" style="margin:0" />
+          <input class="input" id="pauseHeadFramesInput" type="number" step="1" min="0" max="30" value="0" style="text-align:right; padding:4px 8px; font-size:13px; height:28px; background:#131518; border:1px solid #383e46; border-radius:4px" />
+          <span style="color:#8a929e; font-size:13px">帧</span>
+        </div>
+
+        <div class="resolve-param-row" style="display:grid; grid-template-columns:85px 1fr 72px 28px; align-items:center; gap:10px; margin-bottom:14px">
+          <span style="color:#b2b8c2; font-size:13px; text-align:right">尾部之后</span>
+          <input class="range" id="pauseTailFrames" type="range" min="0" max="30" step="1" value="0" style="margin:0" />
+          <input class="input" id="pauseTailFramesInput" type="number" step="1" min="0" max="30" value="0" style="text-align:right; padding:4px 8px; font-size:13px; height:28px; background:#131518; border:1px solid #383e46; border-radius:4px" />
+          <span style="color:#8a929e; font-size:13px">帧</span>
+        </div>
+
+        <div class="resolve-param-row" style="display:grid; grid-template-columns:85px 1fr 72px 28px; align-items:center; gap:10px; margin-bottom:16px">
+          <span style="color:#b2b8c2; font-size:13px; text-align:right">最小剥离时长</span>
+          <input class="range" id="pauseMinFrames" type="range" min="1" max="60" step="1" value="2" style="margin:0" />
+          <input class="input" id="pauseMinFramesInput" type="number" step="1" min="1" max="60" value="2" style="text-align:right; padding:4px 8px; font-size:13px; height:28px; background:#131518; border:1px solid #383e46; border-radius:4px" />
+          <span style="color:#8a929e; font-size:13px">帧</span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; margin-left:95px; margin-bottom:20px">
+          <input type="checkbox" id="pauseCrossfade" checked style="width:16px; height:16px; cursor:pointer; accent-color:#1f83ff" />
+          <label for="pauseCrossfade" style="color:#c5cbd4; font-size:13px; cursor:pointer; margin:0">音频交叉淡变</label>
+        </div>
+
+        <div id="pauseAnalysisSummary" class="status" style="display:none; margin-bottom:14px; font-size:12px"></div>
+
+        <div class="dialogactions" style="display:flex; justify-content:center; gap:18px; margin-top:10px">
+          <button class="btn" id="pauseCutCancel" style="min-width:96px; padding:7px 18px; border-radius:5px; background:#292c31; border:1px solid #3e444d; color:#c5cbd4">取消</button>
+          <button class="btn primary" id="applyPauseCutBtn" style="min-width:96px; padding:7px 18px; border-radius:5px; background:#1f83ff; border:none; color:#ffffff; font-weight:600">移除</button>
         </div>
       </div>
     </div>
@@ -8320,32 +8325,56 @@
           }
       }
       function currentPauseCutOptions() {
-        const minPause = Number($("pauseMinDuration")?.value || 80) / 100;
-        const buffer = Number($("pauseBuffer")?.value || 15) / 100;
-        const sensitivity = Number($("pauseSensitivity")?.value || 65) / 100;
+        const fps = Math.max(1, Number(state.fps || state.video?.fps || 25));
+        const thresholdDb = Number($("pauseThresholdDb")?.value || -25.0);
+        const headFrames = Math.max(0, Number($("pauseHeadFrames")?.value || 0));
+        const tailFrames = Math.max(0, Number($("pauseTailFrames")?.value || 0));
+        const minFrames = Math.max(1, Number($("pauseMinFrames")?.value || 2));
+        const crossfade = $("pauseCrossfade")?.checked !== false;
+
+        const preRollSec = headFrames / fps;
+        const postRollSec = tailFrames / fps;
+        const minDurationSec = minFrames / fps;
+
         return {
-          keepSeconds: Math.max(0.1, buffer * 2),
-          minPauseSeconds: Math.max(0.2, minPause),
-          edgeKeepSeconds: Math.max(0.05, buffer),
-          sensitivity: sensitivity,
-          trimCaptionGaps: $("pauseTrimCaptionGaps")?.checked !== false,
+          thresholdDb: thresholdDb,
+          preRollSeconds: preRollSec,
+          postRollSeconds: postRollSec,
+          minDurationSeconds: minDurationSec,
+          headFrames: headFrames,
+          tailFrames: tailFrames,
+          minFrames: minFrames,
+          crossfade: crossfade,
+          edgeKeepSeconds: Math.max(0.04, preRollSec),
+          minPauseSeconds: minDurationSec,
         };
       }
-      function syncPauseCutSettingsUI() {
-        if ($("pauseMinDurationOut"))
-          $("pauseMinDurationOut").textContent = `${(Number($("pauseMinDuration").value) / 100).toFixed(2)} 秒`;
-        if ($("pauseBufferOut"))
-          $("pauseBufferOut").textContent = `${(Number($("pauseBuffer").value) / 100).toFixed(2)} 秒`;
-        if ($("pauseSensitivityOut"))
-          $("pauseSensitivityOut").textContent = `${$("pauseSensitivity").value}%`;
+      function syncPauseCutSettingsUI(source = "range") {
+        const fps = Math.max(1, Number(state.fps || state.video?.fps || 25));
+        if (source === "range") {
+          if ($("pauseThresholdDbInput")) $("pauseThresholdDbInput").value = Number($("pauseThresholdDb").value).toFixed(1);
+          if ($("pauseHeadFramesInput")) $("pauseHeadFramesInput").value = $("pauseHeadFrames").value;
+          if ($("pauseTailFramesInput")) $("pauseTailFramesInput").value = $("pauseTailFrames").value;
+          if ($("pauseMinFramesInput")) $("pauseMinFramesInput").value = $("pauseMinFrames").value;
+        } else {
+          if ($("pauseThresholdDb")) $("pauseThresholdDb").value = $("pauseThresholdDbInput").value;
+          if ($("pauseHeadFrames")) $("pauseHeadFrames").value = $("pauseHeadFramesInput").value;
+          if ($("pauseTailFrames")) $("pauseTailFrames").value = $("pauseTailFramesInput").value;
+          if ($("pauseMinFrames")) $("pauseMinFrames").value = $("pauseMinFramesInput").value;
+        }
       }
-      for (const id of ["pauseMinDuration", "pauseBuffer", "pauseSensitivity"]) {
-        const el = $(id);
-        if (el) el.oninput = syncPauseCutSettingsUI;
+      for (const id of ["pauseThresholdDb", "pauseHeadFrames", "pauseTailFrames", "pauseMinFrames"]) {
+        const rangeEl = $(id);
+        if (rangeEl) rangeEl.oninput = () => syncPauseCutSettingsUI("range");
+        const inputEl = $(`${id}Input`);
+        if (inputEl) {
+          inputEl.oninput = () => syncPauseCutSettingsUI("input");
+          inputEl.onchange = () => syncPauseCutSettingsUI("input");
+        }
       }
       function openPauseCutSettingsModal() {
-        syncPauseCutSettingsUI();
-        $("pauseAnalysisSummary").style.display = "none";
+        syncPauseCutSettingsUI("range");
+        if ($("pauseAnalysisSummary")) $("pauseAnalysisSummary").style.display = "none";
         $("pauseCutModal").classList.add("on");
       }
       function closePauseCutSettingsModal() {
@@ -8358,33 +8387,6 @@
           if (e.target === $("pauseCutModal")) closePauseCutSettingsModal();
         };
       }
-      if ($("analyzePauseBtn"))
-        $("analyzePauseBtn").onclick = async () => {
-          if (!state.video) {
-            toast("请先导入视频");
-            return;
-          }
-          const btn = $("analyzePauseBtn");
-          btn.disabled = true;
-          btn.textContent = "分析中…";
-          try {
-            const opts = currentPauseCutOptions();
-            const result = unwrap(
-              await window.native.analyzePauses({
-                path: state.video.path,
-                options: opts,
-              }),
-            );
-            const summaryEl = $("pauseAnalysisSummary");
-            summaryEl.style.display = "block";
-            summaryEl.textContent = `分析结果：找到 ${result.pauses.length} 处停顿气口，剪除后预计缩短 ${formatTime(result.removals.reduce((acc, r) => acc + (r.duration || 0), 0))}`;
-          } catch (e) {
-            toast(e.message);
-          } finally {
-            btn.disabled = false;
-            btn.textContent = "重新分析";
-          }
-        };
       if ($("applyPauseCutBtn"))
         $("applyPauseCutBtn").onclick = async () => {
           closePauseCutSettingsModal();
