@@ -32,6 +32,13 @@
 ### 5. 驱动内部高亮引擎生成关键帧
 - 通过 `ApplyWordTiming(comp, autosubsTool, wordTiming)` 驱动生成每个单词精确起止帧的变色关键帧。
 
+### 6. 整句背景必须写在 Text+ Element 5（禁止占用 AutoSubs 1–4）
+- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。
+- `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，因此整句背景绝不能写在 Element 4。
+- 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_autosubs_sentence_background`，只用 Element 5 画整句/整行圆角底。
+- **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
+- **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
+
 ---
 ## 二、 ASR 语音听写与文稿对齐铁律（严禁擅自过滤）
 
@@ -78,5 +85,6 @@
 1. 严禁颠倒达芬奇 AutoSubs 宏 5 步时序闭环；
 2. 严禁关闭 Deepgram 的 `filler_words` 参数；
 3. 严禁在 `cutScriptIssue` / `cutReviewSegment` 中添加破坏性的 `end = nextKept` 贪婪外扩；
-4. 严禁破坏 ASS 贝塞尔圆角绘图与音频 `concat` 导出图架构。
+4. 严禁破坏 ASS 贝塞尔圆角绘图与音频 `concat` 导出图架构；
+5. 严禁用 AutoSubs Element 2 / Element 4 画整句字幕背景；整句底只能写在 Element 5，且必须在 ApplyWordTiming 之后。
 

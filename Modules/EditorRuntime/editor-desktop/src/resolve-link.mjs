@@ -409,6 +409,7 @@ export function buildResolveSendJob(input = {}) {
       backgroundExtendX: background.extendX,
       backgroundExtendY: background.extendY,
       backgroundRound: background.round,
+      backgroundMode: String(firstStyle.backgroundMode || "block"),
       centerX: center.centerX,
       centerY: center.centerY,
       align: firstStyle.textAlign === "left" ? 0 : firstStyle.textAlign === "right" ? 2 : 1,

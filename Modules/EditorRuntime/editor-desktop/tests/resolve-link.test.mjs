@@ -43,6 +43,9 @@ test("bundled Resolve script has AutoSubs dynamic template engine and text fallb
   assert.match(lua, /write_progress/);
   assert.match(lua, /notify_user/);
   assert.match(lua, /快剪已连接达芬奇/);
+  assert.match(lua, /apply_autosubs_sentence_background/);
+  assert.match(lua, /Enabled5/);
+  assert.match(lua, /fnApplyWordTiming\(comp, autosubsTool, wordTiming\)[\s\S]*apply_autosubs_sentence_background/);
 });
 
 test("font and color mapping stay readable in Fusion", () => {
@@ -145,6 +148,36 @@ test("send job preserves explicit words timestamps and builds dynamic animation 
   assert.equal(job.style.highlightEnabled, true);
   assert.equal(job.presetSettings.FadeEnabled, 1);
   assert.equal(job.presetSettings.PopInEnabled, 0);
+});
+
+test("send job maps sentence background onto AutoSubs Element 5, not word Bubble", () => {
+  const job = buildResolveSendJob({
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    captionStyle: {
+      fontFamily: "Helvetica",
+      fontSize: 58,
+      color: "#ffffff",
+      backgroundEnabled: true,
+      background: "#111111",
+      backgroundOpacity: 0.8,
+      backgroundMode: "line",
+      backgroundWidth: 18,
+      backgroundHeight: 12,
+      backgroundRadius: 10,
+    },
+    captionTransform: { x: 0, y: 538, width: 860, scale: 1 },
+    captions: [{ text: "一句带背景的字幕", start: 0, end: 1.2 }],
+  });
+  assert.equal(job.style.backgroundEnabled, true);
+  assert.equal(job.style.backgroundMode, "line");
+  assert.ok(job.style.backgroundOpacity > 0);
+  assert.ok(Array.isArray(job.style.backgroundColor));
+  assert.equal(job.presetSettings.BubbleEnabled, 1);
+  assert.match(lua, /AutoSubs owns Text\+ 1=Fill 2=Outline 3=Shadow 4=word Bubble/);
+  assert.match(lua, /set_number\(tool, "Enabled5", 1\)/);
+  assert.match(lua, /set_number\(tool, "Type5", 1\)/);
 });
 
 test("install writes the script and caption-bin.drb into Resolve Utility folders", () => {

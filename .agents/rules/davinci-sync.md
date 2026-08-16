@@ -32,8 +32,16 @@
 ### 5. 驱动内部高亮引擎生成关键帧
 - 通过 `ApplyWordTiming(comp, autosubsTool, wordTiming)` 驱动生成每个单词精确起止帧的变色关键帧。
 
+### 6. 整句背景必须写在 Text+ Element 5（禁止占用 AutoSubs 1–4）
+- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。
+- `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，因此整句背景绝不能写在 Element 4。
+- 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_autosubs_sentence_background`，只用 Element 5 画整句/整行圆角底。
+- **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
+- **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
+
 ---
 ## 永久禁令：
 1. 严禁颠倒第 2、3 步的时序（必须先写文本与 WordTiming，再调用 SetInputValues 与 ApplyWordTiming）；
 2. 严禁改动 `to_word_timing` 的单调递增校准；
-3. 严禁随意删除或破坏宏与 TextPlus 的数据绑定链。
+3. 严禁随意删除或破坏宏与 TextPlus 的数据绑定链；
+4. 严禁用 AutoSubs Element 2 / Element 4 画整句字幕背景；整句底只能写在 Element 5，且必须在 ApplyWordTiming 之后。

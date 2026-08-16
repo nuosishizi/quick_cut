@@ -642,6 +642,48 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
   return result
 end
 
+-- AutoSubs owns Text+ 1=Fill 2=Outline 3=Shadow 4=word Bubble.
+-- Sentence background must use Element 5, after ApplyWordTiming.
+local function apply_autosubs_sentence_background(tool, style)
+  if not tool then
+    return
+  end
+  if not style or not style.backgroundEnabled then
+    set_number(tool, "Enabled5", 0)
+    return
+  end
+  local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
+  local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
+  local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
+  local bgA = tonumber(style.backgroundOpacity) or 0.94
+  local extX = math.max(0.04, tonumber(style.backgroundExtendX) or 0.12)
+  local extY = math.max(0.04, tonumber(style.backgroundExtendY) or 0.08)
+  local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
+  local bgMode = tostring(style.backgroundMode or "block")
+  local bgLevel = (bgMode == "line") and 2 or 3
+
+  set_number(tool, "SelectElement", 5)
+  set_number(tool, "Enabled5", 1)
+  set_number(tool, "Element5", 2)
+  set_number(tool, "ElementShape5", 2)
+  set_number(tool, "Type5", 1)
+  set_number(tool, "Thickness5", 1.0)
+  set_number(tool, "Level5", bgLevel)
+  set_number(tool, "Red5", bgR)
+  set_number(tool, "Green5", bgG)
+  set_number(tool, "Blue5", bgB)
+  set_number(tool, "Alpha5", bgA)
+  set_number(tool, "Opacity5", bgA)
+  set_number(tool, "ExtendHorizontal5", extX)
+  set_number(tool, "ExtendVertical5", extY)
+  set_number(tool, "ExtendX5", extX)
+  set_number(tool, "ExtendY5", extY)
+  set_number(tool, "Round5", round)
+  set_number(tool, "Round5X", round)
+  set_number(tool, "Round5Y", round)
+  set_number(tool, "Softness5", 0)
+end
+
 local function apply_style(comp, tool, item, style)
   if not tool then
     return false
@@ -1285,6 +1327,8 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
             if fnApplyWordTiming then
               pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
             end
+
+            apply_autosubs_sentence_background(templateTool or comp:FindTool("Template"), style)
           else
             local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
             local clsTool = comp:FindTool("CharacterLevelStyling1")
