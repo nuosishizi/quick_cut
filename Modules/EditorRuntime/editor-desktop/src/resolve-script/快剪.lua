@@ -814,17 +814,33 @@ local function apply_quickcut_caption_look(comp, style)
   apply_autosubs_sentence_background(template, style)
 end
 
+local function clear_outline(tool)
+  if not tool then
+    return
+  end
+  -- AutoSubs Template default is a magenta outline (Red2=1, Green2≈0.39).
+  -- Always kill it before deciding whether the 快剪 style wants a stroke.
+  set_number(tool, "SelectElement", 2)
+  set_number(tool, "Enabled2", 0)
+  set_number(tool, "Red2", 0)
+  set_number(tool, "Green2", 0)
+  set_number(tool, "Blue2", 0)
+  set_number(tool, "Thickness2", 0)
+  pcall(function()
+    tool:SetInput("OutlineEnabled", 0)
+  end)
+end
+
 local function apply_text_outline(tool, style)
   if not tool or not style then
     return false
   end
   local stroke = tonumber(style.stroke) or 0
-  local hl = style.highlightEnabled
-  local highlightOn = hl ~= false and hl ~= 0
-  if not (style.strokeEnabled or stroke > 0 or highlightOn) then
+  if not (style.strokeEnabled or stroke > 0) then
+    clear_outline(tool)
     return false
   end
-  local strokeThick = stroke > 0 and math.max(0.035, stroke) or 0.055
+  local strokeThick = math.max(0.035, stroke)
   local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
   local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
   local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
@@ -898,6 +914,7 @@ local function apply_style(comp, tool, item, style, mode)
     return false
   end
   mode = mode or "both"
+  clear_outline(tool)
   pcall(function()
     tool:SetInput("Direction", 0)
   end)
@@ -1156,6 +1173,14 @@ local function lock_plain_renderer(comp, tool)
     pcall(function()
       follower:SetAttrs({ TOOLB_PassThrough = true })
     end)
+    clear_outline(follower)
+  end
+  local template = nil
+  pcall(function()
+    template = comp:FindTool("Template")
+  end)
+  if template and template ~= tool then
+    clear_outline(template)
   end
   bind_media_out(comp, tool)
 end

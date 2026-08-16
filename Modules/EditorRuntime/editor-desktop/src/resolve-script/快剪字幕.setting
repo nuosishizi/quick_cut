@@ -21,7 +21,7 @@
 				Alpha1 = Input { Value = 1, },
 				Opacity1 = Input { Value = 1, },
 				Softness1 = Input { Value = 0, },
-				Enabled2 = Input { Value = 1, },
+				Enabled2 = Input { Value = 0, },
 				Element2 = Input { Value = 1, },
 				Type2 = Input { Value = 0, },
 				Red2 = Input { Value = 0, },

@@ -218,6 +218,9 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.match(lua, /find_named_pool_clip/);
   assert.match(lua, /\["快剪Text\+"\] = true/);
   assert.match(lua, /apply_text_outline/);
+  assert.match(lua, /clear_outline/);
+  assert.match(lua, /AutoSubs Template default is a magenta outline/);
+  assert.match(lua, /if not \(style.strokeEnabled or stroke > 0\) then/);
   assert.match(lua, /pick_quickcut_text_tool/);
   assert.match(lua, /style_plain_text_item/);
   assert.match(lua, /ensure_plain_text_plus/);
@@ -243,7 +246,7 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.match(lua, /SetKeyFrames\(keyframes, true\)/);
   assert.equal(fs.existsSync(bundledTitleSettingPath()), true);
   assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /TextPlus/);
-  assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Enabled2 = Input \{ Value = 1/);
+  assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Enabled2 = Input \{ Value = 0/);
   assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Type4 = Input \{ Value = 1/);
   assert.equal(job.titleSettingPath, bundledTitleSettingPath());
 });
