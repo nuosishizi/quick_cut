@@ -642,15 +642,16 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
   return result
 end
 
--- Fusion Text+ Appearance: 0=Text Fill, 1=Border Fill, 2=Text Outline, 3=Border Outline.
--- Border Fill Level: 0=Text (one box), 1=Line, 2=Word, 3=Character.
--- AutoSubs Element 4 is word Bubble (Level 2). Sentence plate must be Element 5,
--- Type 1 + Level 0. Never Type 0 (that paints glyphs) and never Level 2 (per-word pills).
+-- First principle: AutoSubs Template only serializes shading 1-4.
+-- SetInput Enabled5 is a no-op. The only plate that can exist is Element 4.
+-- ApplyHighlight turns Enabled4 off unless highlight is Bubble; reclaim it AFTER that
+-- as Border Fill + Level Text. Word-pill (highlightStyle 3) keeps Element 4.
+-- Appearance: 0=Text Fill, 1=Border Fill. Level: 0=Text, 1=Line, 2=Word, 3=Character.
 local function harden_text_opacity(tool)
   if not tool then
     return
   end
-  for i = 1, 5 do
+  for i = 1, 4 do
     pcall(function()
       tool:ConnectInput("Opacity" .. i, nil)
     end)
@@ -683,8 +684,12 @@ local function apply_autosubs_sentence_background(tool, style)
   if not tool then
     return
   end
+  local highlightStyle = tonumber(style and style.highlightStyle) or 0
+  if highlightStyle == 3 then
+    return
+  end
   if not style or not style.backgroundEnabled then
-    set_number(tool, "Enabled5", 0)
+    set_number(tool, "Enabled4", 0)
     return
   end
   local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
@@ -695,28 +700,27 @@ local function apply_autosubs_sentence_background(tool, style)
   local extY = math.max(0.05, tonumber(style.backgroundExtendY) or 0.10)
   local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
   local bgMode = tostring(style.backgroundMode or "block")
-  -- 0=Text one plate, 1=Line. 2=Word would recreate the per-word yellow pills.
   local bgLevel = (bgMode == "line") and 1 or 0
 
-  set_number(tool, "SelectElement", 5)
-  set_number(tool, "Enabled5", 1)
-  set_number(tool, "Type5", 1)
-  set_number(tool, "Level5", bgLevel)
-  set_number(tool, "Red5", bgR)
-  set_number(tool, "Green5", bgG)
-  set_number(tool, "Blue5", bgB)
-  set_number(tool, "Alpha5", 1.0)
-  set_number(tool, "Opacity5", bgA)
-  set_number(tool, "ExtendHorizontal5", extX)
-  set_number(tool, "ExtendVertical5", extY)
-  set_number(tool, "ExtendX5", extX)
-  set_number(tool, "ExtendY5", extY)
-  set_number(tool, "Round5", round)
-  set_number(tool, "Round5X", round)
-  set_number(tool, "Round5Y", round)
-  set_number(tool, "Softness5", 0)
-  set_number(tool, "SoftnessX5", 0)
-  set_number(tool, "SoftnessY5", 0)
+  set_number(tool, "SelectElement", 4)
+  set_number(tool, "Enabled4", 1)
+  set_number(tool, "Type4", 1)
+  set_number(tool, "Level4", bgLevel)
+  set_number(tool, "Red4", bgR)
+  set_number(tool, "Green4", bgG)
+  set_number(tool, "Blue4", bgB)
+  set_number(tool, "Alpha4", 1.0)
+  set_number(tool, "Opacity4", bgA)
+  set_number(tool, "ExtendHorizontal4", extX)
+  set_number(tool, "ExtendVertical4", extY)
+  set_number(tool, "ExtendX4", extX)
+  set_number(tool, "ExtendY4", extY)
+  set_number(tool, "Round4", round)
+  set_number(tool, "Round4X", round)
+  set_number(tool, "Round4Y", round)
+  set_number(tool, "Softness4", 0)
+  set_number(tool, "SoftnessX4", 0)
+  set_number(tool, "SoftnessY4", 0)
 end
 
 local function apply_quickcut_caption_look(comp, style)
@@ -727,7 +731,7 @@ local function apply_quickcut_caption_look(comp, style)
   apply_autosubs_fill_color(template, style)
   apply_autosubs_fill_color(follower, style)
   if follower then
-    set_number(follower, "Enabled5", 0)
+    set_number(follower, "Enabled4", 0)
   end
   apply_autosubs_sentence_background(template, style)
 end

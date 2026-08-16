@@ -46,7 +46,7 @@ test("bundled Resolve script has AutoSubs dynamic template engine and text fallb
   assert.match(lua, /notify_user/);
   assert.match(lua, /快剪已连接达芬奇/);
   assert.match(lua, /apply_autosubs_sentence_background/);
-  assert.match(lua, /Enabled5/);
+  assert.match(lua, /Enabled4/);
   assert.match(lua, /fnApplyWordTiming\(comp, autosubsTool, wordTiming\)[\s\S]*apply_quickcut_caption_look/);
 });
 
@@ -155,7 +155,7 @@ test("send job preserves explicit words timestamps and builds dynamic animation 
   assert.equal(job.presetSettings.PopInEnabled, 0);
 });
 
-test("send job maps sentence background onto AutoSubs Element 5, not word Bubble", () => {
+test("send job maps sentence background onto Element 4 Border Fill, not a missing Element 5", () => {
   const job = buildResolveSendJob({
     width: 1080,
     height: 1920,
@@ -181,16 +181,15 @@ test("send job maps sentence background onto AutoSubs Element 5, not word Bubble
   assert.ok(Array.isArray(job.style.backgroundColor));
   assert.equal(job.presetSettings.BubbleEnabled, 0);
   assert.equal(job.templateName, "快剪字幕");
-  assert.match(lua, /AutoSubs Element 4 is word Bubble/);
-  assert.match(lua, /set_number\(tool, "Enabled5", 1\)/);
-  assert.match(lua, /set_number\(tool, "Type5", 1\)/);
-  assert.match(lua, /0=Text one plate, 1=Line/);
+  assert.match(lua, /SetInput Enabled5 is a no-op/);
+  assert.match(lua, /set_number\(tool, "Enabled4", 1\)/);
+  assert.match(lua, /set_number\(tool, "Type4", 1\)/);
+  assert.match(lua, /set_number\(tool, "Level4", bgLevel\)/);
   assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);
-  assert.match(lua, /apply_autosubs_fill_color/);
 });
 
-test("word-pill highlight uses AutoSubs Bubble, sentence background stays on Element 5", () => {
+test("word-pill highlight keeps AutoSubs Bubble on Element 4", () => {
   const job = buildResolveSendJob({
     width: 1080,
     height: 1920,

@@ -32,13 +32,12 @@
 ### 5. 驱动内部高亮引擎生成关键帧
 - 通过 `ApplyWordTiming(comp, autosubsTool, wordTiming)` 驱动生成每个单词精确起止帧的变色关键帧。
 
-### 6. 整句背景必须写在 Text+ Element 5（禁止占用 AutoSubs 1–4）
-- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。
-- `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，因此整句背景绝不能写在 Element 4。
-- 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_quickcut_caption_look`。
-- Fusion Text+ 整句底只能是 **Appearance=Border Fill（Type 1）+ Level=Text（0）**。Type 0 是字填充，Level 2 是逐词气泡。
-- AutoSubs 母版 Follower 默认 Softness=1，且卡拉 OK 不能再开 Fade：Fade + Duration 0 + Mode Both 会把整段字淡出，看起来像半透明。
-- 写底之前必须把 Template/Follower 的 Opacity1–5 断开 stretcher 并设为 1，Softness 归 0。
+### 6. 整句背景必须收回 Element 4（母版没有 Element 5）
+- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=Bubble（母版里唯一可画底的层）`。
+- AutoSubs 母版 Text+ **只序列化了 Element 1–4**。对 Element 5 的 SetInput 是空操作，整句底不会出现。
+- 整句底只能在 `ApplyWordTiming` 之后**收回 Element 4**：`Type4=1`（Border Fill）+ `Level4=0`（整句）。Fill 高亮走 Element 1 / CLS，不占用 4。
+- `highlightStyle==3`（word-pill）时 Element 4 仍归词气泡，不得抢。
+- 卡拉 OK 不得开 Fade；写样式前 Opacity 断开 stretcher 并设为 1，Softness 归 0。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
 - **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
 - 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，引擎仍走同一套宏 5 步。
@@ -90,5 +89,5 @@
 2. 严禁关闭 Deepgram 的 `filler_words` 参数；
 3. 严禁在 `cutScriptIssue` / `cutReviewSegment` 中添加破坏性的 `end = nextKept` 贪婪外扩；
 4. 严禁破坏 ASS 贝塞尔圆角绘图与音频 `concat` 导出图架构；
-5. 严禁用 AutoSubs Element 2 / Element 4 画整句字幕背景；整句底只能写在 Element 5，且必须在 ApplyWordTiming 之后。
+5. 严禁对 AutoSubs 母版写 Element 5 当整句底（输入不存在）。Fill 高亮时必须在 ApplyWordTiming 之后把 Element 4 收成 Border Fill + Level Text。
 
