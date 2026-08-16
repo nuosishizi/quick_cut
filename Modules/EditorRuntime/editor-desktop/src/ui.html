@@ -8330,13 +8330,18 @@
       function openPauseCutSettingsModal() {
         syncPauseCutSettingsUI();
         $("pauseAnalysisSummary").style.display = "none";
-        $("pauseCutModal").classList.add("open");
+        $("pauseCutModal").classList.add("on");
       }
       function closePauseCutSettingsModal() {
-        $("pauseCutModal").classList.remove("open");
+        $("pauseCutModal").classList.remove("on");
       }
       if ($("openPauseCutSettings")) $("openPauseCutSettings").onclick = openPauseCutSettingsModal;
       if ($("pauseCutCancel")) $("pauseCutCancel").onclick = closePauseCutSettingsModal;
+      if ($("pauseCutModal")) {
+        $("pauseCutModal").onclick = (e) => {
+          if (e.target === $("pauseCutModal")) closePauseCutSettingsModal();
+        };
+      }
       if ($("analyzePauseBtn"))
         $("analyzePauseBtn").onclick = async () => {
           if (!state.video) {
