@@ -3345,7 +3345,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.5</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.6</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -3797,12 +3797,18 @@
       function normalizeCaptionLineMode(value) {
         const raw = String(value ?? "2").trim().toLowerCase();
         if (raw === "1" || raw === "one" || raw === "single") return 1;
+        if (raw === "3" || raw === "three") return 3;
         if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return "multi";
+        const numeric = Number(raw);
+        if (numeric === 1) return 1;
+        if (numeric === 3) return 3;
+        if (numeric === 0 || numeric >= 4) return "multi";
         return 2;
       }
       function captionWrapLineLimit(value) {
         const mode = normalizeCaptionLineMode(value);
         if (mode === 1) return 1;
+        if (mode === 3) return 3;
         if (mode === "multi") return 8;
         return 2;
       }
@@ -6701,16 +6707,30 @@
           letterSpacing = Number(state.captionStyle.letterSpacing || 0),
           weight = Number(state.captionStyle.fontWeight || 400),
           stroke = Math.max(0, Number(state.captionStyle.stroke || 0)),
-          weightScale = weight >= 800 ? 1.16 : weight >= 600 ? 1.08 : 1,
+          weightScale = weight >= 800 ? 1.2 : weight >= 600 ? 1.1 : 1,
           text = String(display || "");
         let units = 0;
         for (const character of text) {
-          if (/[MW@%]/.test(character)) units += 0.78;
-          else if (/[ilI1'.,:;]/.test(character)) units += 0.34;
-          else if (/[A-Z0-9]/.test(character)) units += 0.62;
-          else units += 0.58;
+          if (/[MW@%#&]/.test(character)) units += 0.8;
+          else if (/[—–―]/.test(character)) units += 0.72;
+          else if (/[ilI1'`.,:;!|]/.test(character)) units += 0.36;
+          else if (/[A-Z0-9]/.test(character)) units += 0.66;
+          else units += 0.62;
         }
-        return units * fontSize * weightScale + Math.max(0, text.length - 1) * letterSpacing + stroke * 1.15;
+        return units * fontSize * weightScale + Math.max(0, text.length - 1) * letterSpacing + stroke * 2;
+      }
+      function estimatedCaptionLineWidth(displays) {
+        const items = (displays || []).map((item) => String(item || "").trim()).filter(Boolean);
+        if (!items.length) return 0;
+        const fontSize = Number(state.captionStyle.fontSize || 54);
+        const gap = Number(state.captionStyle.wordSpacing || 0) + fontSize * 0.52;
+        const trailing = fontSize * 0.24;
+        let width = 0;
+        items.forEach((word, index) => {
+          const wordWidth = estimatedCaptionWordWidth(word);
+          width = index ? width + gap + wordWidth : wordWidth;
+        });
+        return width + trailing;
       }
       function captionTwoLineBreak(words, requestedWidth) {
         const breaks = captionLineBreaks(words, requestedWidth, 2);
@@ -6720,30 +6740,22 @@
         if (!Array.isArray(words) || words.length < 2) return [];
         const limit = captionWrapLineLimit(lineMode ?? state.captionLines);
         if (limit <= 1) return [];
-        const gap = Number(state.captionStyle.wordSpacing || 0) +
-            Number(state.captionStyle.fontSize || 54) * 0.28,
-          padding = state.captionStyle.backgroundEnabled
+        const padding = state.captionStyle.backgroundEnabled
             ? Number(state.captionStyle.backgroundWidth || 14) * 2
             : 0,
           width = Math.max(
             80,
             Math.min(state.width * 0.92, Number(requestedWidth || state.width * 0.8) - padding) * 0.94,
-          ),
-          measures = words.map((word) => estimatedCaptionWordWidth(word.display)),
-          total = measures.reduce((sum, value) => sum + value, 0) + gap * (words.length - 1);
-        if (total <= width) return [];
+          );
+        const displays = words.map((word) => word.display);
+        if (estimatedCaptionLineWidth(displays) <= width) return [];
         const breaks = [];
-        let lineWidth = 0;
         let lineStart = 0;
         for (let index = 0; index < words.length; index += 1) {
-          const wordWidth = measures[index];
-          const candidate = index > lineStart ? lineWidth + gap + wordWidth : wordWidth;
-          if (index > lineStart && candidate > width && breaks.length < limit - 1) {
+          const candidate = estimatedCaptionLineWidth(displays.slice(lineStart, index + 1));
+          if (index > lineStart && candidate > width) {
             breaks.push(index);
             lineStart = index;
-            lineWidth = wordWidth;
-          } else {
-            lineWidth = candidate;
           }
         }
         return breaks;
@@ -10003,6 +10015,9 @@
           }
           $("scriptText").value = d.script || "";
           setRatio(d.ratio || "9:16");
+          if (state.captions.length) {
+            state.captions = await applyCaptionGrouping(state.captions, state.captionLines);
+          }
           renderAll();
           toast("工程已打开");
         } catch (e) {

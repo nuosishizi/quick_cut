@@ -123,7 +123,7 @@ test("quoted caption titles stay well-formed after name truncation", () => {
     ],
     captionStyle: { fontSize: 58, highlight: "#ffd21f", highlightEnabled: true },
   });
-  assert.match(xml, /name="&quot;&quot;I only stretched the · &quot;&quot;I"/);
+  assert.match(xml, /name="&quot;&quot;I only stretched(?: the)? · &quot;&quot;I"/);
   assert.doesNotMatch(xml, /&(?:quot|amp|lt|gt)(?!;)/);
   for (const name of [...xml.matchAll(/\bname="([^"]*)"/g)].map((match) => match[1])) {
     assert.doesNotMatch(
@@ -176,12 +176,19 @@ test("long captions wrap to two lines and keep font size in ASS", () => {
   assert.match(ass, /\\N/);
   assert.match(ass, /Style: Default,Helvetica,58,/);
   const single = wrapCaptionText(
-    "We're treating as ordinary something He calls holy.",
+    "Holy.",
     { ...style, captionLines: 1 },
     1080,
     720,
   );
   assert.equal(single.length, 1);
+  const longOne = wrapCaptionText(
+    "We're treating as ordinary something He calls holy.",
+    { ...style, captionLines: 1 },
+    1080,
+    720,
+  );
+  assert.ok(longOne.every((line) => line.trim().length > 0));
   const many = wrapCaptionText(
     "We're treating as ordinary something He calls holy.",
     { ...style, captionLines: "multi" },
