@@ -32,15 +32,11 @@
 ### 5. 驱动内部高亮引擎生成关键帧
 - 通过 `ApplyWordTiming(comp, autosubsTool, wordTiming)` 驱动生成每个单词精确起止帧的变色关键帧。
 
-### 6. 整句背景必须收回 Element 4（母版没有 Element 5）
-- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=Bubble（母版里唯一可画底的层）`。
-- AutoSubs 母版 Text+ **只序列化了 Element 1–4**。对 Element 5 的 SetInput 是空操作，整句底不会出现。
-- 整句底只能在 `ApplyWordTiming` 之后**收回 Element 4**：`Type4=1`（Border Fill）+ `Level4=0`（整句）。Fill 高亮走 Element 1 / CLS，不占用 4。
-- `highlightStyle==3`（word-pill）时 Element 4 仍归词气泡，不得抢。
-- 卡拉 OK 不得开 Fade；写样式前 Opacity 断开 stretcher 并设为 1，Softness 归 0。
-- **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
-- **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
-- 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，引擎仍走同一套宏 5 步。
+### 6. 整句底不要走 AutoSubs 宏（会拼缝、会播着消失）
+- AutoSubs Caption 的 CLS 关键帧占用 Element 4。把整句底写在 4 上，播放时会被拆成逐字块，随后再被盖掉。
+- 有整句底时必须走普通 Text+：`Type4=1` Border Fill + `Level4=0` Text，关掉描边/硬阴影。词色用 `apply_native_cls_keyframes`（只改 Element 1）。
+- AutoSubs 5 步只用于**没有整句底**的逐词高亮。
+- 不要做「在 AutoSubs 母版上再加一层」的模板，除非在达芬奇里另存一份带独立背景层的 `.setting`。
 
 ---
 ## 二、 ASR 语音听写与文稿对齐铁律（严禁擅自过滤）

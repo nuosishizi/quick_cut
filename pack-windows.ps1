@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Version = "2.7.10"
+$Version = "2.7.11"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-Windows-$Version"
 $StageRoot = "D:\QuickCut-win-pack"

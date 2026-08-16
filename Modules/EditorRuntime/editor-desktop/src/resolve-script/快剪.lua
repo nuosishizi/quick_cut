@@ -779,55 +779,40 @@ local function apply_style(comp, tool, item, style)
   end)
 
   if style.backgroundEnabled then
-    -- Background Box / Pill (Element 4 & Element 2)
+    -- One official plate: Border Fill at Text level. Dual Element 2+4 looks stitched.
     local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
     local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
     local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
     local bgA = tonumber(style.backgroundOpacity) or 0.94
-    local extX = math.max(0.04, tonumber(style.backgroundExtendX) or 0.12)
-    local extY = math.max(0.04, tonumber(style.backgroundExtendY) or 0.08)
+    local extX = math.max(0.08, tonumber(style.backgroundExtendX) or 0.16)
+    local extY = math.max(0.05, tonumber(style.backgroundExtendY) or 0.10)
     local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
     local bgMode = tostring(style.backgroundMode or "block")
-    local bgLevel = (bgMode == "line") and 2 or 3 -- 2 = Line level, 3 = Text level
+    local bgLevel = (bgMode == "line") and 1 or 0
 
     set_number(tool, "SelectElement", 4)
     set_number(tool, "Enabled4", 1)
-    set_number(tool, "Element4", 2)
-    set_number(tool, "ElementShape4", 2)
-    set_number(tool, "Type4", 0)
-    set_number(tool, "Thickness4", 1.0)
+    set_number(tool, "Type4", 1)
     set_number(tool, "Level4", bgLevel)
     set_number(tool, "Red4", bgR)
     set_number(tool, "Green4", bgG)
     set_number(tool, "Blue4", bgB)
-    set_number(tool, "Alpha4", bgA)
+    set_number(tool, "Alpha4", 1.0)
     set_number(tool, "Opacity4", bgA)
     set_number(tool, "ExtendHorizontal4", extX)
     set_number(tool, "ExtendVertical4", extY)
     set_number(tool, "ExtendX4", extX)
     set_number(tool, "ExtendY4", extY)
     set_number(tool, "Round4", round)
+    set_number(tool, "Round4X", round)
+    set_number(tool, "Round4Y", round)
     set_number(tool, "Softness4", 0)
+    set_number(tool, "SoftnessX4", 0)
+    set_number(tool, "SoftnessY4", 0)
 
-    set_number(tool, "SelectElement", 2)
-    set_number(tool, "Enabled2", 1)
-    set_number(tool, "Type2", 1) -- 1 = Text Border Box
-    set_number(tool, "Level2", bgLevel == 2 and 0 or 1)
-    set_number(tool, "Red2", bgR)
-    set_number(tool, "Green2", bgG)
-    set_number(tool, "Blue2", bgB)
-    set_number(tool, "Alpha2", bgA)
-    set_number(tool, "Opacity2", bgA)
-    set_number(tool, "Extends2X", extX)
-    set_number(tool, "Extends2Y", extY)
-    set_number(tool, "ExtendHorizontal2", extX)
-    set_number(tool, "ExtendVertical2", extY)
-    set_number(tool, "Round2X", round)
-    set_number(tool, "Round2Y", round)
-    set_number(tool, "Round2", round)
-    set_number(tool, "Softness2", 0)
-
+    set_number(tool, "Enabled2", 0)
     set_number(tool, "Enabled3", 0)
+    set_number(tool, "Softness1", 0)
   elseif style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0) then
     -- Text Stroke / Outline (Element 2)
     local strokeThick = math.max(0.035, (tonumber(style.stroke) or 0.08))
@@ -1523,9 +1508,11 @@ local function place_captions(job, root)
   local job_id = tostring(job.id or "")
   local origin = first_picture_frame(timeline, start_frame)
 
-  -- Try batch AppendToTimeline with 快剪字幕 (AutoSubs-compatible) template
+  -- Sentence plates cannot live on AutoSubs Caption: its CLS keyframes own
+  -- Element 4 and will split then erase the box on playback. Use Text+.
+  local useAutosubs = not style.backgroundEnabled
   local mediaPool = project:GetMediaPool()
-  if mediaPool then
+  if useAutosubs and mediaPool then
     local rootFolder = mediaPool:GetRootFolder()
     if rootFolder then
       local templateItem = ensure_caption_template(mediaPool, rootFolder, job, root)
@@ -1553,8 +1540,8 @@ local function place_captions(job, root)
     end
   end
 
-  -- Fallback path: one Text+ per caption via insert_title
-  append_log(root, "one Text+ per caption fallback mode")
+  -- Plain Text+: required for a stable sentence plate (no AutoSubs CLS on Element 4)
+  append_log(root, style.backgroundEnabled and "Text+ sentence plate (skip AutoSubs)" or "one Text+ per caption fallback mode")
   insert_recipe = nil
   local placed = 0
   local first_error = nil
