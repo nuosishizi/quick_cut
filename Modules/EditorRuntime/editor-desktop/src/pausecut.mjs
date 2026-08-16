@@ -84,13 +84,11 @@ function sustainedVoiceFlags(frames, floor, quiet, voice) {
 }
 
 export function analyzePauseFrames(frames, options = {}) {
-  const thresholdDb = options.thresholdDb !== undefined ? Number(options.thresholdDb) : null;
-  const preRollSeconds = Math.max(0, Number(options.preRollSeconds ?? options.headBufferSeconds ?? (options.keepSeconds ? options.keepSeconds / 2 : 0)));
-  const postRollSeconds = Math.max(0, Number(options.postRollSeconds ?? options.tailBufferSeconds ?? (options.keepSeconds ? options.keepSeconds / 2 : 0)));
-  const minPauseSeconds = clamp(Number(options.minDurationSeconds ?? options.minPauseSeconds ?? (options.keepSeconds ?? 0.08)), 0.02, 5);
+  const keepSeconds = clamp(Number(options.keepSeconds ?? 0.3), 0.05, 1);
+  const minPauseSeconds = clamp(Number(options.minPauseSeconds ?? options.keepSeconds ?? 0.3), 0.1, 5);
   const edgeKeepSeconds = clamp(
-    Number(options.edgeKeepSeconds ?? preRollSeconds ?? 0.08),
-    0,
+    Number(options.edgeKeepSeconds ?? 0.1),
+    0.05,
     0.5,
   );
   const sensitivity = clamp(Number(options.sensitivity ?? 0.42), 0, 1);
@@ -100,21 +98,16 @@ export function analyzePauseFrames(frames, options = {}) {
   const floor = percentile(rmsValues, 0.1);
   const quiet = percentile(rmsValues, 0.25);
   const voice = Math.max(percentile(rmsValues, 0.78), quiet * 2.4, 0.002);
-  
-  // If user specified explicit dB threshold (e.g. -25.0 dB), convert to RMS amplitude: 10^(dB/20)
-  const rmsThreshold = thresholdDb !== null
-    ? Math.max(0.0001, Math.pow(10, thresholdDb / 20))
-    : clamp(
-        floor * (1.5 + sensitivity * 1.5) + voice * (0.015 + sensitivity * 0.025),
-        0.0007,
-        voice * 0.20,
-      );
-  const peakThreshold = thresholdDb !== null
-    ? rmsThreshold * 2.2
-    : Math.max(
-        percentile(peakValues, 0.2) * 2.1,
-        rmsThreshold * 3.2,
-      );
+  // Higher sensitivity raises the silence threshold to overcome steady room/mic noise
+  const rmsThreshold = clamp(
+    floor * (1.5 + sensitivity * 1.5) + voice * (0.015 + sensitivity * 0.025),
+    0.0007,
+    voice * 0.20,
+  );
+  const peakThreshold = Math.max(
+    percentile(peakValues, 0.2) * 2.1,
+    rmsThreshold * 3.2,
+  );
   const voiceFlags = sustainedVoiceFlags(frames, floor, quiet, voice),
     firstVoiceIndex = voiceFlags.findIndex(Boolean),
     lastVoiceIndex = voiceFlags.findLastIndex(Boolean),
@@ -128,7 +121,7 @@ export function analyzePauseFrames(frames, options = {}) {
       (frame.rms > rmsThreshold || frame.peak > peakThreshold || (frame.zcr > 0.08 && frame.rms > rmsThreshold * 0.55)),
   );
   const frameDuration = Math.max(0.005, frames[0].end - frames[0].start);
-  speech = bridgeShortRuns(speech, Math.round(0.08 / frameDuration));
+  speech = bridgeShortRuns(speech, Math.round(0.12 / frameDuration));
 
   const pauses = [];
   let index = 0;
@@ -143,14 +136,14 @@ export function analyzePauseFrames(frames, options = {}) {
     const end = frames[Math.min(frames.length - 1, index - 1)].end;
     const duration = end - start;
     const boundary = start <= voiceStart + frameDuration || end >= voiceEnd - frameDuration;
-    if (!boundary && duration >= minPauseSeconds - 0.01)
+    if (!boundary && duration > Math.max(keepSeconds, minPauseSeconds) - 0.02)
       pauses.push({ start, end, duration, boundary: false });
   }
   const removals = pauses
     .map((pause) => {
-      // 尾部之后保留 postRollSeconds，头部之前保留 preRollSeconds
-      const start = pause.start + postRollSeconds;
-      const end = pause.end - preRollSeconds;
+      const edge = keepSeconds / 2;
+      const start = pause.start + edge;
+      const end = pause.end - edge;
       return {
         start,
         end,
@@ -158,7 +151,7 @@ export function analyzePauseFrames(frames, options = {}) {
         source: "pause",
       };
     })
-    .filter((range) => range.duration > 0.02);
+    .filter((range) => range.duration > 0.035);
   if (hasVoice && voiceStart > edgeKeepSeconds + 0.035)
     removals.unshift({
       start: 0,
