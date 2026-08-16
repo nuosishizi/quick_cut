@@ -65,7 +65,7 @@ test("manuscript gaps are locally cut and ripple every linked track", () => {
   assert.match(ui, /const autoCut = applyConfirmedRepeatCuts\(\)/);
   assert.match(
     ui,
-    /function cutScriptIssue\(id, \{ record = true, quiet = false \} = \{\}\) \{[\s\S]*?nextKept[\s\S]*?end = Math\.min\(state\.duration, nextKept\)/,
+    /function cutScriptIssue\(id, \{ record = true, quiet = false \} = \{\}\) \{[\s\S]*?nextKept[\s\S]*?end = Math\.min\(end, Math\.max\(start \+ 0\.04, nextKept - 0\.05\)\)/,
   );
   assert.match(ui, /data-cut-review/);
   assert.match(ui, /data-insert-review/);

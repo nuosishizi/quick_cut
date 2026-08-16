@@ -9353,10 +9353,11 @@
         );
         const nextKept = (state.captions || [])
           .map((item) => Number(item.start || 0))
-          .filter((time) => time > end + 0.02)
+          .filter((time) => time > start + 0.02)
           .sort((left, right) => left - right)[0];
-        if (Number.isFinite(nextKept) && nextKept - end <= 2.8)
-          end = Math.min(state.duration, nextKept);
+        if (Number.isFinite(nextKept)) {
+          end = Math.min(end, Math.max(start + 0.04, nextKept - 0.05));
+        }
         const sourceStart = timelineToSource(start);
         const sourceEnd = timelineToSource(end);
         if (sourceEnd <= sourceStart + 0.002) {
@@ -9636,13 +9637,17 @@
         const issue = state.issues.find((item) => item.id === id);
         if (!issue) return;
         const start = Math.max(0, Number(issue.start || 0));
-        let end = Math.min(state.duration, Math.max(start + 0.04, Number(issue.end || 0)));
+        let end = Math.min(
+          state.duration,
+          Math.max(start + 0.04, Number(issue.end || 0)),
+        );
         const nextKept = (state.captions || [])
           .map((item) => Number(item.start || 0))
-          .filter((time) => time > end + 0.02)
+          .filter((time) => time > start + 0.02)
           .sort((left, right) => left - right)[0];
-        if (Number.isFinite(nextKept) && nextKept - end <= 2.8)
-          end = Math.min(state.duration, nextKept);
+        if (Number.isFinite(nextKept)) {
+          end = Math.min(end, Math.max(start + 0.04, nextKept - 0.05));
+        }
         const sourceStart = timelineToSource(start),
           sourceEnd = timelineToSource(end);
         if (sourceEnd <= sourceStart + 0.002) {
