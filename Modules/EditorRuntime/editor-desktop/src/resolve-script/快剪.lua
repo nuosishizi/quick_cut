@@ -1074,6 +1074,7 @@ local function insert_title(timeline, root)
   return nil, "none"
 end
 
+local QUICKCUT_CAPTION_DISPLAY_NAME = "快剪字幕"
 local ANIMATED_CAPTION_DISPLAY_NAME = "AutoSubs Caption"
 local AUTOSUBS_BIN = "快剪"
 
@@ -1103,10 +1104,35 @@ end
 
 local function is_animated_caption(clipName)
   if type(clipName) ~= "string" then return false end
-  return clipName == ANIMATED_CAPTION_DISPLAY_NAME
+  return clipName == QUICKCUT_CAPTION_DISPLAY_NAME
+    or clipName == ANIMATED_CAPTION_DISPLAY_NAME
     or clipName:sub(1, #ANIMATED_CAPTION_DISPLAY_NAME + 1) == ANIMATED_CAPTION_DISPLAY_NAME .. " "
     or clipName == "快剪动态字幕"
     or clipName == "快剪Text+"
+end
+
+local function adopt_quickcut_template_name(clip)
+  if not clip then return clip end
+  local clipName = ""
+  pcall(function()
+    local props = clip:GetClipProperty()
+    clipName = (type(props) == "table" and props["Clip Name"]) or ""
+  end)
+  if clipName == "" then
+    pcall(function() clipName = clip:GetName() or "" end)
+  end
+  if clipName == QUICKCUT_CAPTION_DISPLAY_NAME then
+    return clip
+  end
+  if clipName == ANIMATED_CAPTION_DISPLAY_NAME
+    or clipName:sub(1, #ANIMATED_CAPTION_DISPLAY_NAME + 1) == ANIMATED_CAPTION_DISPLAY_NAME .. " "
+    or clipName == "快剪动态字幕"
+    or clipName == "快剪Text+"
+  then
+    pcall(function() clip:SetClipProperty("Clip Name", QUICKCUT_CAPTION_DISPLAY_NAME) end)
+    pcall(function() clip:SetName(QUICKCUT_CAPTION_DISPLAY_NAME) end)
+  end
+  return clip
 end
 
 local function get_root_subfolder(rootFolder, folderName)
@@ -1170,7 +1196,7 @@ end
 local function ensure_caption_template(mediaPool, rootFolder, job, root)
   local template = find_template_item(rootFolder, job and job.templateName)
   if template then
-    return template
+    return adopt_quickcut_template_name(template)
   end
   local binPath = find_caption_bin_file(job, root)
   if not binPath then
@@ -1200,6 +1226,7 @@ local function ensure_caption_template(mediaPool, rootFolder, job, root)
     append_log(root, "Imported bin did not contain animated caption template")
     return nil
   end
+  template = adopt_quickcut_template_name(template)
   if targetBin and sourceBin and sourceBin ~= targetBin then
     pcall(function()
       mediaPool:MoveClips({ template }, targetBin)
@@ -1444,7 +1471,7 @@ local function place_captions(job, root)
   local job_id = tostring(job.id or "")
   local origin = first_picture_frame(timeline, start_frame)
 
-  -- Try batch AppendToTimeline with AutoSubs Caption template
+  -- Try batch AppendToTimeline with 快剪字幕 (AutoSubs-compatible) template
   local mediaPool = project:GetMediaPool()
   if mediaPool then
     local rootFolder = mediaPool:GetRootFolder()

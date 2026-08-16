@@ -38,6 +38,7 @@
 - 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_autosubs_sentence_background`，只用 Element 5 画整句/整行圆角底。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
 - **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
+- 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，引擎仍走同一套宏 5 步。
 
 ---
 ## 永久禁令：

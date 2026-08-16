@@ -30,6 +30,8 @@ test("bundled Resolve script has AutoSubs dynamic template engine and text fallb
   assert.match(lua, /快剪 QuickCut/);
   assert.match(lua, /Copyright \(c\) 2026 HX/);
   assert.match(lua, /AutoSubs Caption/);
+  assert.match(lua, /QUICKCUT_CAPTION_DISPLAY_NAME = "快剪字幕"/);
+  assert.match(lua, /adopt_quickcut_template_name/);
   assert.match(lua, /AppendToTimeline/);
   assert.match(lua, /WordTiming/);
   assert.match(lua, /CharacterLevelStyling/);
@@ -106,7 +108,10 @@ test("send job wraps captions, generates word timestamps and presetSettings", ()
   assert.ok(job.presetSettings !== undefined);
   assert.equal(job.presetSettings.PopInEnabled, 1);
   assert.equal(job.presetSettings.HighlightEnabled, 1);
-  assert.equal(job.templateName, "AutoSubs Caption");
+  assert.equal(job.presetSettings.AnimationLevel, 0);
+  assert.equal(job.presetSettings.AnimationLength, 0);
+  assert.equal(job.presetSettings.BubbleEnabled, 0);
+  assert.equal(job.templateName, "快剪字幕");
 });
 
 test("send job preserves explicit words timestamps and builds dynamic animation settings", () => {
@@ -174,10 +179,32 @@ test("send job maps sentence background onto AutoSubs Element 5, not word Bubble
   assert.equal(job.style.backgroundMode, "line");
   assert.ok(job.style.backgroundOpacity > 0);
   assert.ok(Array.isArray(job.style.backgroundColor));
-  assert.equal(job.presetSettings.BubbleEnabled, 1);
+  assert.equal(job.presetSettings.BubbleEnabled, 0);
+  assert.equal(job.templateName, "快剪字幕");
   assert.match(lua, /AutoSubs owns Text\+ 1=Fill 2=Outline 3=Shadow 4=word Bubble/);
   assert.match(lua, /set_number\(tool, "Enabled5", 1\)/);
   assert.match(lua, /set_number\(tool, "Type5", 1\)/);
+});
+
+test("word-pill highlight uses AutoSubs Bubble, sentence background stays on Element 5", () => {
+  const job = buildResolveSendJob({
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    captionStyle: {
+      fontFamily: "Helvetica",
+      fontSize: 58,
+      color: "#ffffff",
+      backgroundEnabled: true,
+      background: "#111111",
+      animation: "word-pill",
+    },
+    captionTransform: { x: 0, y: 538, width: 860, scale: 1 },
+    captions: [{ text: "word pill", start: 0, end: 1 }],
+  });
+  assert.equal(job.presetSettings.HighlightStyle, 3);
+  assert.equal(job.presetSettings.BubbleEnabled, 1);
+  assert.equal(job.style.backgroundEnabled, true);
 });
 
 test("install writes the script and caption-bin.drb into Resolve Utility folders", () => {
