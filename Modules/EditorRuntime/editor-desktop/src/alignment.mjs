@@ -1813,7 +1813,10 @@ export function buildCaptions(expectedWords, options = {}) {
         group.length >= maxWords ||
         candidate.length > maxChars ||
         priorEnds ||
-        (priorClauseEnds && group.length >= 3 && timingGap >= 0.45))
+        (priorClauseEnds && group.length >= 3 && timingGap >= 0.45) ||
+        (priorWord &&
+          (word.matchType === "spoken_addition") !==
+            (priorWord.matchType === "spoken_addition")))
     )
       flush();
     group.push(word);
@@ -1923,24 +1926,48 @@ export function buildReviewCaptions(
 
 export function manuscriptCaptionWords(aligned = {}) {
   const words = [];
-  for (const operation of aligned.operations || []) {
-    if (!operation?.expected) continue;
-    const start = Number(operation.expected.start ?? operation.spoken?.start ?? 0);
-    const end = Number(operation.expected.end ?? operation.spoken?.end ?? start);
-    words.push({
-      display: operation.expected.display,
-      start,
-      end,
-      matchType:
-        operation.expected.matchType ||
-        (["match", "near"].includes(operation.type) ? operation.type : "error"),
-      issueType: operation.issueType || "",
-      expectedDisplay: operation.expected.display,
-      issueId: operation.issueId || "",
-      action: operation.action || "",
-      keepWithPrevious: !!operation.expected.keepWithPrevious,
-      scriptureReference: !!operation.expected.scriptureReference,
-    });
+  const ops = aligned.operations || [];
+  const firstExpectedIndex = ops.findIndex((op) => op.expected);
+  const lastExpectedIndex = ops.findLastIndex((op) => op.expected);
+  for (let index = 0; index < ops.length; index += 1) {
+    const operation = ops[index];
+    if (operation?.expected) {
+      const start = Number(operation.expected.start ?? operation.spoken?.start ?? 0);
+      const end = Number(operation.expected.end ?? operation.spoken?.end ?? start);
+      words.push({
+        display: operation.expected.display,
+        start,
+        end,
+        matchType:
+          operation.expected.matchType ||
+          (["match", "near"].includes(operation.type) ? operation.type : "error"),
+        issueType: operation.issueType || "",
+        expectedDisplay: operation.expected.display,
+        issueId: operation.issueId || "",
+        action: operation.action || "",
+        keepWithPrevious: !!operation.expected.keepWithPrevious,
+        scriptureReference: !!operation.expected.scriptureReference,
+      });
+    } else if (
+      operation?.spoken &&
+      operation.action === "insert" &&
+      ["addition", "extra"].includes(operation.issueType) &&
+      (index < firstExpectedIndex || index > lastExpectedIndex) &&
+      Number(operation.spoken.end) > Number(operation.spoken.start)
+    ) {
+      words.push({
+        display: operation.spoken.display,
+        start: Number(operation.spoken.start),
+        end: Number(operation.spoken.end),
+        matchType: "spoken_addition",
+        issueType: "addition",
+        expectedDisplay: "",
+        issueId: operation.issueId || "",
+        action: "insert",
+        keepWithPrevious: !!operation.spoken.keepWithPrevious,
+        scriptureReference: false,
+      });
+    }
   }
   interpolateManuscriptTimes(words);
   return words.filter((word) => Number(word.end) > Number(word.start) + 0.001);
@@ -1948,7 +1975,8 @@ export function manuscriptCaptionWords(aligned = {}) {
 
 function interpolateManuscriptTimes(words = []) {
   const anchored = (word) =>
-    ["match", "near"].includes(word.matchType) && Number(word.end) > Number(word.start) + 0.02;
+    ["match", "near", "spoken_addition"].includes(word.matchType) &&
+    Number(word.end) > Number(word.start) + 0.02;
   let index = 0;
   while (index < words.length) {
     if (anchored(words[index])) {

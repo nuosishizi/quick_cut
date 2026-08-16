@@ -756,3 +756,19 @@ test("doesn't just say stays matched when ASR speaks does not", () => {
   assert.equal(textOf(aligned.operations), script);
   assert.equal(aligned.issues.length, 0);
 });
+
+test("tail off-script spoken addition (together and follow Christ) generates green caption with accurate timestamps", () => {
+  const aligned = alignScript({
+    segments: [
+      { text: "get connected", start: 418.0, end: 419.5 },
+      { text: "together and follow Christ.", start: 419.8, end: 421.5 },
+    ],
+    script: "get connected.",
+    duration: 422,
+  });
+  const words = manuscriptCaptionWords(aligned);
+  const captions = buildCaptions(words);
+  assert.ok(captions.some((c) => /together and follow Christ/i.test(c.text)), "tail spoken addition must generate caption");
+  const tailCaption = captions.find((c) => /together and follow Christ/i.test(c.text));
+  assert.ok(tailCaption.start >= 419.5, "tail caption start timestamp must match spoken audio");
+});

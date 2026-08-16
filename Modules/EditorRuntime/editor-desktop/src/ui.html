@@ -1662,10 +1662,11 @@
       .clip.review.repeat {
         background: #b72d4e;
         border-color: #ff668a;
-      }
       .clip.review.scripture {
-        background: #8a6418;
-        border-color: #f5c542;
+        background: linear-gradient(135deg, rgba(217, 119, 6, 0.95) 0%, rgba(180, 83, 9, 0.98) 100%) !important;
+        border-color: #fbbf24 !important;
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.5) !important;
+        color: #ffffff !important;
       }
       .clip.review.cut,
       .clip.review.repeat,
@@ -4665,9 +4666,10 @@
         const expected = String(item.expectedText || "")
           .replace(/^\s*[—-]\s*$/, "")
           .trim();
-        if (item.scripture && item.type === "missing") return expected ? `经文需补录：${expected}` : "经文需补录";
+        if (item.scripture && item.type === "missing") return expected ? `📖 经文需补录：${expected}` : "📖 经文需补录";
         if (item.type === "missing") return expected ? `需补录：${expected}` : "需补录";
-        if (item.scripture && expected) return `经文不符：${spoken && spoken !== "未识别出文字" ? spoken : expected}`;
+        if (item.scripture && expected) return `📖 经文差异：${spoken && spoken !== "未识别出文字" ? spoken : expected}`;
+        if (item.scripture) return `📖 经文差异：${spoken}`;
         if (spoken && spoken !== "待处理") return spoken;
         if (expected) return expected;
         return "未识别出文字";
@@ -4676,21 +4678,21 @@
         const spoken = reviewClipText(item);
         const expected = String(item.expectedText || "").replace(/^\s*[—-]\s*$/, "").trim();
         const kind =
-          item.type === "repeat"
+          item.scripture
+            ? "📖 经文/神的话语差异（必须按原文）"
+            : item.type === "repeat"
             ? "重复阅读"
             : item.type === "missing" || item.action === "missing"
             ? "漏读，需补录"
             : item.type === "extra"
-              ? "多读内容"
-              : item.scripture
-                ? "经文必须按原文，说错需重录"
-                : "读法有差异";
+              ? "口播补充"
+              : "读法有差异";
         const detail = expected && expected !== spoken
           ? `${kind}：${spoken}（文稿：${expected}）`
           : `${kind}：${spoken}`;
         if (item.type === "missing" || item.action === "missing") return detail;
         if (["accept", "insert"].includes(item.action))
-          return `${detail}。点击插入正确字幕轨道`;
+          return `${detail}。已生成绿字幕；Shift+点击可波纹切除`;
         return `${detail}。点击试听；Ctrl+点击保留不删除；Shift+点击接受并删除`;
       }
       function repairScriptDifferenceLinks() {
@@ -7257,7 +7259,7 @@
       function clipHtml(c, type, lane = 0, laneCount = 1) {
         const visualType = type === "audioasset" ? "audio" : type;
         const issueClass = type === "review"
-          ? ` ${c.type || "mismatch"}${c.scripture && c.action !== "cut" && c.type !== "repeat" && c.type !== "extra" ? " scripture" : ""}`
+          ? ` ${c.type || "mismatch"}${c.scripture ? " scripture" : ""}`
           : "";
         const displayText = type === "review"
           ? reviewClipText(c)
