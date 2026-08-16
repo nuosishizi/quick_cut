@@ -2019,7 +2019,7 @@ function buildExportGraph(config, info) {
     const cropBottom = Math.max(0, Math.min(95, Number(image.cropBottom || 0)));
     const cropLeft = Math.max(0, Math.min(95, Number(image.cropLeft || 0)));
     const cropRight = Math.max(0, Math.min(95, Number(image.cropRight || 0)));
-    const imageScale = Math.max(0.03, Number(image.scale || 0.35));
+    const imageScale = Math.max(0.03, Number(image.scale ?? 1));
     const imageWidth = Math.max(8, Math.round(width * imageScale));
     const imageFilters = [];
     if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {

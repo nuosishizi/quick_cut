@@ -480,6 +480,21 @@ test("preview workspace zoom, rotated selection and app context menus are wired"
   assert.match(ui, /function showContextMenu/);
   assert.match(ui, /timelineScroll"\)\.addEventListener\("contextmenu"/);
   assert.match(ui, /stage"\)\.addEventListener\("contextmenu"/);
+  const stageWheel = ui.match(/\$\("stage"\)\.addEventListener\(\s*"wheel",[\s\S]*?\{ passive: false \}/)?.[0] || "";
+  assert.match(stageWheel, /state\.canvasZoom = clamp/);
+  assert.doesNotMatch(stageWheel, /selected\.scale = clamp/);
+});
+
+test("caption typing does not steal play and color swatches stay small", () => {
+  assert.match(ui, /function isTypingField\(/);
+  assert.match(ui, /function blurActiveTextField\(/);
+  assert.match(ui, /const textEditing = isTypingField\(target\)/);
+  assert.match(ui, /pointerdown[\s\S]*?blurActiveTextField\(\)/);
+  assert.match(ui, /\$\("play"\)\.onclick = \(\) => \{[\s\S]*?blurActiveTextField\(\)/);
+  assert.match(ui, /\.input\.colorinput\s*\{[\s\S]*?max-width:\s*36px/);
+  assert.match(ui, /label:has\(> \.colorinput\) \{[\s\S]*?pointer-events:\s*none/);
+  assert.match(ui, /function ensureResolvePlugin\(/);
+  assert.match(ui, /ensureResolvePlugin\(\)/);
 });
 
 test("first script match automatically resumes and validates the speech model", () => {
@@ -555,10 +570,125 @@ test("media import is optimistic and export offers mainstream color spaces", () 
 test("pause cut settings modal supports noise sensitivity, min duration and caption gap trimming", () => {
   assert.match(ui, /id="openPauseCutSettings"/);
   assert.match(ui, /id="pauseCutModal"/);
-  assert.match(ui, /id="pauseMinDuration"/);
-  assert.match(ui, /id="pauseBuffer"/);
-  assert.match(ui, /id="pauseSensitivity"/);
-  assert.match(ui, /id="pauseTrimCaptionGaps"/);
+  assert.match(ui, /id="pauseMinFrames"/);
+  assert.match(ui, /id="pauseThresholdDb"/);
+  assert.match(ui, /id="pauseHeadFrames"/);
+  assert.match(ui, /id="pauseTailFrames"/);
   assert.match(ui, /function openPauseCutSettingsModal/);
   assert.match(ui, /function currentPauseCutOptions/);
+});
+
+test("timeline ruler stays pinned and blade shows a cut line", () => {
+  assert.match(ui, /id="rulerBar"/);
+  assert.match(ui, /id="rulerTimecode"/);
+  assert.match(ui, /id="bladeGuide"/);
+  assert.match(ui, /class="tracklabels-col"/);
+  assert.match(ui, /function syncTimelineChrome\(/);
+  assert.match(ui, /function setBladeGuide\(/);
+  assert.match(ui, /function previewBladeTime\(/);
+  assert.match(ui, /tick\$\{major \? "" : minor \? " minor" : " micro"\}/);
+  assert.match(ui, /function rulerTickPlan\(/);
+  assert.match(ui, /trackLabels"\)\.scrollTop = \$\("timelineScroll"\)\.scrollTop/);
+  assert.match(ui, /syncTimelineChrome\(\)/);
+  assert.doesNotMatch(ui, /content\.insertBefore\(ruler, content\.firstChild\)/);
+  assert.doesNotMatch(ui, /\.tracklabels\s*\{[\s\S]{0,180}padding-top:\s*25px/);
+});
+
+test("timeline snapping aligns clip edges to other clips and the playhead", () => {
+  assert.match(ui, /function toggleSnapping\(/);
+  assert.match(ui, /function snapGroupDelta\(/);
+  assert.match(ui, /function showSnapGuide\(/);
+  assert.match(ui, /id="snapGuide"/);
+  assert.match(ui, /code === "KeyN" && !command/);
+  assert.match(ui, /title="时间线吸附（N）"/);
+  assert.match(ui, /timelineDrag\.mainTrimTime = snapTime\(rawTime, clip\)/);
+  assert.match(ui, /snapGroupDelta\(\s*moving,/);
+  assert.match(ui, /time = snapTime\(/);
+  assert.match(ui, /靠近片段边缘和播放头会对齐/);
+});
+
+test("playhead split and blade work without selecting a real clip first", () => {
+  assert.match(ui, /function splitSelected\(\) \{[\s\S]*?clipsUnderPlayhead\(time\)/);
+  assert.match(ui, /function clipsUnderPlayhead\(/);
+  assert.match(ui, /function resolveWorkingSelection\(/);
+  assert.match(ui, /id="bladeTool"/);
+  assert.match(ui, /editTool === "blade"/);
+  assert.match(ui, /code === "KeyB" && !command/);
+  assert.match(ui, /code === "KeyB" \|\| code === "Backslash"/);
+  assert.match(ui, /videoIds\.delete\("main"\)/);
+  assert.match(ui, /shiftTracks\(originStart, Math\.max\(0, edgeTime - originStart\)\)/);
+  assert.match(ui, /把播放头放到要切的片段上，再按切割/);
+  assert.doesNotMatch(
+    ui,
+    /function splitSelected\(\) \{[\s\S]*?先选择片段，并把播放头放在片段内部/,
+  );
+});
+
+test("timeline linking follows DaVinci linked selection, not time overlap", () => {
+  const linker = ui.match(
+    /function linkedTimelineObjects\(anchorType, anchorId\) \{([\s\S]*?)\n      \}\n      function includeLinkedSelection/,
+  )?.[1];
+  assert.ok(linker);
+  assert.match(linker, /item\.linkGroupId === obj\.linkGroupId/);
+  assert.doesNotMatch(linker, /state\.images|state\.titles|state\.captions|state\.reviewCaptions/);
+  assert.doesNotMatch(linker, /overlap/);
+  assert.match(ui, /function expandLinkedSelection\(/);
+  assert.match(ui, /function rippleOverlayTrack\(/);
+  assert.match(ui, /linkedMoving: \[\]/);
+  assert.match(ui, /deleteSelected\(!!e\.shiftKey\)/);
+  assert.match(ui, /联动选择已开启：成组音画一起选、移、剪、删/);
+  assert.doesNotMatch(ui, /全部轨道已联动/);
+});
+
+test("imported images default to 100 percent scale in preview and export", () => {
+  const importer = ui.match(
+    /async function importImage\([\s\S]*?const item = \{([\s\S]*?)\};\s*state\.images\.push/,
+  )?.[1];
+  assert.ok(importer);
+  assert.match(importer, /scale:\s*1/);
+  assert.doesNotMatch(importer, /scale:\s*0\.35/);
+  assert.match(media, /image\.scale \?\? 1/);
+  assert.doesNotMatch(media, /image\.scale \|\| 0\.35/);
+});
+
+test("overlay ripple delete only slides later clips on the same track", () => {
+  const trackSrc = ui.match(/function overlayTrackId\(type, item\) \{[\s\S]*?\n      \}/)?.[0];
+  const shiftSrc = ui.match(/function shiftTimedOverlay\(item, length\) \{[\s\S]*?\n      \}/)?.[0];
+  const rippleSrc = ui.match(/function rippleOverlayTrack\(list, trackId, type, cutStart, cutEnd\) \{[\s\S]*?\n      \}/)?.[0];
+  assert.ok(trackSrc);
+  assert.ok(shiftSrc);
+  assert.ok(rippleSrc);
+  const run = new Function(
+    `${trackSrc}\n${shiftSrc}\n${rippleSrc}\nreturn { overlayTrackId, rippleOverlayTrack };`,
+  )();
+  const images = [
+    { id: "keep-before", trackId: "image-a", start: 0, end: 1 },
+    { id: "later-same", trackId: "image-a", start: 4, end: 6 },
+    { id: "other-track", trackId: "image-b", start: 4, end: 6 },
+    { id: "overlap-not-eaten", trackId: "image-a", start: 1.5, end: 2.5 },
+  ];
+  run.rippleOverlayTrack(images, "image-a", "image", 1, 3);
+  assert.equal(images[0].start, 0);
+  assert.equal(images[1].start, 2);
+  assert.equal(images[1].end, 4);
+  assert.equal(images[2].start, 4);
+  assert.equal(images[3].start, 1.5);
+  const captions = [
+    {
+      trackId: "caption",
+      start: 5,
+      end: 7,
+      words: [
+        { display: "my", start: 5, end: 5.4 },
+        { display: "family", start: 5.4, end: 6.2 },
+      ],
+    },
+  ];
+  run.rippleOverlayTrack(captions, "caption", "caption", 1, 3);
+  assert.equal(captions[0].start, 3);
+  assert.equal(captions[0].words[1].display, "family");
+  assert.match(
+    ui,
+    /function deleteSelected\(ripple = false\) \{[\s\S]*?if \(ripple && !rippleClips\.length\) \{[\s\S]*?rippleOverlayTrack/,
+  );
 });

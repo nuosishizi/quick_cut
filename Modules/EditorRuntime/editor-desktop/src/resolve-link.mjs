@@ -530,6 +530,7 @@ export function installResolveLink(options = {}) {
   return {
     installed: installed[0] || "",
     copies: installed,
+    changed,
   };
 }
 

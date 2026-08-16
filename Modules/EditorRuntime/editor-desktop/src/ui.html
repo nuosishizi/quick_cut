@@ -620,8 +620,8 @@
         box-shadow: 0 0 0 3px rgba(22, 132, 255, 0.18);
       }
       .imageobject {
-        max-width: 80%;
-        max-height: 80%;
+        max-width: 100%;
+        max-height: 100%;
       }
       .textobject {
         white-space: nowrap;
@@ -815,9 +815,34 @@
         grid-template-columns: 1fr 1fr;
         gap: 7px;
       }
-      .colorinput {
-        height: 34px;
-        padding: 3px;
+      .colorinput,
+      .input.colorinput {
+        width: 36px;
+        min-width: 36px;
+        max-width: 36px;
+        height: 28px;
+        padding: 0;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .colorinput::-webkit-color-swatch-wrapper,
+      .input.colorinput::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      .colorinput::-webkit-color-swatch,
+      .input.colorinput::-webkit-color-swatch {
+        border: none;
+        border-radius: 5px;
+      }
+      label:has(> .colorinput) {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        pointer-events: none;
+      }
+      label:has(> .colorinput) .colorinput {
+        pointer-events: auto;
       }
       .switch {
         display: flex;
@@ -883,10 +908,30 @@
         z-index: 12;
       }
       .track-resizer:hover { background: var(--blue); }
-      .tracklabels {
+      .tracklabels-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
         background: #191b1d;
         border-right: 1px solid var(--line);
-        padding-top: 25px;
+      }
+      .ruler-spacer {
+        flex: 0 0 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+        color: #e8eaed;
+        background: #181a1c;
+        border-bottom: 1px solid var(--line);
+        z-index: 21;
+      }
+      .tracklabels {
+        flex: 1;
+        min-height: 0;
+        background: #191b1d;
         overflow: hidden;
       }
       .tracklabel {
@@ -921,7 +966,34 @@
         background: transparent;
         color: #747b84;
       }
+      .timeline-main {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #121415;
+      }
+      .timeline-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 40;
+        overflow: hidden;
+      }
+      .ruler-bar {
+        flex: 0 0 28px;
+        height: 28px;
+        overflow: hidden;
+        position: relative;
+        z-index: 30;
+        background: #181a1c;
+        border-bottom: 1px solid var(--line);
+      }
       .scroll {
+        flex: 1;
+        min-height: 0;
         overflow: auto;
         position: relative;
         background: #121415;
@@ -931,21 +1003,33 @@
         min-height: 225px;
       }
       .ruler {
-        height: 25px;
+        height: 28px;
         position: relative;
-        border-bottom: 1px solid var(--line);
-        background: #181a1c;
         cursor: ew-resize;
         touch-action: none;
+        will-change: transform;
       }
       .tick {
         position: absolute;
         bottom: 2px;
-        color: #777e87;
+        color: #9aa1aa;
         font-size: 9px;
-        border-left: 1px solid #50555c;
+        border-left: 1px solid #6a7078;
         padding-left: 3px;
-        height: 11px;
+        height: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tick.minor {
+        height: 7px;
+        color: transparent;
+        padding-left: 0;
+        border-left-color: #3a3f45;
+      }
+      .tick.micro {
+        height: 4px;
+        color: transparent;
+        padding-left: 0;
+        border-left-color: #2a2e33;
       }
       .trackrow {
         height: 40px;
@@ -1002,15 +1086,22 @@
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 7px;
+        width: 11px;
         z-index: 8;
         cursor: ew-resize;
-        background: transparent;
+        background: rgba(255,255,255,.14);
       }
       .trim-handle.start { left: 0; }
       .trim-handle.end { right: 0; }
       .clip:hover .trim-handle,
-      .clip.selected .trim-handle { background: rgba(255,255,255,.34); }
+      .clip.selected .trim-handle { background: rgba(255,255,255,.42); }
+      .timeline.blade-mode,
+      .timeline.blade-mode .clip,
+      .timeline.blade-mode .clip .trim-handle,
+      .timeline.blade-mode .ruler,
+      .timeline.blade-mode .timeline-main {
+        cursor: col-resize;
+      }
       .trackmenu {
         position: absolute;
         left: 132px;
@@ -1113,7 +1204,7 @@
         bottom: 0;
         width: 1px;
         background: #fff;
-        z-index: 40;
+        z-index: 42;
         pointer-events: none;
       }
       .playhead:before {
@@ -1124,6 +1215,51 @@
         border-left: 5px solid transparent;
         border-right: 5px solid transparent;
         border-top: 8px solid white;
+      }
+      .snap-guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: #4ec3ff;
+        box-shadow: 0 0 8px rgba(78, 195, 255, 0.55);
+        z-index: 41;
+        pointer-events: none;
+        display: none;
+      }
+      .snap-guide.on { display: block; }
+      .blade-guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        border-left: 1px dashed #ff4d4d;
+        box-shadow: 0 0 8px rgba(255, 77, 77, 0.45);
+        z-index: 43;
+        pointer-events: none;
+        display: none;
+      }
+      .blade-guide.on { display: block; }
+      .blade-guide:before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -5px;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 8px solid #ff4d4d;
+      }
+      .blade-time {
+        position: absolute;
+        top: 9px;
+        left: 7px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: #ff4d4d;
+        color: #fff;
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
       .toast {
         position: fixed;
@@ -1314,8 +1450,13 @@
       .timelinebody {
         grid-template-columns: var(--track-label-width) 5px minmax(0, 1fr);
       }
-      .tracklabels {
-        padding-top: 23px;
+      .ruler-spacer,
+      .ruler-bar {
+        flex-basis: 26px;
+        height: 26px;
+      }
+      .ruler {
+        height: 26px;
       }
       .tracklabel,
       .trackrow {
@@ -3252,9 +3393,9 @@
             ⚙</button
           ><button class="btn iconbtn" id="addTrack" title="添加文本">
             T＋</button
-          ><button class="btn iconbtn" id="linkAV" title="全部轨道联动">
+          ><button class="btn iconbtn" id="linkAV" title="联动选择：成组音画一起移动和删除">
             🔗</button
-          ><button class="btn iconbtn" id="snapToggle" title="时间线吸附">
+          ><button class="btn iconbtn" id="snapToggle" title="时间线吸附（N）">
             ⌁</button
           ><button class="btn iconbtn" id="stepBack" title="后退一帧（←）">
             ‹</button
@@ -3266,8 +3407,10 @@
             title="删除播放头左侧（Q）"
           >
             ◀|</button
-          ><button class="btn iconbtn" id="splitClip" title="切割（⌘B）">
+          ><button class="btn iconbtn" id="splitClip" title="在播放头切割经过的片段（⌘B）">
             ✂</button
+          ><button class="btn iconbtn" id="bladeTool" title="剃刀：点击片段切割（B）">
+            ╎</button
           ><button
             class="btn iconbtn"
             id="trimRight"
@@ -3285,7 +3428,7 @@
           ><button
             class="btn iconbtn danger"
             id="rippleDelete"
-            title="删除并前移"
+            title="删除并前移（Shift+Delete）"
           >
             ⇤</button
           ><button class="btn iconbtn" id="undo" title="撤销（⌘Z）">↶</button
@@ -3310,37 +3453,50 @@
           /><button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-left: 2px;">⛶</button><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button><span class="small" id="durationLabel">00:00</span>
         </div>
         <div class="timelinebody">
-          <div class="tracklabels" id="trackLabels"></div>
+          <div class="tracklabels-col" id="trackLabelCol">
+            <div class="ruler-spacer" id="rulerTimecode">00:00</div>
+            <div class="tracklabels" id="trackLabels"></div>
+          </div>
           <div class="track-resizer" id="trackLabelResizer"></div>
-          <div class="scroll" id="timelineScroll">
-            <div class="timelinecontent" id="timelineContent">
-              <div class="ruler" id="ruler"></div>
-              <div
-                class="trackrow"
-                id="track-review"
-                data-track-key="review"
-              ></div>
-              <div
-                class="trackrow"
-                id="track-caption"
-                data-track-key="caption"
-              ></div>
-              <div class="trackrow" id="track-text" data-track-key="text"></div>
-              <div
-                class="trackrow"
-                id="track-image"
-                data-track-key="image"
-              ></div>
-              <div
-                class="trackrow"
-                id="track-video"
-                data-track-key="video"
-              ></div>
-              <div class="trackrow" id="track-audio" data-track-key="audio">
-                <canvas class="wavecanvas" id="waveform"></canvas>
-              </div>
-              <div class="timeline-marquee" id="timelineMarquee"></div>
+          <div class="timeline-main" id="timelineMain">
+            <div class="timeline-overlay" id="timelineOverlay">
               <div class="playhead" id="playhead"></div>
+              <div class="snap-guide" id="snapGuide"></div>
+              <div class="blade-guide" id="bladeGuide">
+                <span class="blade-time" id="bladeTime"></span>
+              </div>
+            </div>
+            <div class="ruler-bar" id="rulerBar">
+              <div class="ruler" id="ruler"></div>
+            </div>
+            <div class="scroll" id="timelineScroll">
+              <div class="timelinecontent" id="timelineContent">
+                <div
+                  class="trackrow"
+                  id="track-review"
+                  data-track-key="review"
+                ></div>
+                <div
+                  class="trackrow"
+                  id="track-caption"
+                  data-track-key="caption"
+                ></div>
+                <div class="trackrow" id="track-text" data-track-key="text"></div>
+                <div
+                  class="trackrow"
+                  id="track-image"
+                  data-track-key="image"
+                ></div>
+                <div
+                  class="trackrow"
+                  id="track-video"
+                  data-track-key="video"
+                ></div>
+                <div class="trackrow" id="track-audio" data-track-key="audio">
+                  <canvas class="wavecanvas" id="waveform"></canvas>
+                </div>
+                <div class="timeline-marquee" id="timelineMarquee"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -4668,6 +4824,7 @@
           watchProjectMediaAnalysis();
           checkModel();
           updateAiReviewButton();
+          ensureResolvePlugin();
         }, 120);
       }
       function reviewClipText(item = {}) {
@@ -5004,37 +5161,37 @@
         state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
         if (state.selected.type === "caption") focusCaptionInspector(state.selected.id, true);
       }
-      function linkedTimelineObjects(start, end, exceptType = "", exceptId = "") {
+      function overlayTrackId(type, item) {
+        if (!item) return type;
+        if (type === "review") return item.trackId || "review";
+        if (type === "caption") return item.trackId || "caption";
+        return item.trackId || type;
+      }
+      function linkedTimelineObjects(anchorType, anchorId) {
         if (!state.avLinked) return [];
-        const lists = [
+        const obj = timelineObjectFor(anchorType, anchorId);
+        if (!obj?.linkGroupId) return [];
+        const result = [];
+        for (const [type, items] of [
           ["videolayer", state.videoLayers],
           ["audioasset", state.audioAssets],
-          ["image", state.images],
-          ["text", state.titles],
-          ["caption", state.captions],
-          ["review", state.reviewCaptions],
-        ];
-        const result = [];
-        for (const [type, items] of lists)
-          for (const obj of items || []) {
-            if (type === exceptType && obj.id === exceptId) continue;
-            const overlap =
-              Math.min(end, Number(obj.end || 0)) -
-              Math.max(start, Number(obj.start || 0));
-            if (overlap > 0.002)
+        ])
+          for (const item of items || []) {
+            if (type === anchorType && item.id === anchorId) continue;
+            if (item.linkGroupId === obj.linkGroupId)
               result.push({
                 type,
-                id: obj.id,
-                obj,
-                originStart: Number(obj.start || 0),
-                originEnd: Number(obj.end || 0),
+                id: item.id,
+                obj: item,
+                originStart: Number(item.start || 0),
+                originEnd: Number(item.end || 0),
               });
           }
         return result;
       }
-      function includeLinkedSelection(anchorType, anchorId, start, end) {
+      function includeLinkedSelection(anchorType, anchorId) {
         if (!state.avLinked) return;
-        for (const item of linkedTimelineObjects(start, end, anchorType, anchorId))
+        for (const item of linkedTimelineObjects(anchorType, anchorId))
           if (
             !state.selectedItems.some(
               (selected) =>
@@ -5043,40 +5200,350 @@
           )
             state.selectedItems.push({ type: item.type, id: item.id });
       }
-      function snapTime(value, moving = null) {
-        if (!state.snapping) return value;
-        const candidates = [0, state.duration, state.currentTime];
-        for (const list of [
-          mainClips(),
-          mainAudioClips(),
-          state.videoLayers,
-          state.audioAssets,
-          state.images,
-          state.titles,
-          state.captions,
-          state.reviewCaptions,
+      function expandLinkedSelection(items) {
+        if (!state.avLinked) return [...(items || [])];
+        const expanded = [...(items || [])];
+        const has = (type, id) =>
+          expanded.some((item) => item.type === type && item.id === id);
+        const push = (type, id) => {
+          if (id && !has(type, id)) expanded.push({ type, id });
+        };
+        for (const item of items || []) {
+          const obj = timelineObjectFor(item.type, item.id);
+          if (obj?.linkedAudioId) push("audioasset", obj.linkedAudioId);
+          if (obj?.linkedVideoId) push("videolayer", obj.linkedVideoId);
+          for (const partner of linkedTimelineObjects(item.type, item.id))
+            push(partner.type, partner.id);
+        }
+        return expanded;
+      }
+      function shiftTimedOverlay(item, length) {
+        const start = Number(item.start || 0);
+        const end = Number(item.end || start + 0.04);
+        item.start = Math.max(0, start - length);
+        item.end = Math.max(item.start + 0.04, end - length);
+        if (!Array.isArray(item.words)) return item;
+        for (const word of item.words) {
+          const wordStart = Number(word.start || 0);
+          const wordEnd = Number(word.end || wordStart + 0.01);
+          word.start = Math.max(0, wordStart - length);
+          word.end = Math.max(word.start + 0.01, wordEnd - length);
+        }
+        return item;
+      }
+      function rippleOverlayTrack(list, trackId, type, cutStart, cutEnd) {
+        const length = Math.max(0, Number(cutEnd) - Number(cutStart));
+        if (length <= 0.001) return list;
+        for (const item of list || []) {
+          if (overlayTrackId(type, item) !== trackId) continue;
+          if (Number(item.start || 0) + 0.002 >= Number(cutEnd))
+            shiftTimedOverlay(item, length);
+        }
+        return list;
+      }
+      function playheadInside(item, time, margin = 0.04) {
+        const start = Number(item?.start || 0);
+        const end = Number(item?.end || start);
+        return Number(time) > start + margin && Number(time) < end - margin;
+      }
+      function joinCaptionWords(words) {
+        return (words || [])
+          .map((word) => word.display || word.text || "")
+          .join(" ")
+          .replace(/\s+([.,!?;:])/g, "$1")
+          .trim();
+      }
+      function splitTimedItem(item, time, nextId) {
+        if (!item || !playheadInside(item, time)) return null;
+        const left = item;
+        const right = { ...item, id: nextId };
+        if (Array.isArray(item.words) && item.words.length) {
+          const leftWords = [];
+          const rightWords = [];
+          for (const word of item.words) {
+            const wordStart = Number(word.start || 0);
+            const wordEnd = Number(word.end || wordStart + 0.01);
+            if ((wordStart + wordEnd) / 2 < time) leftWords.push({ ...word });
+            else rightWords.push({ ...word });
+          }
+          if (!leftWords.length || !rightWords.length) return null;
+          left.words = leftWords;
+          left.start = Number(leftWords[0].start || item.start);
+          left.end = Math.max(left.start + 0.04, Math.min(time, Number(leftWords.at(-1).end)));
+          left.text = joinCaptionWords(leftWords);
+          right.words = rightWords;
+          right.start = Math.max(time, Number(rightWords[0].start || time));
+          right.end = Number(rightWords.at(-1).end || item.end);
+          right.text = joinCaptionWords(rightWords);
+          return { left, right };
+        }
+        left.end = time;
+        right.start = time;
+        return { left, right };
+      }
+      function clipUnderPlayhead(type = "video", time = state.currentTime) {
+        if (type === "audio")
+          return mainAudioClips().find((clip) => playheadInside(clip, time)) || null;
+        return mainClips().find((clip) => playheadInside(clip, time)) || null;
+      }
+      function clipsUnderPlayhead(time = state.currentTime, { includeReview = false } = {}) {
+        const hits = [];
+        for (const clip of mainClips())
+          if (playheadInside(clip, time)) hits.push({ type: "video", id: clip.id });
+        if (!state.avLinked)
+          for (const clip of mainAudioClips())
+            if (playheadInside(clip, time)) hits.push({ type: "audio", id: clip.id });
+        for (const [type, list] of [
+          ["videolayer", state.videoLayers],
+          ["audioasset", state.audioAssets],
+          ["image", state.images],
+          ["text", state.titles],
+          ["caption", state.captions],
         ])
-          for (const item of list)
-            if (
-              item !== moving &&
-              !(moving?.id && item?.id === moving.id)
-            ) candidates.push(item.start, item.end);
-        const closest = candidates.reduce(
-          (best, point) =>
-            Math.abs(point - value) < Math.abs(best - value) ? point : best,
-          value,
+          for (const item of list || [])
+            if (playheadInside(item, time)) hits.push({ type, id: item.id });
+        if (includeReview)
+          for (const item of state.reviewCaptions || [])
+            if (playheadInside(item, time)) hits.push({ type: "review", id: item.id });
+        return hits;
+      }
+      function resolveWorkingSelection(items) {
+        const result = [];
+        let bare = false;
+        for (const item of items || []) {
+          if ((item.type === "video" || item.type === "audio") && item.id === "main") {
+            bare = true;
+            continue;
+          }
+          result.push(item);
+        }
+        if (bare) {
+          const clip = clipUnderPlayhead("video") || clipUnderPlayhead("audio");
+          if (clip)
+            result.push({
+              type: mainClips().some((item) => item.id === clip.id) ? "video" : "audio",
+              id: clip.id,
+            });
+        }
+        return result;
+      }
+      let editTool = "select";
+      function setEditTool(tool) {
+        editTool = tool === "blade" ? "blade" : "select";
+        $("timeline")?.classList.toggle("blade-mode", editTool === "blade");
+        $("bladeTool")?.classList.toggle("primary", editTool === "blade");
+        if (editTool !== "blade") setBladeGuide(0, false);
+      }
+      function timelineTimeFromClientX(clientX) {
+        const scroll = $("timelineScroll");
+        if (!scroll) return state.currentTime;
+        const bounds = scroll.getBoundingClientRect();
+        return clamp(
+          (scroll.scrollLeft + clientX - bounds.left) / state.zoom,
+          0,
+          visibleTimelineDuration(),
         );
-        return Math.abs(closest - value) <= Math.max(0.04, 16 / state.zoom)
-          ? closest
-          : value;
+      }
+      function snapThresholdSeconds(zoom = state.zoom) {
+        return Math.max(0.04, 12 / Math.max(1, Number(zoom) || 1));
+      }
+      function collectSnapPoints({ clips = [], extra = [], ignoreIds = new Set() } = {}) {
+        const points = [];
+        for (const value of extra)
+          if (Number.isFinite(Number(value))) points.push(Number(value));
+        for (const item of clips || []) {
+          if (item?.id && ignoreIds.has(item.id)) continue;
+          const start = Number(item.start);
+          const end = Number(item.end);
+          if (Number.isFinite(start)) points.push(start);
+          if (Number.isFinite(end)) points.push(end);
+        }
+        return points;
+      }
+      function snapValue(value, points, threshold) {
+        const time = Number(value);
+        const window = Math.max(0, Number(threshold) || 0);
+        let best = time;
+        let bestDist = Infinity;
+        for (const point of points || []) {
+          const dist = Math.abs(Number(point) - time);
+          if (dist < bestDist && dist <= window) {
+            best = Number(point);
+            bestDist = dist;
+          }
+        }
+        const snapped = bestDist <= window && bestDist < Infinity;
+        return {
+          time: snapped ? best : time,
+          snapped,
+          target: snapped ? best : null,
+          distance: snapped ? bestDist : Infinity,
+        };
+      }
+      function snapClipEdges(start, duration, points, threshold) {
+        const length = Math.max(0.04, Number(duration) || 0);
+        const startSnap = snapValue(start, points, threshold);
+        const endSnap = snapValue(Number(start) + length, points, threshold);
+        if (endSnap.distance < startSnap.distance)
+          return {
+            start: endSnap.time - length,
+            snapped: endSnap.snapped,
+            target: endSnap.target,
+            edge: endSnap.snapped ? "end" : "",
+          };
+        return {
+          start: startSnap.time,
+          snapped: startSnap.snapped,
+          target: startSnap.target,
+          edge: startSnap.snapped ? "start" : "",
+        };
+      }
+      function snapGroupDelta(moving, delta, points, threshold) {
+        let bestAdj = 0;
+        let bestDist = Infinity;
+        let target = null;
+        for (const item of moving || []) {
+          const start = Number(item.originStart) + Number(delta);
+          const end = Number(item.originEnd) + Number(delta);
+          for (const edge of [start, end]) {
+            const snap = snapValue(edge, points, threshold);
+            if (!snap.snapped) continue;
+            const adj = snap.time - edge;
+            if (Math.abs(adj) < bestDist) {
+              bestDist = Math.abs(adj);
+              bestAdj = adj;
+              target = snap.target;
+            }
+          }
+        }
+        return {
+          delta: Number(delta) + bestAdj,
+          snapped: bestDist < Infinity,
+          target,
+        };
+      }
+      function allSnapClips() {
+        return [
+          ...mainClips(),
+          ...(!state.avLinked ? mainAudioClips() : []),
+          ...state.videoLayers,
+          ...state.audioAssets,
+          ...state.images,
+          ...state.titles,
+          ...state.captions,
+          ...state.reviewCaptions,
+        ];
+      }
+      function snapIgnoreIds(moving) {
+        const ids = new Set();
+        const add = (item) => {
+          if (!item) return;
+          if (item.id) ids.add(item.id);
+          if (item.obj?.id) ids.add(item.obj.id);
+          const groupId = item.linkGroupId || item.obj?.linkGroupId;
+          if (!groupId) return;
+          for (const partner of [...state.videoLayers, ...state.audioAssets])
+            if (partner.linkGroupId === groupId) ids.add(partner.id);
+        };
+        if (Array.isArray(moving)) moving.forEach(add);
+        else add(moving);
+        return ids;
+      }
+      function currentSnapPoints(moving = null) {
+        return collectSnapPoints({
+          clips: allSnapClips(),
+          extra: [0, state.duration, state.currentTime],
+          ignoreIds: snapIgnoreIds(moving),
+        });
+      }
+      function overlayX(time) {
+        return Number(time) * state.zoom - ($("timelineScroll")?.scrollLeft || 0);
+      }
+      function syncRulerScroll() {
+        const ruler = $("ruler");
+        const scroll = $("timelineScroll");
+        if (ruler && scroll) ruler.style.transform = `translateX(${-scroll.scrollLeft}px)`;
+      }
+      function syncPlayheadPosition() {
+        const el = $("playhead");
+        if (el) el.style.left = `${overlayX(state.currentTime)}px`;
+        if ($("rulerTimecode"))
+          $("rulerTimecode").textContent = formatTime(state.currentTime, false);
+      }
+      function syncTimelineChrome() {
+        syncRulerScroll();
+        syncPlayheadPosition();
+        const snap = $("snapGuide");
+        if (snap?.classList.contains("on")) {
+          const time = Number(snap.dataset.time);
+          if (Number.isFinite(time)) snap.style.left = `${overlayX(time)}px`;
+        }
+        const blade = $("bladeGuide");
+        if (blade?.classList.contains("on")) {
+          const time = Number(blade.dataset.time);
+          if (Number.isFinite(time)) blade.style.left = `${overlayX(time)}px`;
+        }
+      }
+      function showSnapGuide(time, on) {
+        const el = $("snapGuide");
+        if (!el) return;
+        el.classList.toggle("on", !!on && Number.isFinite(time));
+        if (on && Number.isFinite(time)) {
+          el.dataset.time = String(time);
+          el.style.left = `${overlayX(time)}px`;
+        }
+      }
+      function setBladeGuide(time, on) {
+        const el = $("bladeGuide");
+        if (!el) return;
+        if (!on || !Number.isFinite(time)) {
+          el.classList.remove("on");
+          return;
+        }
+        el.classList.add("on");
+        el.dataset.time = String(time);
+        el.style.left = `${overlayX(time)}px`;
+        if ($("bladeTime")) $("bladeTime").textContent = formatTime(time);
+      }
+      function previewBladeTime(clientX) {
+        const raw = timelineTimeFromClientX(clientX);
+        if (!state.snapping) return raw;
+        return snapValue(raw, currentSnapPoints(), snapThresholdSeconds()).time;
+      }
+      function hideSnapGuide() {
+        $("snapGuide")?.classList.remove("on");
+      }
+      function snapTime(value, moving = null) {
+        if (!state.snapping) {
+          hideSnapGuide();
+          return value;
+        }
+        const result = snapValue(value, currentSnapPoints(moving), snapThresholdSeconds());
+        showSnapGuide(result.target, result.snapped);
+        return result.time;
       }
       function snapClipStart(value, duration, moving = null) {
-        if (!state.snapping) return value;
-        const direct = snapTime(value, moving);
-        const snappedEnd = snapTime(value + duration, moving) - duration;
-        return Math.abs(snappedEnd - value) < Math.abs(direct - value)
-          ? snappedEnd
-          : direct;
+        if (!state.snapping) {
+          hideSnapGuide();
+          return value;
+        }
+        const result = snapClipEdges(
+          value,
+          duration,
+          currentSnapPoints(moving),
+          snapThresholdSeconds(),
+        );
+        showSnapGuide(result.target, result.snapped);
+        return result.start;
+      }
+      function toggleSnapping() {
+        state.snapping = !state.snapping;
+        if (!state.snapping) hideSnapGuide();
+        $("snapToggle").classList.toggle("primary", state.snapping);
+        $("snapToggle").title = state.snapping
+          ? "时间线吸附（N）"
+          : "吸附已关闭（N）";
+        toast(state.snapping ? "时间线吸附已开启：靠近片段边缘和播放头会对齐" : "时间线吸附已关闭");
       }
       function currentStyle() {
         const obj = currentObject();
@@ -5966,7 +6433,7 @@
             end: clamp(Number(at) || 0, 0, visibleTimelineDuration()) + 3,
             x: 0,
             y: 0,
-            scale: 0.35,
+            scale: 1,
             opacity: 1,
             rotation: 0,
             blendMode: "normal",
@@ -6598,7 +7065,7 @@
           applyAnimatedObjectStyle(
             el,
             image,
-            `translate(calc(-50% + ${image.x * px}px),calc(-50% + ${image.y * py}px)) rotate(${Number(image.rotation || 0)}deg) scale(${image.scale})`,
+            `translate(calc(-50% + ${image.x * px}px),calc(-50% + ${image.y * py}px)) rotate(${Number(image.rotation || 0)}deg) scale(${image.scale || 1})`,
           );
           el.dataset.type = "image";
           el.dataset.id = image.id;
@@ -6929,6 +7396,19 @@
         );
         return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
       }
+      function rulerTickPlan(zoom) {
+        const z = Number(zoom) || 60;
+        if (z < 2) return { major: 300, minor: 60, micro: 12 };
+        if (z < 4) return { major: 120, minor: 30, micro: 6 };
+        if (z < 8) return { major: 60, minor: 10, micro: 2 };
+        if (z < 16) return { major: 30, minor: 5, micro: 1 };
+        if (z < 28) return { major: 10, minor: 2, micro: 0.5 };
+        if (z < 48) return { major: 5, minor: 1, micro: 0.2 };
+        if (z < 80) return { major: 2, minor: 0.5, micro: 0.1 };
+        if (z < 130) return { major: 1, minor: 0.2, micro: 1 / 30 };
+        if (z < 200) return { major: 0.5, minor: 0.1, micro: 1 / 30 };
+        return { major: 1 / 15, minor: 1 / 30, micro: 1 / 60 };
+      }
       function renderRuler() {
         const visibleDuration = visibleTimelineDuration();
         const width = Math.max(
@@ -6937,27 +7417,29 @@
           ),
           ruler = $("ruler");
         $("timelineContent").style.width = `${width}px`;
-        const step =
-          state.zoom < 2 ? 300 :
-          state.zoom < 5 ? 120 :
-          state.zoom < 10 ? 60 :
-          state.zoom < 20 ? 30 :
-          state.zoom < 40 ? 10 :
-          state.zoom < 80 ? 5 :
-          state.zoom < 140 ? 2 : 1;
+        if (ruler) ruler.style.width = `${width}px`;
+        const plan = rulerTickPlan(state.zoom);
         let html = "";
-        for (let t = 0; t <= visibleDuration; t += step)
-          html += `<span class="tick" style="left:${t * state.zoom}px">${formatTime(t, false)}</span>`;
+        for (let t = 0; t <= visibleDuration + 0.0001; t += plan.micro) {
+          const major = Math.abs(t / plan.major - Math.round(t / plan.major)) < 0.001;
+          const minor = !major && Math.abs(t / plan.minor - Math.round(t / plan.minor)) < 0.001;
+          const label = major
+            ? plan.major >= 1
+              ? formatTime(t, false)
+              : formatTime(t, true).replace(/(\.\d).+$/, "$1")
+            : "";
+          html += `<span class="tick${major ? "" : minor ? " minor" : " micro"}" style="left:${t * state.zoom}px">${label}</span>`;
+        }
         for (const issue of state.issues)
           html += `<span class="marker ${issue.type}" data-issue="${issue.id}" title="${issue.label}" style="left:${issue.start * state.zoom}px"></span>`;
         html += `<span class="trackend" style="left:${state.duration * state.zoom}px"></span>`;
         ruler.innerHTML = html;
+        syncTimelineChrome();
       }
       function renderTrackOrder() {
         const labels = $("trackLabels"),
           content = $("timelineContent"),
-          ruler = $("ruler"),
-          playhead = $("playhead");
+          tail = content.querySelector("#timelineMarquee");
         labels.innerHTML = state.trackOrder
           .map((key) => {
             const meta = trackInfo(key),
@@ -6992,9 +7474,9 @@
             state.trackVisibility[key] === false,
           );
           row.classList.toggle("locked-track", isTrackLocked(key));
-          content.insertBefore(row, playhead);
+          if (tail) content.insertBefore(row, tail);
+          else content.appendChild(row);
         }
-        content.insertBefore(ruler, content.firstChild);
         labels.querySelectorAll("[data-track-key]").forEach((label) => {
           label.ondragstart = (event) => {
             event.dataTransfer.effectAllowed = "move";
@@ -7113,7 +7595,7 @@
           const label = $("trackLabels").querySelector(`[data-track-key="${key}"]`);
           if (label) label.style.height = laneHeight;
         }
-        $("playhead").style.left = `${state.currentTime * state.zoom}px`;
+        syncTimelineChrome();
         drawWaveform();
         drawAssetWaveforms();
         $("durationLabel").textContent = formatTime(state.duration, false);
@@ -8104,7 +8586,7 @@
         }
         renderPreviewObjects(false);
         syncPreviewAudio();
-        $("playhead").style.left = `${state.currentTime * state.zoom}px`;
+        syncTimelineChrome();
         $("timecode").textContent =
           `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
         keepPlayheadInView(state.playing ? "play" : "edge");
@@ -8144,7 +8626,7 @@
             return;
           }
           schedulePreviewRender(false);
-          $("playhead").style.left = `${state.currentTime * state.zoom}px`;
+          syncPlayheadPosition();
           $("timecode").textContent =
             `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
           keepPlayheadInView("play");
@@ -8452,166 +8934,187 @@
           btn.textContent = "自动剪停顿";
         }
       }
-      function splitSelected() {
-        if (!guardUnlocked()) return;
-        if (state.selected.type === "audio" && !state.avLinked) {
-          const clip = mainAudioClips().find(
-            (item) => item.id === state.selected.id,
-          );
-          if (
-            !clip ||
-            state.currentTime <= clip.start + 0.04 ||
-            state.currentTime >= clip.end - 0.04
-          ) {
-            toast("先选择音频片段，并把播放头放在片段内部");
-            return;
-          }
-          snapshot();
+      function splitMainClipAt(clip, time, audioOnly = false) {
+        if (!clip || !playheadInside(clip, time)) return false;
+        if (audioOnly && !state.avLinked) {
           const trackId = state.mainAudioTrackMap?.[clip.id];
-          state.audioCuts.push(state.currentTime);
+          state.audioCuts.push(time);
           if (trackId) {
             delete state.mainAudioTrackMap[clip.id];
             for (const next of mainAudioClips().filter(
-              (item) => item.start >= clip.start - .01 && item.end <= clip.end + .01,
-            )) state.mainAudioTrackMap[next.id] = trackId;
+              (item) => item.start >= clip.start - 0.01 && item.end <= clip.end + 0.01,
+            ))
+              state.mainAudioTrackMap[next.id] = trackId;
           }
-          renderAll();
-          toast("已切割主音频，视频保持不变");
-          return;
+          return true;
         }
-        if (["video", "audio"].includes(state.selected.type)) {
-          const clip = mainClips().find((c) => c.id === state.selected.id);
-          if (
-            !clip ||
-            state.currentTime <= clip.start + 0.04 ||
-            state.currentTime >= clip.end - 0.04
-          ) {
-            toast("先选择片段，并把播放头放在片段内部");
-            return;
-          }
-          snapshot();
-          const videoTrack = state.mainVideoTrackMap?.[clip.id];
-          const audioTrack = state.mainAudioTrackMap?.[clip.id];
-          const videoOffset = Number(state.mainVideoClipOffsets?.[clip.id] || 0);
-          const audioOffset = Number(state.mainAudioClipOffsets?.[clip.id] || 0);
-          state.manualCuts.push(timelineToSource(state.currentTime));
-          delete state.mainVideoTrackMap[clip.id];
-          delete state.mainAudioTrackMap[clip.id];
-          delete state.mainVideoClipOffsets[clip.id];
-          delete state.mainAudioClipOffsets[clip.id];
-          for (const next of mainClips().filter(
-            (item) => item.sourceStart >= clip.sourceStart - .01 && item.sourceEnd <= clip.sourceEnd + .01,
-          )) {
-              state.mainVideoClipOffsets[next.id] = videoOffset;
-              state.mainAudioClipOffsets[next.id] = audioOffset;
-              if (videoTrack) state.mainVideoTrackMap[next.id] = videoTrack;
-              if (audioTrack) state.mainAudioTrackMap[next.id] = audioTrack;
-          }
-          renderAll();
-          toast("已建立切点");
-          return;
+        const videoTrack = state.mainVideoTrackMap?.[clip.id];
+        const audioTrack = state.mainAudioTrackMap?.[clip.id];
+        const videoOffset = Number(state.mainVideoClipOffsets?.[clip.id] || 0);
+        const audioOffset = Number(state.mainAudioClipOffsets?.[clip.id] || 0);
+        state.manualCuts.push(timelineToSource(time));
+        delete state.mainVideoTrackMap[clip.id];
+        delete state.mainAudioTrackMap[clip.id];
+        delete state.mainVideoClipOffsets[clip.id];
+        delete state.mainAudioClipOffsets[clip.id];
+        for (const next of mainClips().filter(
+          (item) =>
+            item.sourceStart >= clip.sourceStart - 0.01 &&
+            item.sourceEnd <= clip.sourceEnd + 0.01,
+        )) {
+          state.mainVideoClipOffsets[next.id] = videoOffset;
+          state.mainAudioClipOffsets[next.id] = audioOffset;
+          if (videoTrack) state.mainVideoTrackMap[next.id] = videoTrack;
+          if (audioTrack) state.mainAudioTrackMap[next.id] = audioTrack;
         }
-        const obj = currentTimelineObject();
-        if (!obj) {
-          toast("请选择一个片段");
-          return;
-        }
-        if (
-          state.currentTime <= obj.start + 0.04 ||
-          state.currentTime >= obj.end - 0.04
-        ) {
-          toast("播放头需要位于片段内部");
-          return;
-        }
-        snapshot();
-        const originalStart = obj.start;
-        const clone = {
-          ...obj,
-          id: uid(),
-          start: state.currentTime,
-          sourceStart: ["videolayer", "audioasset"].includes(state.selected.type)
-            ? Number(obj.sourceStart || 0) +
-              (state.currentTime - originalStart) * Math.max(.5, Number(state.audio.speed || 1))
-            : obj.sourceStart,
-        };
-        obj.end = state.currentTime;
-        if (["videolayer", "audioasset"].includes(state.selected.type) && obj.linkGroupId && state.avLinked) {
-          const linked = [...state.videoLayers, ...state.audioAssets].find(
-            (item) => item !== obj && item.linkGroupId === obj.linkGroupId,
-          );
-          if (linked) {
-            const secondGroup = uid();
-            const linkedClone = {
-              ...linked,
-              id: uid(),
-              start: state.currentTime,
-              sourceStart: Number(linked.sourceStart || 0) +
-                (state.currentTime - originalStart) * Math.max(.5, Number(state.audio.speed || 1)),
-              linkGroupId: secondGroup,
-            };
-            linked.end = state.currentTime;
-            clone.linkGroupId = secondGroup;
-            if (state.selected.type === "videolayer") {
-              clone.linkedAudioId = linkedClone.id;
-              linkedClone.linkedVideoId = clone.id;
-              state.audioAssets.push(linkedClone);
-            } else {
-              clone.linkedVideoId = linkedClone.id;
-              linkedClone.linkedAudioId = clone.id;
-              state.videoLayers.push(linkedClone);
+        return true;
+      }
+      function splitOverlayObject(type, id, time) {
+        const obj = timelineObjectFor(type, id);
+        if (!obj || selectionIsLocked(type, id) || !playheadInside(obj, time))
+          return false;
+        const originalStart = Number(obj.start || 0);
+        const originalSourceStart = Number(obj.sourceStart || 0);
+        const split = splitTimedItem(obj, time, uid());
+        if (!split) return false;
+        const clone = split.right;
+        if (["videolayer", "audioasset"].includes(type)) {
+          clone.sourceStart =
+            originalSourceStart +
+            (time - originalStart) * Math.max(0.5, Number(state.audio.speed || 1));
+          if (obj.linkGroupId && state.avLinked) {
+            const linked = [...state.videoLayers, ...state.audioAssets].find(
+              (item) => item !== obj && item.linkGroupId === obj.linkGroupId,
+            );
+            if (linked && playheadInside(linked, time)) {
+              const secondGroup = uid();
+              const linkedStart = Number(linked.start || 0);
+              const linkedSource = Number(linked.sourceStart || 0);
+              const linkedSplit = splitTimedItem(linked, time, uid());
+              if (linkedSplit) {
+                const linkedClone = linkedSplit.right;
+                linkedClone.sourceStart =
+                  linkedSource +
+                  (time - linkedStart) * Math.max(0.5, Number(state.audio.speed || 1));
+                linkedClone.linkGroupId = secondGroup;
+                clone.linkGroupId = secondGroup;
+                if (type === "videolayer") {
+                  clone.linkedAudioId = linkedClone.id;
+                  linkedClone.linkedVideoId = clone.id;
+                  state.audioAssets.push(linkedClone);
+                } else {
+                  clone.linkedVideoId = linkedClone.id;
+                  linkedClone.linkedAudioId = clone.id;
+                  state.videoLayers.push(linkedClone);
+                }
+              }
             }
           }
         }
-        if (state.selected.type === "videolayer") state.videoLayers.push(clone);
-        if (state.selected.type === "audioasset") state.audioAssets.push(clone);
-        if (state.selected.type === "image") state.images.push(clone);
-        if (state.selected.type === "text") state.titles.push(clone);
-        if (state.selected.type === "caption") state.captions.push(clone);
-        if (state.selected.type === "review") state.reviewCaptions.push(clone);
+        if (type === "videolayer") state.videoLayers.push(clone);
+        if (type === "audioasset") state.audioAssets.push(clone);
+        if (type === "image") state.images.push(clone);
+        if (type === "text") state.titles.push(clone);
+        if (type === "caption") state.captions.push(clone);
+        if (type === "review") state.reviewCaptions.push(clone);
+        return true;
+      }
+      function splitClipsAt(time, targets) {
+        const hits = (targets || []).filter(
+          (item) => item?.id && item.id !== "main" && !selectionIsLocked(item.type, item.id),
+        );
+        if (!hits.length) return false;
+        snapshot();
+        let cut = 0;
+        const seen = new Set();
+        const mark = (type, id) => {
+          const key = `${type}:${id}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        };
+        for (const hit of hits) {
+          if (hit.type === "video") {
+            const clip = mainClips().find((item) => item.id === hit.id);
+            if (mark("video", hit.id) && splitMainClipAt(clip, time, false)) cut += 1;
+            continue;
+          }
+          if (hit.type === "audio") {
+            const clip = mainAudioClips().find((item) => item.id === hit.id);
+            if (mark("audio", hit.id) && splitMainClipAt(clip, time, true)) cut += 1;
+            continue;
+          }
+          if (!mark(hit.type, hit.id)) continue;
+          if (splitOverlayObject(hit.type, hit.id, time)) {
+            cut += 1;
+            if (state.avLinked) {
+              for (const partner of linkedTimelineObjects(hit.type, hit.id))
+                seen.add(`${partner.type}:${partner.id}`);
+            }
+          }
+        }
+        if (!cut) {
+          state.undo.pop();
+          return false;
+        }
         renderAll();
+        toast(`已在 ${formatTime(time)} 切割 ${cut} 个片段`);
+        return true;
+      }
+      function splitSelected() {
+        const time = state.currentTime;
+        const under = clipsUnderPlayhead(time);
+        if (!under.length) {
+          toast("把播放头放到要切的片段上，再按切割");
+          return;
+        }
+        splitClipsAt(time, under);
       }
       function trimAtPlayhead(side) {
-        if (!guardUnlocked()) return;
+        const time = state.currentTime;
+        const working = resolveWorkingSelection(
+          (state.selectedItems || []).length
+            ? state.selectedItems
+            : state.selected?.id
+              ? [state.selected]
+              : [],
+        );
+        const selectedOverlay = working
+          .map((item) => ({ ...item, obj: timelineObjectFor(item.type, item.id) }))
+          .find((item) => item.obj && playheadInside(item.obj, time, 0.02));
         if (state.selected.type === "audio" && !state.avLinked) {
-          const clip = mainAudioClips().find(
-            (item) => item.id === state.selected.id,
-          );
-          if (
-            !clip ||
-            state.currentTime <= clip.start + 0.02 ||
-            state.currentTime >= clip.end - 0.02
-          ) {
-            toast("请先选择音频片段，并把播放头放在片段内部");
+          const clip =
+            mainAudioClips().find((item) => item.id === state.selected.id) ||
+            clipUnderPlayhead("audio", time);
+          if (!clip || !playheadInside(clip, time, 0.02)) {
+            toast("把播放头放到要剪的音频片段上");
             return;
           }
           snapshot();
           state.audioMutes.push(
             side === "left"
-              ? { start: clip.start, end: state.currentTime }
-              : { start: state.currentTime, end: clip.end },
+              ? { start: clip.start, end: time }
+              : { start: time, end: clip.end },
           );
           renderAll();
           return;
         }
-        if (["video", "audio"].includes(state.selected.type)) {
-          const clip = mainClips().find(
-            (item) => item.id === state.selected.id,
-          );
-          if (
-            !clip ||
-            state.currentTime <= clip.start + 0.02 ||
-            state.currentTime >= clip.end - 0.02
-          ) {
-            toast("请先选择片段，并把播放头放在片段内部");
+        const mainClip =
+          (["video", "audio"].includes(state.selected.type) &&
+            mainClips().find((item) => item.id === state.selected.id)) ||
+          clipUnderPlayhead("video", time);
+        if (mainClip && playheadInside(mainClip, time, 0.02) && !selectedOverlay) {
+          if (isTrackLocked(selectionTrackId("video", mainClip.id))) {
+            toast("这个轨道已锁定，请先点击轨道前方的锁");
             return;
           }
           snapshot();
-          const sourceAt = timelineToSource(state.currentTime);
+          const sourceAt = timelineToSource(time);
           const range =
             side === "left"
-              ? { start: clip.sourceStart, end: sourceAt }
-              : { start: sourceAt, end: clip.sourceEnd };
-          const at = side === "left" ? clip.start : state.currentTime;
+              ? { start: mainClip.sourceStart, end: sourceAt }
+              : { start: sourceAt, end: mainClip.sourceEnd };
+          const at = side === "left" ? mainClip.start : time;
           const len = range.end - range.start;
           state.removals.push({ ...range, source: `trim-${side}` });
           normalizeRemovals();
@@ -8620,24 +9123,26 @@
           renderAll();
           return;
         }
-        const object = currentTimelineObject();
-        if (!object) {
-          toast("请先选择一个片段");
+        const object = selectedOverlay?.obj || currentTimelineObject();
+        if (!object || !playheadInside(object, time, 0.02)) {
+          toast("把播放头放到要剪的片段上");
           return;
         }
+        if (!guardUnlocked(selectedOverlay?.type || state.selected.type, object.id))
+          return;
         snapshot();
         if (side === "left")
-          object.start = clamp(
-            state.currentTime,
-            object.start,
-            object.end - 0.04,
+          object.start = clamp(time, object.start, object.end - 0.04);
+        else object.end = clamp(time, object.start + 0.04, object.end);
+        if (state.avLinked && object.linkGroupId) {
+          const linked = [...state.videoLayers, ...state.audioAssets].find(
+            (item) => item !== object && item.linkGroupId === object.linkGroupId,
           );
-        else
-          object.end = clamp(
-            state.currentTime,
-            object.start + 0.04,
-            object.end,
-          );
+          if (linked) {
+            linked.start = object.start;
+            linked.end = object.end;
+          }
+        }
         renderAll();
       }
       async function createFreezeFrame() {
@@ -8751,13 +9256,15 @@
         cleanupEmptyDynamicTracks();
       }
       function deleteSelected(ripple = false) {
-        const requested = (state.selectedItems || []).length
-          ? [...state.selectedItems]
-          : state.selected?.id
-            ? [{ ...state.selected }]
-            : [];
-        const selected = requested.filter(
-          (item) => !selectionIsLocked(item.type, item.id),
+        const requested = resolveWorkingSelection(
+          (state.selectedItems || []).length
+            ? [...state.selectedItems]
+            : state.selected?.id
+              ? [{ ...state.selected }]
+              : [],
+        );
+        const selected = expandLinkedSelection(
+          requested.filter((item) => !selectionIsLocked(item.type, item.id)),
         );
         if (!selected.length) {
           toast(requested.length ? "所选轨道已锁定" : "请先选择一个或多个片段");
@@ -8767,14 +9274,30 @@
         const ids = (type) =>
           new Set(selected.filter((item) => item.type === type).map((item) => item.id));
         const videoIds = ids("video");
-        const removeWholeMain = videoIds.delete("main");
+        videoIds.delete("main");
         const audioIds = ids("audio");
+        audioIds.delete("main");
+        const removeWholeMain = false;
         const shouldRippleAudio = ripple && state.avLinked;
         const sourceClips = mainClips();
         const rippleClips = sourceClips
           .filter(
             (clip) => videoIds.has(clip.id) || (shouldRippleAudio && audioIds.has(clip.id)),
           )
+          .sort((a, b) => b.start - a.start);
+        const overlayHoles = selected
+          .filter((item) => !["video", "audio"].includes(item.type))
+          .map((item) => {
+            const obj = timelineObjectFor(item.type, item.id);
+            if (!obj) return null;
+            return {
+              type: item.type,
+              trackId: overlayTrackId(item.type, obj),
+              start: Number(obj.start || 0),
+              end: Number(obj.end || obj.start || 0),
+            };
+          })
+          .filter((hole) => hole && hole.end > hole.start + 0.001)
           .sort((a, b) => b.start - a.start);
         for (const clip of rippleClips) {
           state.removals.push({
@@ -8807,6 +9330,28 @@
         state.captions = state.captions.filter(keep("caption"));
         state.reviewCaptions = state.reviewCaptions.filter(keep("review"));
         state.issues = state.issues.filter(keep("review"));
+        if (ripple && !rippleClips.length) {
+          for (const hole of overlayHoles) {
+            const list =
+              hole.type === "videolayer"
+                ? state.videoLayers
+                : hole.type === "audioasset"
+                  ? state.audioAssets
+                  : hole.type === "image"
+                    ? state.images
+                    : hole.type === "text"
+                      ? state.titles
+                      : hole.type === "caption"
+                        ? state.captions
+                        : hole.type === "review"
+                          ? state.reviewCaptions
+                          : null;
+            if (list)
+              rippleOverlayTrack(list, hole.trackId, hole.type, hole.start, hole.end);
+            if (hole.type === "review")
+              rippleOverlayTrack(state.issues, hole.trackId, "review", hole.start, hole.end);
+          }
+        }
         if (removeWholeMain) clearOrPromoteMainVideo();
         if (rippleClips.length) {
           normalizeRemovals();
@@ -8820,7 +9365,7 @@
           : { type: "", id: "" };
         seekTimeline(Math.min(state.currentTime, state.duration));
         renderAll();
-        toast(`已删除 ${selected.length} 个所选片段${selected.length < requested.length ? "；锁定轨道已跳过" : ""}`);
+        toast(`已删除 ${selected.length} 个所选片段${selected.length < requested.length ? "；锁定轨道已跳过" : ""}${ripple ? "，并前移同轨" : ""}`);
       }
       function shiftTracks(at, len) {
         for (const list of [
@@ -10775,7 +11320,10 @@
           toast(error.message);
         }
       };
-      $("play").onclick = togglePlay;
+      $("play").onclick = () => {
+        blurActiveTextField();
+        togglePlay();
+      };
       $("toStart").onclick = () => seekTimeline(0);
       $("toEnd").onclick = () => seekTimeline(state.duration);
       $("pauseCut").onclick = runPauseCut;
@@ -10859,7 +11407,7 @@
             return;
           }
           showContextMenu(event, [
-            { label: "在播放头切割", action: () => splitSelected() },
+            { label: "在播放头切割经过的片段", action: () => splitSelected() },
             { label: "删除所选片段", danger: true, action: () => deleteSelected(false) },
             { label: "删除并前移", danger: true, action: () => deleteSelected(true) },
           ]);
@@ -10921,20 +11469,21 @@
         state.audio.offset = 0;
         $("linkAV").classList.toggle("primary", state.avLinked);
         $("linkAV").title = state.avLinked
-          ? "全部轨道联动"
-          : "全部轨道独立";
-        toast(state.avLinked ? "全部轨道已联动" : "全部轨道现在可以独立调整");
+          ? "联动选择：成组音画一起移动和删除"
+          : "联动选择已关闭，音画可独立调整";
+        toast(state.avLinked ? "联动选择已开启：成组音画一起选、移、剪、删" : "联动选择已关闭：各片段独立调整");
         renderTimeline();
         queueAutosave();
       };
-      $("snapToggle").onclick = () => {
-        state.snapping = !state.snapping;
-        $("snapToggle").classList.toggle("primary", state.snapping);
-        toast(state.snapping ? "时间线吸附已开启" : "时间线吸附已关闭");
-      };
+      $("snapToggle").onclick = toggleSnapping;
       $("stepBack").onclick = () => seekTimeline(state.currentTime - 1 / 30);
       $("stepForward").onclick = () => seekTimeline(state.currentTime + 1 / 30);
       $("splitClip").onclick = splitSelected;
+      if ($("bladeTool"))
+        $("bladeTool").onclick = () => {
+          setEditTool(editTool === "blade" ? "select" : "blade");
+          toast(editTool === "blade" ? "剃刀：点击片段切割" : "已退出剃刀");
+        };
       $("deleteClip").onclick = () => deleteSelected(false);
       $("rippleDelete").onclick = () => deleteSelected(true);
       $("undo").onclick = restoreSnapshot;
@@ -11039,8 +11588,8 @@
         // A large caption project can contain thousands of nodes; touching all
         // of them on every pointer event is the source of the multi-second UI
         // stalls. The complete geometry is committed once after the gesture.
-        $("playhead").style.left = `${state.currentTime * state.zoom}px`;
         scroll.scrollLeft = Math.max(0, playheadTime * state.zoom - anchorX);
+        syncTimelineChrome();
         scheduleTimelineZoomCommit();
       }
       let timelineZoomCommitTimer = 0;
@@ -11067,8 +11616,8 @@
           const nextWidth = Math.max(scroll.clientWidth, visibleTimelineDuration() * state.zoom);
           content.style.width = `${nextWidth}px`;
         }
-        $("playhead").style.left = `${state.currentTime * state.zoom}px`;
         scroll.scrollLeft = 0;
+        syncTimelineChrome();
         renderTimeline();
         scheduleWaveformRender();
       }
@@ -11158,7 +11707,7 @@
         rulerScrubTime = 0,
         rulerScrubLastSeek = 0;
       function scheduleRulerScrub(clientX) {
-        const rect = $("timelineContent").getBoundingClientRect();
+        const rect = ($("ruler") || $("timelineContent")).getBoundingClientRect();
         rulerScrubTime = clamp(
           (clientX - rect.left) / state.zoom,
           0,
@@ -11247,6 +11796,18 @@
         }
         const clip = e.target.closest(".clip");
         if (clip) {
+          if (editTool === "blade") {
+            const guided = Number($("bladeGuide")?.dataset.time);
+            const time = Number.isFinite(guided)
+              ? guided
+              : previewBladeTime(e.clientX);
+            seekTimeline(time);
+            setBladeGuide(time, true);
+            if (!splitClipsAt(time, [{ type: clip.dataset.type, id: clip.dataset.id }]))
+              toast("点在片段中部切割");
+            e.preventDefault();
+            return;
+          }
           const additive = e.shiftKey || e.metaKey || e.ctrlKey;
           selectItem(
             clip.dataset.type,
@@ -11272,19 +11833,9 @@
               ? mainAudioClips().find((item) => item.id === clip.dataset.id)
               : null;
           if (selectedTimelineObject)
-            includeLinkedSelection(
-              clip.dataset.type,
-              clip.dataset.id,
-              selectedTimelineObject.start,
-              selectedTimelineObject.end,
-            );
+            includeLinkedSelection(clip.dataset.type, clip.dataset.id);
           else if (selectedMainClip)
-            includeLinkedSelection(
-              clip.dataset.type,
-              clip.dataset.id,
-              selectedMainClip.start,
-              selectedMainClip.end,
-            );
+            includeLinkedSelection(clip.dataset.type, clip.dataset.id);
           if (state.avLinked && ["videolayer", "audioasset"].includes(clip.dataset.type)) {
             const selectedObject = timelineObjectFor(clip.dataset.type, clip.dataset.id);
             const linked = selectedObject?.linkGroupId
@@ -11340,7 +11891,7 @@
             e.stopPropagation();
             return;
           }
-          const movable = (state.selectedItems || [])
+          const movable = expandLinkedSelection(state.selectedItems || [])
             .map((item) => ({
               ...item,
               obj: timelineObjectFor(item.type, item.id),
@@ -11390,16 +11941,20 @@
                           sourceClip.parentId || sourceClip.id
                         ] || 0,
                       ),
-                linkedMoving: linkedTimelineObjects(
-                  sourceClip.start,
-                  sourceClip.end,
-                ),
+                linkedMoving: [],
               };
             }
           }
           updateInspector();
           renderTimeline();
           renderPreviewObjects();
+          e.preventDefault();
+          return;
+        }
+        if (editTool === "blade") {
+          const time = previewBladeTime(e.clientX);
+          seekTimeline(time);
+          setBladeGuide(time, true);
           e.preventDefault();
           return;
         }
@@ -11421,6 +11976,8 @@
         e.preventDefault();
       };
       document.addEventListener("pointermove", (e) => {
+        if (editTool === "blade" && !timelineDrag && e.target.closest?.("#timelineMain"))
+          setBladeGuide(previewBladeTime(e.clientX), true);
         if (timelineDrag?.pointer === e.pointerId) {
           if (timelineDrag.marquee) {
             const rect = $("timelineContent").getBoundingClientRect();
@@ -11525,9 +12082,10 @@
               );
             } else if (timelineDrag.mainTrimClip) {
               const clip = timelineDrag.mainTrimClip;
-              timelineDrag.mainTrimTime = edge === "start"
+              const rawTime = edge === "start"
                 ? clamp(timelineDrag.originStart + delta, clip.start, clip.end - 0.04)
                 : clamp(timelineDrag.originEnd + delta, clip.start + 0.04, clip.end);
+              timelineDrag.mainTrimTime = snapTime(rawTime, clip);
               const start = edge === "start"
                   ? timelineDrag.mainTrimTime
                   : timelineDrag.originStart,
@@ -11581,21 +12139,32 @@
             const delta = (e.clientX - timelineDrag.startX) / state.zoom;
             const moving = timelineDrag.moving || [];
             const anchor = moving[0];
-            const appliedDelta = anchor
-              ? snapClipStart(
-                  clamp(
-                    anchor.originStart + delta,
-                    0,
-                    Math.max(
-                      0,
-                      visibleTimelineDuration() -
-                        (anchor.originEnd - anchor.originStart),
-                    ),
-                  ),
-                  anchor.originEnd - anchor.originStart,
-                  anchor.obj,
-                ) - anchor.originStart
-              : delta;
+            const appliedDelta = (() => {
+              if (!anchor) return delta;
+              const rawStart = clamp(
+                anchor.originStart + delta,
+                0,
+                Math.max(
+                  0,
+                  visibleTimelineDuration() -
+                    (anchor.originEnd - anchor.originStart),
+                ),
+              );
+              const rawDelta = rawStart - anchor.originStart;
+              if (!state.snapping) {
+                hideSnapGuide();
+                return rawDelta;
+              }
+              const group = snapGroupDelta(
+                moving,
+                rawDelta,
+                currentSnapPoints(moving),
+                snapThresholdSeconds(),
+              );
+              showSnapGuide(group.target, group.snapped);
+              const minStart = Math.min(...moving.map((item) => Number(item.originStart || 0)));
+              return minStart + group.delta < 0 ? -minStart : group.delta;
+            })();
             for (const item of moving) {
               const length = item.originEnd - item.originStart;
               item.obj.start = clamp(
@@ -11614,6 +12183,7 @@
       });
       document.addEventListener("pointerup", (e) => {
         if (timelineDrag?.pointer === e.pointerId) {
+          hideSnapGuide();
           if (timelineDrag.marquee) {
             $("timelineMarquee").classList.remove("on");
             if (timelineDrag.moved) {
@@ -11630,7 +12200,9 @@
               const merged = timelineDrag.additive
                 ? [...(state.selectedItems || []), ...hits]
                 : hits;
-              state.selectedItems = [...new Map(merged.map((item) => [selectionKey(item.type, item.id), item])).values()];
+              state.selectedItems = expandLinkedSelection(
+                [...new Map(merged.map((item) => [selectionKey(item.type, item.id), item])).values()],
+              );
               state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
               renderTimeline();
               renderPreviewObjects();
@@ -11652,10 +12224,17 @@
               recomputeContentDuration();
             } else {
               const sourceAt = timelineToSource(timelineDrag.mainTrimTime);
-              if (timelineDrag.trimEdge === "start" && sourceAt > clip.sourceStart + .002)
+              const originStart = Number(timelineDrag.originStart);
+              const originEnd = Number(timelineDrag.originEnd);
+              const edgeTime = Number(timelineDrag.mainTrimTime);
+              if (timelineDrag.trimEdge === "start" && sourceAt > clip.sourceStart + .002) {
                 state.removals.push({ start: clip.sourceStart, end: sourceAt, source: "edge-trim" });
-              if (timelineDrag.trimEdge === "end" && sourceAt < clip.sourceEnd - .002)
+                shiftTracks(originStart, Math.max(0, edgeTime - originStart));
+              }
+              if (timelineDrag.trimEdge === "end" && sourceAt < clip.sourceEnd - .002) {
                 state.removals.push({ start: sourceAt, end: clip.sourceEnd, source: "edge-trim" });
+                shiftTracks(edgeTime, Math.max(0, originEnd - edgeTime));
+              }
               normalizeRemovals();
             }
             renderAll();
@@ -11890,9 +12469,14 @@
       );
       $("timelineScroll").addEventListener("scroll", () => {
         $("trackLabels").scrollTop = $("timelineScroll").scrollTop;
+        syncTimelineChrome();
         scheduleWaveformRender();
       });
-      let lastStageWheelCheckpoint = 0;
+      if ($("timelineMain")) {
+        $("timelineMain").addEventListener("pointerleave", () => {
+          if (!timelineDrag) setBladeGuide(0, false);
+        });
+      }
       $("stage").addEventListener(
         "wheel",
         (event) => {
@@ -11900,27 +12484,11 @@
           const rawDelta = Number(event.deltaY || 0);
           const deltaPixels = event.deltaMode === 1 ? rawDelta * 16 : (event.deltaMode === 2 ? rawDelta * 120 : rawDelta);
           const delta = clamp(deltaPixels, -12, 12);
-          const selected = currentObject();
-          const visualSelection = ["video", "videolayer", "image", "text", "caption"].includes(state.selected.type);
-          if (selected && visualSelection && !selectionIsLocked()) {
-            const now = performance.now();
-            if (now - lastStageWheelCheckpoint > 320) snapshot();
-            lastStageWheelCheckpoint = now;
-            // Magic Mouse/trackpad deltas are high-frequency; keep each event tiny.
-            const factor = Math.exp(-delta * 0.00075);
-            selected.scale = clamp(Number(selected.scale || 1) * factor, 0.05, 8);
-            updatePreviewTransformOnly();
-            updateTransformInspector(selected);
-            queueAutosave();
-          } else {
-            // When nothing editable is selected the wheel zooms the canvas itself,
-            // at an even gentler rate so it never jumps 10% in one touch.
-            const factor = Math.exp(-delta * 0.00045);
-            state.canvasZoom = clamp(Number(state.canvasZoom || 1) * factor, 0.25, 4);
-            $("frame").style.transform = `scale(${state.canvasZoom})`;
-            $("canvasZoomLabel").textContent = `${Math.round(state.canvasZoom * 100)}%`;
-            updateSelectionBox();
-          }
+          const factor = Math.exp(-delta * 0.00045);
+          state.canvasZoom = clamp(Number(state.canvasZoom || 1) * factor, 0.25, 4);
+          $("frame").style.transform = `scale(${state.canvasZoom})`;
+          $("canvasZoomLabel").textContent = `${Math.round(state.canvasZoom * 100)}%`;
+          updateSelectionBox();
         },
         { passive: false },
       );
@@ -12781,16 +13349,24 @@
         clearTimeout(windowResizeTimer);
         windowResizeTimer = setTimeout(() => updateFrameSize(true), 140);
       };
+      function isTypingField(el) {
+        if (!el || el === document.body) return false;
+        if (el.isContentEditable) return true;
+        const tag = String(el.tagName || "");
+        if (tag === "TEXTAREA") return true;
+        if (tag !== "INPUT") return false;
+        return ["text", "search", "password", "email", "url", "tel", "number"].includes(
+          String(el.type || "text").toLowerCase(),
+        );
+      }
+      function blurActiveTextField() {
+        const active = document.activeElement;
+        if (isTypingField(active)) active.blur();
+      }
       function handleEditorShortcut(e) {
         if (!state.editorActive) return;
         const target = e.target || document.activeElement;
-        const textEditing =
-          target?.isContentEditable ||
-          target?.tagName === "TEXTAREA" ||
-          (target?.tagName === "INPUT" &&
-            !["range", "checkbox", "radio", "button"].includes(
-              String(target.type || "text").toLowerCase(),
-            ));
+        const textEditing = isTypingField(target);
         const command = e.metaKey || e.ctrlKey;
         const code = e.code || "";
         if (command && code === "KeyA" && target?.id === "scriptText") {
@@ -12837,9 +13413,20 @@
           updateInspector();
           return;
         }
-        if (command && code === "KeyB" && !textEditing) {
+        if (command && (code === "KeyB" || code === "Backslash") && !textEditing) {
           e.preventDefault();
           splitSelected();
+          return;
+        }
+        if (code === "KeyB" && !command && !textEditing) {
+          e.preventDefault();
+          setEditTool(editTool === "blade" ? "select" : "blade");
+          toast(editTool === "blade" ? "剃刀：点击片段切割" : "已退出剃刀");
+          return;
+        }
+        if (code === "KeyN" && !command && !textEditing) {
+          e.preventDefault();
+          toggleSnapping();
           return;
         }
         if (textEditing) return;
@@ -12848,7 +13435,7 @@
           togglePlay();
         } else if (code === "Delete" || code === "Backspace") {
           e.preventDefault();
-          deleteSelected(false);
+          deleteSelected(!!e.shiftKey);
         } else if (code === "ArrowLeft") {
           e.preventDefault();
           seekTimeline(state.currentTime - (e.shiftKey ? 1 : 1 / 30));
@@ -12866,6 +13453,11 @@
           retimeTracksForSpeed((state.audio.speed || 1) + 0.1);
           renderAll();
         } else if (code === "Escape") {
+          if (editTool === "blade") {
+            setEditTool("select");
+            toast("已退出剃刀");
+          }
+          hideSnapGuide();
           state.selectedItems = [];
           state.selected = { type: "video", id: "main" };
           renderAll();
@@ -12873,6 +13465,16 @@
       }
       window.addEventListener("keydown", handleEditorShortcut, true);
       window.__quickCutHandleShortcut = handleEditorShortcut;
+      document.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (event.target.closest?.("textarea, select, [contenteditable='true']")) return;
+          if (event.target.closest?.("input") && isTypingField(event.target.closest("input")))
+            return;
+          blurActiveTextField();
+        },
+        true,
+      );
       let dragDepth = 0;
       let latestExternalDropIntent = {
         target: "media",
@@ -12886,6 +13488,7 @@
       }
       function clearDropUi() {
         dragDepth = 0;
+        hideSnapGuide();
         $("dropVeil").classList.remove("on");
         document
           .querySelectorAll("[data-drop-zone]")
@@ -12899,11 +13502,13 @@
         let time = state.currentTime;
         if (target === "timeline") {
           const rect = $("timelineScroll").getBoundingClientRect();
-          time = clamp(
-            ($("timelineScroll").scrollLeft + event.clientX - rect.left) /
-              state.zoom,
-            0,
-            visibleTimelineDuration(),
+          time = snapTime(
+            clamp(
+              ($("timelineScroll").scrollLeft + event.clientX - rect.left) /
+                state.zoom,
+              0,
+              visibleTimelineDuration(),
+            ),
           );
         }
         return { target, time, trackId };
@@ -13135,12 +13740,22 @@
       renderProjectHome([]);
       pollDrops();
       renderFontFamilyOptions();
+      async function ensureResolvePlugin() {
+        try {
+          const result = await nativeCall("installResolveLink");
+          if (result?.changed)
+            toast("达芬奇插件已装好：工作区 → 脚本 → 快剪");
+        } catch (error) {
+          console.warn(error);
+        }
+      }
       waitNative()
         .then(async () => {
           await Promise.all([
             refreshHome(),
             loadCustomPresets(),
             loadLocalFonts(),
+            ensureResolvePlugin(),
           ]);
         })
         .catch((error) => showFatal(error.message));

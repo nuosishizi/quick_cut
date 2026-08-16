@@ -320,6 +320,9 @@ test("install writes the script and caption-bin.drb into Resolve Utility folders
     fs.mkdirSync(scriptDir, { recursive: true });
     const result = installResolveLink({ directories: [scriptDir] });
     assert.equal(fs.existsSync(result.installed), true);
+    assert.equal(result.changed, true);
+    const again = installResolveLink({ directories: [scriptDir] });
+    assert.equal(again.changed, false);
     assert.equal(fs.existsSync(path.join(scriptDir, "caption-bin.drb")), true);
     const packXml = path.join(
       path.dirname(bundledResolveScriptPath()),
