@@ -791,6 +791,7 @@ async function deepgramTranscribeFile(filePath, { signal } = {}) {
   url.searchParams.set("smart_format", "true");
   url.searchParams.set("punctuate", "true");
   url.searchParams.set("utterances", "true");
+  url.searchParams.set("filler_words", "true");
   url.searchParams.set("language", "en");
   const response = await fetch(url, {
     method: "POST",
