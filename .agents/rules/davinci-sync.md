@@ -38,7 +38,7 @@
 - 快剪自己的母版和 AutoSubs 一样走媒体池：`caption-bin.drb` 里的生成器名叫 `快剪Text+`（普通 Fusion Title / Text+，不是 AutoSubs 宏）。铺条只用 `AppendToTimeline` + `recordFrame`。
 - `快剪字幕.setting` 仍装到 Fusion Titles，只作备用。禁止把逐条 `InsertFusionTitleIntoTimeline` 当主路径。
 - 字色 Element 1、描边 Element 2、整句底 Element 4（`Type4=1` Border Fill）。三者写在**同一个** Text+ 上。
-- 逐词高亮必须走 `StyledTextCLS`，关键帧 `SetKeyFrames(kf, true)`，**只写当前词**的填充色（Index 0）。词的起止帧必须和时间线铺条用同一套 `media_frame` 时钟，并加上 `COMPN_RenderStart`。词结束写空关键帧，下一词开口前再锁一帧空，停顿全灭。禁止把缺省的 `end` 拉到整句末尾。禁止 `AddTool("CharacterLevelStyling")`。高亮写完后必须再锁一次 `Level4=0`。
+- 逐词高亮必须走 `StyledTextCLS`，关键帧 `SetKeyFrames(kf, true)`。每一帧必须给**全句每个词**写死填充色（当前词高亮，其余词原色，Index 0），并在下一状态前一帧锁住同一数组，避免 Fusion 插值把两个词同时点亮。整句底必须在独立的 `快剪底` Text+ 上，字在 `快剪Text`/`Template` 上，用 Merge 合成。禁止只写当前词区间。禁止 `AddTool("CharacterLevelStyling")`。
 - 有 AutoSubs 宏的旧合成才另建 `快剪Text` 并断开宏。新母版不要导入 `caption-bin.drb`。
 - AutoSubs 5 步只留给「没有快剪标题、也没有整句底」的旧回退。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。

@@ -227,9 +227,11 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.match(lua, /apply_sentence_plate/);
   assert.match(lua, /set_number\(tool, "Type4", 1\)/);
   assert.match(lua, /set_number\(tool, "Level4", bgLevel\)/);
-  assert.match(lua, /Only the spoken word goes into CLS/);
-  assert.match(lua, /Pause is dark/);
-  assert.match(lua, /if nextStart == nil or eFrame < nextStart then/);
+  assert.match(lua, /Every word gets an explicit fill at every keyframe/);
+  assert.match(lua, /Pause is all-base/);
+  assert.match(lua, /快剪底/);
+  assert.match(lua, /快剪合成/);
+  assert.match(lua, /bind_caption_merge/);
   assert.match(lua, /nextStart \+ shift - 1/);
   assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);

@@ -38,7 +38,7 @@ unset QUICKCUT_NO_WINDOW
 cd "$EDITOR"
 
 echo "============================================="
-echo " 快剪 QuickCut 2.7.19  macOS"
+echo " 快剪 QuickCut 2.7.20  macOS"
 echo "============================================="
 echo "正在启动编辑器…"
 echo "关闭这个终端窗口即可退出。"

@@ -893,10 +893,11 @@ local function apply_sentence_plate(tool, style)
   return true
 end
 
-local function apply_style(comp, tool, item, style)
+local function apply_style(comp, tool, item, style, mode)
   if not tool then
     return false
   end
+  mode = mode or "both"
   pcall(function()
     tool:SetInput("Direction", 0)
   end)
@@ -922,7 +923,11 @@ local function apply_style(comp, tool, item, style)
   local textG = tonumber(style.color and style.color[2]) or 1.0
   local textB = tonumber(style.color and style.color[3]) or 1.0
   set_number(tool, "SelectElement", 1)
-  set_number(tool, "Enabled1", 1)
+  if mode == "plate" then
+    set_number(tool, "Enabled1", 0)
+  else
+    set_number(tool, "Enabled1", 1)
+  end
   set_number(tool, "Type1", 0) -- 0 = Solid fill
   set_number(tool, "Red1", textR)
   set_number(tool, "Green1", textG)
@@ -935,7 +940,18 @@ local function apply_style(comp, tool, item, style)
     tool:SetInput("Color1Blue", textB)
   end)
 
-  if style.backgroundEnabled then
+  if mode == "plate" then
+    set_number(tool, "Enabled2", 0)
+    set_number(tool, "Enabled3", 0)
+    apply_sentence_plate(tool, style)
+  elseif mode == "fill" then
+    if not apply_text_outline(tool, style) then
+      set_number(tool, "Enabled2", 0)
+    end
+    set_number(tool, "Enabled3", 0)
+    set_number(tool, "Enabled4", 0)
+    set_number(tool, "Softness1", 0)
+  elseif style.backgroundEnabled then
     apply_sentence_plate(tool, style)
     if not apply_text_outline(tool, style) then
       set_number(tool, "Enabled2", 0)
@@ -1176,20 +1192,23 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
   local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
   local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
+  local baseR = tonumber(style.color and style.color[1]) or 1.0
+  local baseG = tonumber(style.color and style.color[2]) or 1.0
+  local baseB = tonumber(style.color and style.color[3]) or 1.0
 
-  -- Only the spoken word goes into CLS. Styling every word splits Element 4
-  -- Border Fill into one capsule per word.
+  -- Every word gets an explicit fill at every keyframe (AutoSubs ApplyHighlight).
+  -- Styling only the active word lets Fusion interpolate two ranges at once,
+  -- so "the" and "third" both go yellow between keys.
   local function style_array(activeIndex)
-    local word = wordTiming[activeIndex]
-    if not word then
-      return {}
+    local array = {}
+    for j, word in ipairs(wordTiming) do
+      local hot = (j == activeIndex)
+      table.insert(array, { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 })
+      table.insert(array, { 2401, word.startIndex, word.endIndex, Value = hot and hlR or baseR, Index = 0, __flags = 256 })
+      table.insert(array, { 2402, word.startIndex, word.endIndex, Value = hot and hlG or baseG, Index = 0, __flags = 256 })
+      table.insert(array, { 2403, word.startIndex, word.endIndex, Value = hot and hlB or baseB, Index = 0, __flags = 256 })
     end
-    return {
-      { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 },
-      { 2401, word.startIndex, word.endIndex, Value = hlR, Index = 0, __flags = 256 },
-      { 2402, word.startIndex, word.endIndex, Value = hlG, Index = 0, __flags = 256 },
-      { 2403, word.startIndex, word.endIndex, Value = hlB, Index = 0, __flags = 256 },
-    }
+    return array
   end
 
   local function make_key(index, array)
@@ -1210,21 +1229,30 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
     keyIndex = keyIndex + 1
   end
 
-  -- Match 快剪 preview: active only while start <= t < end. Pause is dark.
+  -- Match 快剪 preview: active only while start <= t < end. Pause is all-base.
+  -- Hold the same array until the frame before the next change so Fusion
+  -- cannot blend two highlight ranges across a multi-frame gap.
   local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
   if firstStart > 0 then
-    put(shift, {})
+    put(shift, style_array(0))
+    if firstStart > 1 then
+      put(shift + firstStart - 1, style_array(0))
+    end
   end
   for i, word in ipairs(wordTiming) do
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
     local eFrame = math.max(sFrame, tonumber(word.endFrame) or (sFrame + 1))
     put(sFrame + shift, style_array(i))
     local nextStart = wordTiming[i + 1] and tonumber(wordTiming[i + 1].startFrame)
-    if nextStart == nil or eFrame < nextStart then
-      put(eFrame + shift, {})
-      if nextStart and nextStart > eFrame + 1 then
-        put(nextStart + shift - 1, {})
+    if nextStart == nil then
+      put(eFrame + shift, style_array(0))
+    elseif eFrame < nextStart then
+      put(eFrame + shift, style_array(0))
+      if nextStart > eFrame + 1 then
+        put(nextStart + shift - 1, style_array(0))
       end
+    elseif nextStart > sFrame + 1 then
+      put(nextStart + shift - 1, style_array(i))
     end
   end
 
@@ -1264,6 +1292,61 @@ local function pick_quickcut_text_tool(comp)
   return tool or find_text_tool(comp) or add_text_tool(comp)
 end
 
+local function ensure_plate_text(comp)
+  if not comp then
+    return nil
+  end
+  local plate = nil
+  pcall(function()
+    plate = comp:FindTool("快剪底")
+  end)
+  if plate then
+    return plate
+  end
+  plate = add_text_tool(comp)
+  if plate then
+    pcall(function()
+      plate:SetAttrs({ TOOLS_Name = "快剪底" })
+    end)
+  end
+  return plate
+end
+
+local function bind_caption_merge(comp, fill, plate)
+  if not fill then
+    return
+  end
+  if not plate then
+    bind_media_out(comp, fill)
+    return
+  end
+  local merge = nil
+  pcall(function()
+    merge = comp:FindTool("快剪合成")
+  end)
+  if not merge and comp.AddTool then
+    pcall(function()
+      merge = comp:AddTool("Merge")
+    end)
+    if merge then
+      pcall(function()
+        merge:SetAttrs({ TOOLS_Name = "快剪合成" })
+      end)
+    end
+  end
+  if not merge then
+    bind_media_out(comp, fill)
+    return
+  end
+  pcall(function()
+    merge:ConnectInput("Background", plate)
+  end)
+  pcall(function()
+    merge:ConnectInput("Foreground", fill)
+  end)
+  bind_media_out(comp, merge)
+end
+
 local function style_plain_text_item(comp, item, caption, fps, style, index, origin)
   if not comp then
     error("找不到 Fusion 合成")
@@ -1272,11 +1355,19 @@ local function style_plain_text_item(comp, item, caption, fps, style, index, ori
   if not tool then
     error("找不到 Text+")
   end
-  apply_style(comp, tool, caption, style)
+  local wantPlate = style and style.backgroundEnabled
+  apply_style(comp, tool, caption, style, wantPlate and "fill" or "both")
   if comp_has_autosubs(comp) then
     lock_plain_renderer(comp, tool)
   end
-  bind_media_out(comp, tool)
+  local plate = nil
+  if wantPlate then
+    plate = ensure_plate_text(comp)
+    if plate then
+      apply_style(comp, plate, caption, style, "plate")
+    end
+  end
+  bind_caption_merge(comp, tool, plate)
   local plainText = tostring(caption.text or "")
   if highlight_is_on(style) then
     local cls = ensure_text_cls(comp, tool)
@@ -1284,8 +1375,12 @@ local function style_plain_text_item(comp, item, caption, fps, style, index, ori
       apply_native_cls_keyframes(comp, cls, caption, plainText, fps, style, origin)
     end
   end
-  apply_sentence_plate(tool, style)
-  bind_media_out(comp, tool)
+  if plate then
+    apply_sentence_plate(plate, style)
+  elseif wantPlate then
+    apply_sentence_plate(tool, style)
+  end
+  bind_caption_merge(comp, tool, plate)
   if item then
     pcall(function()
       item:SetName(string.format("快剪字幕 %03d", index or 1))
