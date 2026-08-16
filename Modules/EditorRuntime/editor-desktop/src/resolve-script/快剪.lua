@@ -692,7 +692,7 @@ local function apply_style(comp, tool, item, style)
     local bgA = tonumber(style.backgroundOpacity) or 0.94
     local extX = math.max(0.04, tonumber(style.backgroundExtendX) or 0.12)
     local extY = math.max(0.04, tonumber(style.backgroundExtendY) or 0.08)
-    local round = math.min(0.28, tonumber(style.backgroundRound) or 0.22)
+    local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
     local bgMode = tostring(style.backgroundMode or "block")
     local bgLevel = (bgMode == "line") and 2 or 3 -- 2 = Line level, 3 = Text level
 

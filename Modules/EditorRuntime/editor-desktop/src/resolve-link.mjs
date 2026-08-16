@@ -162,7 +162,8 @@ export function fusionBackground(style = {}) {
   const opacity = Math.max(0.05, Math.min(1, Number(style.backgroundOpacity ?? 0.8)));
   const paddingX = Math.max(4, Number(style.backgroundWidth ?? style.padding ?? 14));
   const paddingY = Math.max(4, Number(style.backgroundHeight ?? style.padding ?? 14));
-  const radius = Math.max(0, Number(style.radius ?? 12));
+  const rawRadius = Number(style.backgroundRadius ?? style.radius ?? 12);
+  const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 35;
   const fontSize = Math.max(10, Number(style.fontSize) || 58);
   return {
     enabled: true,
@@ -170,7 +171,7 @@ export function fusionBackground(style = {}) {
     opacity,
     extendX: Math.max(0.12, Math.min(0.40, (paddingX / fontSize) * 0.45)),
     extendY: Math.max(0.06, Math.min(0.30, (paddingY / fontSize) * 0.30)),
-    round: Math.max(0, Math.min(0.30, (radius / 65))),
+    round: isCapsule ? 1.0 : Math.max(0, Math.min(1.0, rawRadius / 28)),
   };
 }
 

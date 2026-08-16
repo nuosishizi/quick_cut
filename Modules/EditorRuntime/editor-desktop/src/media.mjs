@@ -1297,7 +1297,14 @@ function vectorRectEvent(start, end, box, color, opacity = 1, layer = 0, radius 
   const width = Math.max(1, Math.round(box.width)), height = Math.max(1, Math.round(box.height));
   const ass = assOverrideColor(color || "#000000");
   const alpha = assAlpha(opacity);
-  return `Dialogue: ${layer},${assTime(start)},${assTime(end)},Default,,0,0,0,,{\\an7\\pos(${left},${top})\\p1\\1c${ass}\\alpha${alpha}\\bord0\\shad0}m 0 0 l ${width} 0 l ${width} ${height} l 0 ${height}{\\p0}`;
+  const r = Math.max(0, Math.min(Math.floor(width / 2), Math.floor(height / 2), Math.round(radius)));
+  let path = `m 0 0 l ${width} 0 l ${width} ${height} l 0 ${height}`;
+  if (r > 1) {
+    const k = Math.round(r * 0.55228475);
+    const w = width, h = height;
+    path = `m ${r} 0 l ${w - r} 0 b ${w - r + k} 0 ${w} ${r - k} ${w} ${r} l ${w} ${h - r} b ${w} ${h - r + k} ${w - r + k} ${h} ${w - r} ${h} l ${r} ${h} b ${r - k} ${h} 0 ${h - r + k} 0 ${h - r} l 0 ${r} b 0 ${r - k} ${r - k} 0 ${r} 0`;
+  }
+  return `Dialogue: ${layer},${assTime(start)},${assTime(end)},Default,,0,0,0,,{\\an7\\pos(${left},${top})\\p1\\1c${ass}\\alpha${alpha}\\bord0\\shad0}${path}{\\p0}`;
 }
 
 function fullUnderlineEvent(caption, style, x, y, fontSize, scale) {
@@ -1433,7 +1440,22 @@ function createAssSubtitleFile(config, destination = "") {
     const baseTags = assAnimationTags(animation, x, y, durationMs, style);
     const box = estimatedCaptionBox(caption, style, fontSize, origin.scale, x, y);
     if (style.backgroundEnabled) {
-      result.push(vectorRectEvent(caption.start, caption.end, box, style.background || "#000000", Number(style.backgroundOpacity ?? 0.7), 0));
+      const rawRadius = Number(style.backgroundRadius ?? style.radius ?? 14);
+      const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 35;
+      const radius = isCapsule
+        ? Math.min(box.width / 2, box.height / 2)
+        : Math.min(box.width / 2, box.height / 2, rawRadius * origin.scale);
+      result.push(
+        vectorRectEvent(
+          caption.start,
+          caption.end,
+          box,
+          style.background || "#000000",
+          Number(style.backgroundOpacity ?? 0.7),
+          0,
+          radius,
+        ),
+      );
     }
     const wrappedLines = captionAssLines(caption, style, origin.boxWidth, width);
     const wrappedAss = wrappedLines.map((line) => escapeAssText(line)).join("\\N");
