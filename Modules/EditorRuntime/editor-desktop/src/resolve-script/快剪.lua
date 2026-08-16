@@ -787,6 +787,46 @@ local function apply_quickcut_caption_look(comp, style)
   apply_autosubs_sentence_background(template, style)
 end
 
+local function apply_text_outline(tool, style)
+  if not tool or not style then
+    return false
+  end
+  local stroke = tonumber(style.stroke) or 0
+  local hl = style.highlightEnabled
+  local highlightOn = hl ~= false and hl ~= 0
+  if not (style.strokeEnabled or stroke > 0 or highlightOn) then
+    return false
+  end
+  local strokeThick = stroke > 0 and math.max(0.035, stroke) or 0.055
+  local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
+  local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
+  local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
+  set_number(tool, "SelectElement", 2)
+  set_number(tool, "Enabled2", 1)
+  set_number(tool, "Element2", 1)
+  set_number(tool, "Type2", 0)
+  set_number(tool, "Red2", sR)
+  set_number(tool, "Green2", sG)
+  set_number(tool, "Blue2", sB)
+  set_number(tool, "Alpha2", 1.0)
+  set_number(tool, "Opacity2", 1.0)
+  set_number(tool, "Thickness2", strokeThick)
+  set_number(tool, "JoinStyle2", 1)
+  set_number(tool, "LineStyle2", 0)
+  set_number(tool, "Softness2", 0)
+  pcall(function()
+    tool:SetInput("Color2Red", sR)
+    tool:SetInput("Color2Green", sG)
+    tool:SetInput("Color2Blue", sB)
+    tool:SetInput("OutlineEnabled", 1)
+    tool:SetInput("OutlineThickness", strokeThick)
+    tool:SetInput("OutlineColorRed", sR)
+    tool:SetInput("OutlineColorGreen", sG)
+    tool:SetInput("OutlineColorBlue", sB)
+  end)
+  return true
+end
+
 local function apply_style(comp, tool, item, style)
   if not tool then
     return false
@@ -861,40 +901,13 @@ local function apply_style(comp, tool, item, style)
     set_number(tool, "SoftnessX4", 0)
     set_number(tool, "SoftnessY4", 0)
 
-    set_number(tool, "Enabled2", 0)
+    -- Plate is Element 4. Outline is Element 2. They can coexist on our Text+.
+    if not apply_text_outline(tool, style) then
+      set_number(tool, "Enabled2", 0)
+    end
     set_number(tool, "Enabled3", 0)
     set_number(tool, "Softness1", 0)
-  elseif style.strokeEnabled or (tonumber(style.stroke) and tonumber(style.stroke) > 0) then
-    -- Text Stroke / Outline (Element 2)
-    local strokeThick = math.max(0.035, (tonumber(style.stroke) or 0.08))
-    local sR = tonumber(style.strokeColor and style.strokeColor[1]) or 0.0
-    local sG = tonumber(style.strokeColor and style.strokeColor[2]) or 0.0
-    local sB = tonumber(style.strokeColor and style.strokeColor[3]) or 0.0
-
-    set_number(tool, "SelectElement", 2)
-    set_number(tool, "Enabled2", 1)
-    set_number(tool, "Element2", 1) -- 1 = Text Outline
-    set_number(tool, "Type2", 0) -- 0 = Solid Color
-    set_number(tool, "Red2", sR)
-    set_number(tool, "Green2", sG)
-    set_number(tool, "Blue2", sB)
-    set_number(tool, "Alpha2", 1.0)
-    set_number(tool, "Opacity2", 1.0)
-    set_number(tool, "Thickness2", strokeThick)
-    set_number(tool, "JoinStyle2", 1) -- 1 = Round Join
-    set_number(tool, "LineStyle2", 0) -- 0 = Solid Line
-    set_number(tool, "Softness2", 0)
-    pcall(function()
-      tool:SetInput("Color2Red", sR)
-      tool:SetInput("Color2Green", sG)
-      tool:SetInput("Color2Blue", sB)
-      tool:SetInput("OutlineEnabled", 1)
-      tool:SetInput("OutlineThickness", strokeThick)
-      tool:SetInput("OutlineColorRed", sR)
-      tool:SetInput("OutlineColorGreen", sG)
-      tool:SetInput("OutlineColorBlue", sB)
-    end)
-
+  elseif apply_text_outline(tool, style) then
     set_number(tool, "Enabled4", 0)
     set_number(tool, "Enabled3", 0)
   elseif style.shadowEnabled then
@@ -934,16 +947,7 @@ local function apply_style(comp, tool, item, style)
 end
 
 local function find_cls_tool(comp, tool)
-  if not comp then
-    return nil
-  end
   local cls = nil
-  pcall(function()
-    cls = comp:FindTool("CharacterLevelStyling1")
-  end)
-  if cls then
-    return cls
-  end
   if tool and tool.StyledText and tool.StyledText.GetConnectedOutput then
     pcall(function()
       local out = tool.StyledText:GetConnectedOutput()
@@ -955,18 +959,22 @@ local function find_cls_tool(comp, tool)
   if cls then
     return cls
   end
-  pcall(function()
-    local list = comp:GetToolList(false, "CharacterLevelStyling")
-    if type(list) == "table" then
-      cls = list[1] or list[0]
-      if not cls then
-        for _, value in pairs(list) do
-          cls = value
-          break
-        end
-      end
+  if not comp then
+    return nil
+  end
+  if tool then
+    local toolName = nil
+    pcall(function()
+      local attrs = tool:GetAttrs()
+      toolName = attrs and (attrs.TOOLS_Name or attrs.TOOLB_Name)
+    end)
+    if toolName and toolName ~= "" then
+      pcall(function()
+        cls = comp:FindTool(toolName .. "CharacterLevelStyling")
+          or comp:FindTool(toolName .. "_CharacterLevelStyling")
+      end)
     end
-  end)
+  end
   return cls
 end
 
@@ -1121,16 +1129,44 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   pcall(function() spline:SetKeyFrames(keyframes) end)
 end
 
+local function comp_has_autosubs(comp)
+  if not comp then
+    return false
+  end
+  local found = false
+  pcall(function()
+    found = comp:FindTool("AutoSubs") ~= nil or comp:FindToolByID("MacroOperator") ~= nil
+  end)
+  return found
+end
+
+local function pick_quickcut_text_tool(comp)
+  if not comp then
+    return nil
+  end
+  if comp_has_autosubs(comp) then
+    return ensure_plain_text_plus(comp)
+  end
+  local tool = nil
+  pcall(function()
+    tool = comp:FindTool("快剪Text") or comp:FindTool("Template")
+  end)
+  return tool or find_text_tool(comp) or add_text_tool(comp)
+end
+
 local function style_plain_text_item(comp, item, caption, fps, style, index)
   if not comp then
     error("找不到 Fusion 合成")
   end
-  local tool = ensure_plain_text_plus(comp)
+  local tool = pick_quickcut_text_tool(comp)
   if not tool then
     error("找不到 Text+")
   end
   apply_style(comp, tool, caption, style)
-  lock_plain_renderer(comp, tool)
+  if comp_has_autosubs(comp) then
+    lock_plain_renderer(comp, tool)
+  end
+  bind_media_out(comp, tool)
   local plainText = tostring(caption.text or "")
   if highlight_is_on(style) then
     local cls = ensure_text_cls(comp, tool)
@@ -1313,7 +1349,7 @@ local function insert_title(timeline, root)
     end
     append_log(root, "cached insert failed " .. insert_recipe.kind .. " " .. tostring(insert_recipe.name) .. " " .. tostring(err))
   end
-  local names = { "Text+", "Text +", "文本+", "Text", "TextPlus", "Fusion Title", "标题", "简单文本" }
+  local names = { "快剪字幕", "Text+", "Text +", "文本+", "Text", "TextPlus", "Fusion Title", "标题", "简单文本" }
   local kinds = { "fusion_title", "title", "fusion_gen", "generator" }
   for _, kind in ipairs(kinds) do
     for _, name in ipairs(names) do
@@ -1501,7 +1537,7 @@ local function ensure_caption_template(mediaPool, rootFolder, job, root)
   return template
 end
 
-local function place_captions_via_append(mediaPool, timeline, templateItem, captions, fps, origin, track_index, presetSettings, style, root, job_id)
+local function place_captions_via_append(mediaPool, timeline, templateItem, captions, fps, origin, track_index, presetSettings, style, root, job_id, renderer)
   local clipList = {}
   for index, caption in ipairs(captions) do
     local start_seconds = tonumber(caption.start) or 0
@@ -1558,7 +1594,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
-          if style.backgroundEnabled then
+          if renderer == "quickcut" or style.backgroundEnabled then
             style_plain_text_item(comp, item, caption, fps, style, index)
             return
           end
@@ -1736,19 +1772,59 @@ local function place_captions(job, root)
   local job_id = tostring(job.id or "")
   local origin = first_picture_frame(timeline, start_frame)
 
-  -- Placement always uses AppendToTimeline so clips sit on speech frames.
-  -- AutoSubs 5-step is only the renderer when there is no sentence plate.
-  -- A plate lives on 快剪Text (Element 4); spoken-word color is CLS fill.
+  -- Prefer the 快剪 Text+ title. AutoSubs Caption is not the 快剪 look.
   local useAutosubs = not style.backgroundEnabled
   local mediaPool = project:GetMediaPool()
-  if mediaPool then
+  insert_recipe = { kind = "fusion_title", name = "快剪字幕" }
+  pcall(function()
+    timeline:SetCurrentTimecode(frames_to_timecode(origin, fps))
+  end)
+  try_set_destination_track(timeline, track_index)
+  local seed = insert_title(timeline, root)
+  if seed and mediaPool then
+    local generator = nil
+    pcall(function()
+      generator = seed:GetMediaPoolItem()
+    end)
+    if generator then
+      pcall(function()
+        timeline:DeleteClips({ seed })
+      end)
+      seed = nil
+      append_log(root, "Using 快剪字幕 Text+ title via AppendToTimeline")
+      local appendResult, appendErr = place_captions_via_append(
+        mediaPool,
+        timeline,
+        generator,
+        captions,
+        fps,
+        origin,
+        track_index,
+        presetSettings,
+        style,
+        root,
+        job_id,
+        "quickcut"
+      )
+      if appendResult and appendResult.count and appendResult.count > 0 then
+        append_log(root, string.format("Batch append succeeded, placed %d captions", appendResult.count))
+        return appendResult
+      end
+      append_log(root, "快剪字幕 append failed: " .. tostring(appendErr) .. ", falling back")
+    end
+  end
+  if seed then
+    pcall(function()
+      timeline:DeleteClips({ seed })
+    end)
+  end
+
+  if useAutosubs and mediaPool then
     local rootFolder = mediaPool:GetRootFolder()
     if rootFolder then
       local templateItem = ensure_caption_template(mediaPool, rootFolder, job, root)
       if templateItem then
-        append_log(root, useAutosubs
-          and "Using AutoSubs dynamic caption template via mediaPool:AppendToTimeline"
-          or "Text+ sentence plate via AppendToTimeline (skip AutoSubs renderer)")
+        append_log(root, "Using AutoSubs dynamic caption template via mediaPool:AppendToTimeline")
         local appendResult, appendErr = place_captions_via_append(
           mediaPool,
           timeline,
@@ -1806,22 +1882,7 @@ local function place_captions(job, root)
         set_clip_span(item, clip_start, clip_end, root)
         local styleOk, styleErr = pcall(function()
           local comp = item.GetFusionCompByIndex and item:GetFusionCompCount() > 0 and item:GetFusionCompByIndex(1)
-          if style.backgroundEnabled then
-            style_plain_text_item(comp, item, caption, fps, style, index)
-            return
-          end
-          local tool = find_text_tool(comp) or add_text_tool(comp)
-          if not tool then
-            error("找不到 Text+")
-          end
-          apply_style(comp, tool, caption, style)
-          bind_media_out(comp, tool)
-          if highlight_is_on(style) then
-            local cls = ensure_text_cls(comp, tool)
-            if cls then
-              apply_native_cls_keyframes(comp, cls, caption, tostring(caption.text or ""), fps, style)
-            end
-          end
+          style_plain_text_item(comp, item, caption, fps, style, index)
         end)
         if styleOk then
           placed = placed + 1

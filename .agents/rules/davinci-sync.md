@@ -35,9 +35,11 @@
 ### 6. 整句背景走 快剪Text，不要占用 AutoSubs 1–4
 - AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。Element 5 在 Template 上不存在。
 - `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，并在播放时改写 Template，所以整句底不能画在 AutoSubs Template 上。
-- 有整句底时：仍用 `AppendToTimeline` 按语音帧铺条；每条合成里另建 `快剪Text`，`Type4=1` Border Fill、`Level4=0`（或 line=1）；MediaOut 接到 `快剪Text`，AutoSubs 关掉。
-- 逐词高亮写在 `快剪Text` 的 Character Level Styling **填充色 Index 0**，禁止再用 Element 4 做词色，避免把底拆碎。
-- AutoSubs 5 步只用于无整句底的逐词高亮。
+- 快剪自己的母版是 `快剪字幕.setting`（普通 Text+，工具名 `Template`）。装到 Fusion `Templates/Edit/Titles/`。铺条优先 `InsertFusionTitleIntoTimeline("快剪字幕")` 再 `AppendToTimeline`。
+- 字色 Element 1、描边 Element 2、整句底 Element 4（`Type4=1` Border Fill）。三者写在**同一个** Text+ 上。
+- 逐词高亮是这个 Text+ 自己的 Character Level Styling **填充色 Index 0**，不要用 AutoSubs 的 CLS，也不要用 Element 4 做词色。
+- 有 AutoSubs 宏的旧合成才另建 `快剪Text` 并断开宏。新母版不要导入 `caption-bin.drb`。
+- AutoSubs 5 步只留给「没有快剪标题、也没有整句底」的旧回退。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
 - **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
 - **严禁**有底时改走逐条 `insert_title` 当主路径（默认 5 秒标题会互相挤压成碎条）。

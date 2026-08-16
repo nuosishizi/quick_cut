@@ -116,7 +116,7 @@ rm -rf "$DST_APP"
 
 printf '\n=============================================\n'
 printf '✅ 已生成：%s\n' "$DST_APP"
-printf '✅ 快剪 2.7.13 · 可发送字幕到达芬奇时间线（颜色/字号/描边/阴影/换行/背景）\n'
+printf '✅ 快剪 2.7.14 · 可发送字幕到达芬奇时间线（颜色/字号/描边/阴影/换行/背景）\n'
 printf '✅ 视频剪辑界面已嵌入快剪主窗口；Bun / FFmpeg 后台仍为独立进程\n'
 printf '✅ 使用 macOS 原生 WKWebView，不包含 Chromium / CEF\n'
 

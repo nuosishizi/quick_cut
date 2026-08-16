@@ -7,6 +7,7 @@ import { normalizeCaptionStyle, wrapCaptionText } from "./resolve-export.mjs";
 
 export const RESOLVE_SCRIPT_NAME = "快剪.lua";
 export const RESOLVE_CAPTION_BIN = "caption-bin.drb";
+export const RESOLVE_TITLE_SETTING = "快剪字幕.setting";
 const LISTENER_STALE_MS = 4000;
 
 export function bundledResolveScriptPath() {
@@ -15,6 +16,54 @@ export function bundledResolveScriptPath() {
 
 export function bundledCaptionBinPath() {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "resolve-script", RESOLVE_CAPTION_BIN);
+}
+
+export function bundledTitleSettingPath() {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "resolve-script", RESOLVE_TITLE_SETTING);
+}
+
+export function resolveTitleDirectories() {
+  if (process.platform === "win32") {
+    const appdata = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+    return [
+      path.join(
+        appdata,
+        "Blackmagic Design",
+        "DaVinci Resolve",
+        "Support",
+        "Fusion",
+        "Templates",
+        "Edit",
+        "Titles",
+      ),
+    ];
+  }
+  const home = os.homedir();
+  return [
+    path.join(
+      home,
+      "Library",
+      "Application Support",
+      "Blackmagic Design",
+      "DaVinci Resolve",
+      "Fusion",
+      "Templates",
+      "Edit",
+      "Titles",
+    ),
+    path.join(
+      home,
+      "Library",
+      "Application Support",
+      "Blackmagic Design",
+      "DaVinci Resolve",
+      "Support",
+      "Fusion",
+      "Templates",
+      "Edit",
+      "Titles",
+    ),
+  ];
 }
 
 export function resolveScriptDirectories() {
@@ -381,6 +430,7 @@ export function buildResolveSendJob(input = {}) {
   if (!items.length) throw new Error("没有可以发送的字幕。");
 
   const captionBinPath = bundledCaptionBinPath();
+  const titleSettingPath = bundledTitleSettingPath();
 
   return {
     id: String(input.id || `qc-${Date.now()}`),
@@ -389,6 +439,7 @@ export function buildResolveSendJob(input = {}) {
     replace: input.replace !== false,
     templateName: "快剪字幕",
     captionBinPath: fs.existsSync(captionBinPath) ? captionBinPath : "",
+    titleSettingPath: fs.existsSync(titleSettingPath) ? titleSettingPath : "",
     presetSettings,
     style: {
       fontFamily: fontName,
@@ -418,40 +469,45 @@ export function buildResolveSendJob(input = {}) {
   };
 }
 
+function writeIfChanged(destination, body) {
+  const previous = fs.existsSync(destination) ? fs.readFileSync(destination) : null;
+  fs.writeFileSync(destination, body);
+  return !previous || Buffer.compare(previous, body) !== 0;
+}
+
 export function installResolveLink(options = {}) {
   const source = bundledResolveScriptPath();
   if (!fs.existsSync(source)) throw new Error("找不到达芬奇接收脚本。");
   const body = fs.readFileSync(source);
   const binSource = bundledCaptionBinPath();
   const binBody = fs.existsSync(binSource) ? fs.readFileSync(binSource) : null;
+  const titleSource = bundledTitleSettingPath();
+  const titleBody = fs.existsSync(titleSource) ? fs.readFileSync(titleSource) : null;
   const installed = [];
   let changed = false;
   const directories = options.directories || resolveScriptDirectories();
   for (const directory of directories) {
     fs.mkdirSync(directory, { recursive: true });
     const destination = path.join(directory, RESOLVE_SCRIPT_NAME);
-    const previous = fs.existsSync(destination) ? fs.readFileSync(destination) : null;
-    fs.writeFileSync(destination, body);
-    if (!previous || Buffer.compare(previous, body) !== 0) changed = true;
+    if (writeIfChanged(destination, body)) changed = true;
     if (binBody) {
-      const binDestination = path.join(directory, RESOLVE_CAPTION_BIN);
-      const prevBin = fs.existsSync(binDestination) ? fs.readFileSync(binDestination) : null;
-      if (!prevBin || Buffer.compare(prevBin, binBody) !== 0) {
-        fs.writeFileSync(binDestination, binBody);
-        changed = true;
-      }
+      if (writeIfChanged(path.join(directory, RESOLVE_CAPTION_BIN), binBody)) changed = true;
+    }
+    if (titleBody) {
+      if (writeIfChanged(path.join(directory, RESOLVE_TITLE_SETTING), titleBody)) changed = true;
     }
     installed.push(destination);
   }
-  const root = ensureResolveLinkDirs();
-  if (binBody) {
-    const linkBin = path.join(root, RESOLVE_CAPTION_BIN);
-    const prevLinkBin = fs.existsSync(linkBin) ? fs.readFileSync(linkBin) : null;
-    if (!prevLinkBin || Buffer.compare(prevLinkBin, binBody) !== 0) {
-      fs.writeFileSync(linkBin, binBody);
-      changed = true;
-    }
+  const titleDirs = options.titleDirectories
+    || (options.directories ? [] : resolveTitleDirectories());
+  for (const directory of titleDirs) {
+    if (!titleBody) break;
+    fs.mkdirSync(directory, { recursive: true });
+    if (writeIfChanged(path.join(directory, RESOLVE_TITLE_SETTING), titleBody)) changed = true;
   }
+  const root = ensureResolveLinkDirs();
+  if (binBody && writeIfChanged(path.join(root, RESOLVE_CAPTION_BIN), binBody)) changed = true;
+  if (titleBody && writeIfChanged(path.join(root, RESOLVE_TITLE_SETTING), titleBody)) changed = true;
   if (changed) {
     try {
       fs.writeFileSync(path.join(root, "stop"), "1\n");

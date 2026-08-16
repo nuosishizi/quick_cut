@@ -6,6 +6,8 @@ import test from "node:test";
 import {
   buildResolveSendJob,
   bundledResolveScriptPath,
+  bundledTitleSettingPath,
+  RESOLVE_TITLE_SETTING,
   fusionCenter,
   fusionFontStyle,
   fusionGlow,
@@ -183,7 +185,9 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.equal(job.templateName, "快剪字幕");
   assert.match(lua, /SetInput Enabled5 is a no-op/);
   assert.match(lua, /useAutosubs = not style.backgroundEnabled/);
-  assert.match(lua, /Text\+ sentence plate via AppendToTimeline \(skip AutoSubs renderer\)/);
+  assert.match(lua, /Using 快剪字幕 Text\+ title via AppendToTimeline/);
+  assert.match(lua, /apply_text_outline/);
+  assert.match(lua, /pick_quickcut_text_tool/);
   assert.match(lua, /style_plain_text_item/);
   assert.match(lua, /ensure_plain_text_plus/);
   assert.match(lua, /ensure_text_cls/);
@@ -197,6 +201,11 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
     lua,
     /style_plain_text_item[\s\S]*apply_native_cls_keyframes\(comp, cls, caption, plainText, fps, style\)/,
   );
+  assert.equal(fs.existsSync(bundledTitleSettingPath()), true);
+  assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /TextPlus/);
+  assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Enabled2 = Input \{ Value = 1/);
+  assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Type4 = Input \{ Value = 1/);
+  assert.equal(job.titleSettingPath, bundledTitleSettingPath());
 });
 
 test("word-pill highlight keeps AutoSubs Bubble on Element 4", () => {
@@ -269,6 +278,10 @@ test("install writes the script and caption-bin.drb into Resolve Utility folders
     const result = installResolveLink({ directories: [scriptDir] });
     assert.equal(fs.existsSync(result.installed), true);
     assert.equal(fs.existsSync(path.join(scriptDir, "caption-bin.drb")), true);
+    assert.equal(fs.existsSync(path.join(scriptDir, RESOLVE_TITLE_SETTING)), true);
+    const titleDir = path.join(temp, "Titles");
+    installResolveLink({ directories: [scriptDir], titleDirectories: [titleDir] });
+    assert.equal(fs.existsSync(path.join(titleDir, RESOLVE_TITLE_SETTING)), true);
     assert.match(fs.readFileSync(result.installed, "utf8"), /工作区/);
     const status = resolveLinkStatus({ directories: [scriptDir] });
     assert.equal(status.installed, true);
