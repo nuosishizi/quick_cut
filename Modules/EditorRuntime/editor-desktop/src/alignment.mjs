@@ -1177,7 +1177,7 @@ function rematchPrefixFalseStarts(operations = []) {
     let cursor = prefixEnd;
     while (
       cursor < operations.length &&
-      operations[cursor].type === "extra" &&
+      ["extra", "filler", "mismatch"].includes(operations[cursor].type) &&
       operations[cursor].spoken
     ) {
       extras.push(operations[cursor]);
@@ -1189,7 +1189,7 @@ function rematchPrefixFalseStarts(operations = []) {
     let extraAt = -1;
     for (
       let offset = 0;
-      offset <= Math.min(2, extraNorms.length - prefixNorms.length);
+      offset <= Math.min(24, extraNorms.length - prefixNorms.length);
       offset += 1
     ) {
       if (prefixNorms.every((norm, pos) => extraNorms[offset + pos] === norm)) {
@@ -1214,8 +1214,11 @@ function rematchPrefixFalseStarts(operations = []) {
       earlier.issueType = "repeat";
     }
     for (let pos = 0; pos < extraAt; pos += 1) {
+      extras[pos].type = "extra";
+      extras[pos].relation = "extra";
+      extras[pos].expected = null;
       extras[pos].action = "cut";
-      extras[pos].issueType = extras[pos].issueType || "repeat";
+      extras[pos].issueType = "repeat";
     }
   }
   return operations;
@@ -1224,11 +1227,9 @@ function rematchPrefixFalseStarts(operations = []) {
 function looksLikeAbandonedPrefix(phrase, after) {
   const extra = phraseWordList(phrase);
   const next = phraseWordList(after);
-  if (extra.length < 2 || next.length < 3) return false;
+  if (extra.length < 2 || next.length < 2) return false;
   if (extra.slice(0, 2).join(" ") !== next.slice(0, 2).join(" ")) return false;
-  if (extra.join(" ") === next.slice(0, extra.length).join(" "))
-    return extra.length < next.length;
-  return extra.length <= 6;
+  return true;
 }
 
 function sentenceContinues(display) {

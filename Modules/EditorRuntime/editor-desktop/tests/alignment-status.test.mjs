@@ -88,6 +88,28 @@ test("mid-sentence reread with a timestamp hole is marked for cutting", () => {
   assert.ok(review.some((item) => item.action === "cut" && item.end - item.start > 0.8));
 });
 
+test("reread with stumble words (Save this for the next time he's ... Save this for the time He feels silent) is cut and captions match the complete take", () => {
+  const script = 'Comment: "Lord, make me." "Save this for the time He feels silent."';
+  const aligned = alignScript({
+    segments: [
+      { text: "Comment: Lord, make me.", start: 218.0, end: 219.5 },
+      { text: "Save this for the next time he's", start: 219.8, end: 221.5 },
+      { text: "Save this for the time He feels silent.", start: 222.5, end: 224.5 },
+    ],
+    script,
+    duration: 230,
+  });
+  const reread = aligned.issues.find(
+    (issue) => issue.type === "repeat" && /Save this for the next time he/i.test(issue.spokenText)
+  );
+  assert.ok(reread, "should find repeat issue for the abandoned take");
+  assert.equal(reread.confirmedCut, true);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  const completeCaption = captions.find((c) => /Save this for the/i.test(c.text));
+  assert.ok(completeCaption, "should produce full caption for the complete second take");
+  assert.ok(completeCaption.start >= 222.0, "complete caption must be anchored to the second take");
+});
+
 test("a breath after Here does not count as a reread and keeps the sentence together", () => {
   const script = "Here are the three sins.";
   const aligned = alignScript({
