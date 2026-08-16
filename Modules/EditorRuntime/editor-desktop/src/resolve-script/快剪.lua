@@ -933,15 +933,140 @@ local function apply_style(comp, tool, item, style)
   return true
 end
 
+local function find_cls_tool(comp, tool)
+  if not comp then
+    return nil
+  end
+  local cls = nil
+  pcall(function()
+    cls = comp:FindTool("CharacterLevelStyling1")
+  end)
+  if cls then
+    return cls
+  end
+  if tool and tool.StyledText and tool.StyledText.GetConnectedOutput then
+    pcall(function()
+      local out = tool.StyledText:GetConnectedOutput()
+      if out then
+        cls = out:GetTool()
+      end
+    end)
+  end
+  if cls then
+    return cls
+  end
+  pcall(function()
+    local list = comp:GetToolList(false, "CharacterLevelStyling")
+    if type(list) == "table" then
+      cls = list[1] or list[0]
+      if not cls then
+        for _, value in pairs(list) do
+          cls = value
+          break
+        end
+      end
+    end
+  end)
+  return cls
+end
+
+local function ensure_text_cls(comp, tool)
+  local cls = find_cls_tool(comp, tool)
+  if cls then
+    return cls
+  end
+  if tool then
+    pcall(function()
+      tool:AddModifier("StyledText", "CharacterLevelStyling")
+    end)
+  end
+  cls = find_cls_tool(comp, tool)
+  if cls then
+    return cls
+  end
+  if comp and comp.AddTool then
+    pcall(function()
+      cls = comp:AddTool("CharacterLevelStyling")
+      if cls and tool then
+        tool:ConnectInput("StyledText", cls)
+      end
+    end)
+  end
+  return cls or find_cls_tool(comp, tool)
+end
+
+local function cls_keyframe_spline(comp, cls)
+  if not cls then
+    return nil
+  end
+  local spline = nil
+  pcall(function()
+    local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+    if conn then
+      spline = conn:GetTool()
+    end
+  end)
+  if spline then
+    return spline
+  end
+  if comp and comp.AddTool then
+    pcall(function()
+      spline = comp:AddTool("BezierSpline")
+      if spline then
+        cls:ConnectInput("CharacterLevelStyling", spline)
+      end
+    end)
+  end
+  return spline
+end
+
+local function highlight_is_on(style)
+  if not style then
+    return true
+  end
+  local flag = style.highlightEnabled
+  return flag ~= false and flag ~= 0
+end
+
+local function lock_plain_renderer(comp, tool)
+  if not comp or not tool then
+    return
+  end
+  silence_autosubs(comp)
+  local autosubs = nil
+  pcall(function()
+    autosubs = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
+  end)
+  if autosubs then
+    pcall(function()
+      autosubs:SetAttrs({ TOOLB_PassThrough = true })
+    end)
+    pcall(function()
+      if autosubs.Delete then
+        autosubs:Delete()
+      end
+    end)
+  end
+  local follower = nil
+  pcall(function()
+    follower = comp:FindTool("Follower1")
+  end)
+  if follower then
+    pcall(function()
+      follower:SetAttrs({ TOOLB_PassThrough = true })
+    end)
+  end
+  bind_media_out(comp, tool)
+end
+
 local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
-  local cls = clsTool or (comp and comp:FindTool("CharacterLevelStyling1"))
+  local cls = clsTool or find_cls_tool(comp, nil)
   if not cls then return end
 
   pcall(function() cls:SetInput("Text", plainText) end)
   pcall(function() cls:SetInput("StyledText", plainText) end)
 
-  local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
-  local spline = conn and conn:GetTool()
+  local spline = cls_keyframe_spline(comp, cls)
   if not spline then return end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
@@ -996,35 +1121,82 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   pcall(function() spline:SetKeyFrames(keyframes) end)
 end
 
+local function style_plain_text_item(comp, item, caption, fps, style, index)
+  if not comp then
+    error("找不到 Fusion 合成")
+  end
+  local tool = ensure_plain_text_plus(comp)
+  if not tool then
+    error("找不到 Text+")
+  end
+  apply_style(comp, tool, caption, style)
+  lock_plain_renderer(comp, tool)
+  local plainText = tostring(caption.text or "")
+  if highlight_is_on(style) then
+    local cls = ensure_text_cls(comp, tool)
+    if cls then
+      apply_native_cls_keyframes(comp, cls, caption, plainText, fps, style)
+    end
+  end
+  bind_media_out(comp, tool)
+  if item then
+    pcall(function()
+      item:SetName(string.format("快剪字幕 %03d", index or 1))
+    end)
+    pcall(function()
+      item:SetClipColor("Orange")
+    end)
+  end
+end
+
 local function set_clip_span(item, start_frame, end_frame, root)
   if not item then
     return
   end
-  local duration = math.max(1, (tonumber(end_frame) or 1) - (tonumber(start_frame) or 0))
+  start_frame = tonumber(start_frame) or 0
+  end_frame = tonumber(end_frame) or (start_frame + 1)
+  if end_frame <= start_frame then
+    end_frame = start_frame + 1
+  end
+  local duration = math.max(1, end_frame - start_frame)
   local actual = nil
   pcall(function()
     actual = item:GetStart()
   end)
-  if actual ~= nil and math.abs(actual - start_frame) > 2 then
-    append_log(root, string.format(
-      "span keep inserted_start=%s expected=%s duration=%s",
-      tostring(actual),
-      tostring(start_frame),
-      tostring(duration)
-    ))
+  -- Trim the default Fusion title length first so the next insert cannot
+  -- land inside a 5-second clip and get squeezed into 1-frame slivers.
+  if actual ~= nil then
     pcall(function()
       item:SetProperty("End", actual + duration)
     end)
     pcall(function()
       item:SetProperty("Duration", duration)
     end)
-    return actual
   end
   pcall(function()
     item:SetProperty("Start", start_frame)
     item:SetProperty("End", end_frame)
     item:SetProperty("Duration", duration)
   end)
+  local now = nil
+  pcall(function()
+    now = item:GetStart()
+  end)
+  if now ~= nil and math.abs(now - start_frame) > 2 then
+    append_log(root, string.format(
+      "span keep inserted_start=%s expected=%s duration=%s",
+      tostring(now),
+      tostring(start_frame),
+      tostring(duration)
+    ))
+    pcall(function()
+      item:SetProperty("End", now + duration)
+    end)
+    pcall(function()
+      item:SetProperty("Duration", duration)
+    end)
+    return now
+  end
   return start_frame
 end
 
@@ -1386,6 +1558,11 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
       if compCount > 0 then
         local comp = item:GetFusionCompByIndex(1)
         if comp then
+          if style.backgroundEnabled then
+            style_plain_text_item(comp, item, caption, fps, style, index)
+            return
+          end
+
           local autosubsTool = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
           if not autosubsTool then
             local tools = comp:GetToolList(false, "MacroOperator")
@@ -1559,16 +1736,19 @@ local function place_captions(job, root)
   local job_id = tostring(job.id or "")
   local origin = first_picture_frame(timeline, start_frame)
 
-  -- Sentence plates cannot live on AutoSubs Caption: its CLS keyframes own
-  -- Element 4 and will split then erase the box on playback. Use Text+.
+  -- Placement always uses AppendToTimeline so clips sit on speech frames.
+  -- AutoSubs 5-step is only the renderer when there is no sentence plate.
+  -- A plate lives on 快剪Text (Element 4); spoken-word color is CLS fill.
   local useAutosubs = not style.backgroundEnabled
   local mediaPool = project:GetMediaPool()
-  if useAutosubs and mediaPool then
+  if mediaPool then
     local rootFolder = mediaPool:GetRootFolder()
     if rootFolder then
       local templateItem = ensure_caption_template(mediaPool, rootFolder, job, root)
       if templateItem then
-        append_log(root, "Using AutoSubs dynamic caption template via mediaPool:AppendToTimeline")
+        append_log(root, useAutosubs
+          and "Using AutoSubs dynamic caption template via mediaPool:AppendToTimeline"
+          or "Text+ sentence plate via AppendToTimeline (skip AutoSubs renderer)")
         local appendResult, appendErr = place_captions_via_append(
           mediaPool,
           timeline,
@@ -1626,17 +1806,22 @@ local function place_captions(job, root)
         set_clip_span(item, clip_start, clip_end, root)
         local styleOk, styleErr = pcall(function()
           local comp = item.GetFusionCompByIndex and item:GetFusionCompCount() > 0 and item:GetFusionCompByIndex(1)
-          local tool
           if style.backgroundEnabled then
-            tool = ensure_plain_text_plus(comp)
-          else
-            tool = find_text_tool(comp) or add_text_tool(comp)
+            style_plain_text_item(comp, item, caption, fps, style, index)
+            return
           end
+          local tool = find_text_tool(comp) or add_text_tool(comp)
           if not tool then
             error("找不到 Text+")
           end
           apply_style(comp, tool, caption, style)
           bind_media_out(comp, tool)
+          if highlight_is_on(style) then
+            local cls = ensure_text_cls(comp, tool)
+            if cls then
+              apply_native_cls_keyframes(comp, cls, caption, tostring(caption.text or ""), fps, style)
+            end
+          end
         end)
         if styleOk then
           placed = placed + 1

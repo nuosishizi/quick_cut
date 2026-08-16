@@ -183,14 +183,20 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.equal(job.templateName, "快剪字幕");
   assert.match(lua, /SetInput Enabled5 is a no-op/);
   assert.match(lua, /useAutosubs = not style.backgroundEnabled/);
-  assert.match(lua, /Text\+ sentence plate \(skip AutoSubs\)/);
+  assert.match(lua, /Text\+ sentence plate via AppendToTimeline \(skip AutoSubs renderer\)/);
+  assert.match(lua, /style_plain_text_item/);
   assert.match(lua, /ensure_plain_text_plus/);
+  assert.match(lua, /ensure_text_cls/);
   assert.match(lua, /快剪Text/);
   assert.match(lua, /set_number\(tool, "Enabled4", 1\)/);
   assert.match(lua, /set_number\(tool, "Type4", 1\)/);
   assert.match(lua, /set_number\(tool, "Level4", bgLevel\)/);
   assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);
+  assert.match(
+    lua,
+    /style_plain_text_item[\s\S]*apply_native_cls_keyframes\(comp, cls, caption, plainText, fps, style\)/,
+  );
 });
 
 test("word-pill highlight keeps AutoSubs Bubble on Element 4", () => {

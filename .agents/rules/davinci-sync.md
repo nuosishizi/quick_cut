@@ -32,18 +32,20 @@
 ### 5. 驱动内部高亮引擎生成关键帧
 - 通过 `ApplyWordTiming(comp, autosubsTool, wordTiming)` 驱动生成每个单词精确起止帧的变色关键帧。
 
-### 6. 整句背景必须写在 Text+ Element 5（禁止占用 AutoSubs 1–4）
-- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。
-- `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，因此整句背景绝不能写在 Element 4。
-- 有整句底时不要用 AutoSubs 宏。普通 Text+：Type4=1 Border Fill、Level4=0。
+### 6. 整句背景走 快剪Text，不要占用 AutoSubs 1–4
+- AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。Element 5 在 Template 上不存在。
+- `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，并在播放时改写 Template，所以整句底不能画在 AutoSubs Template 上。
+- 有整句底时：仍用 `AppendToTimeline` 按语音帧铺条；每条合成里另建 `快剪Text`，`Type4=1` Border Fill、`Level4=0`（或 line=1）；MediaOut 接到 `快剪Text`，AutoSubs 关掉。
+- 逐词高亮写在 `快剪Text` 的 Character Level Styling **填充色 Index 0**，禁止再用 Element 4 做词色，避免把底拆碎。
 - AutoSubs 5 步只用于无整句底的逐词高亮。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
 - **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
-- 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，引擎仍走同一套宏 5 步。
+- **严禁**有底时改走逐条 `insert_title` 当主路径（默认 5 秒标题会互相挤压成碎条）。
+- 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，无底时引擎仍走同一套宏 5 步。
 
 ---
 ## 永久禁令：
 1. 严禁颠倒第 2、3 步的时序（必须先写文本与 WordTiming，再调用 SetInputValues 与 ApplyWordTiming）；
 2. 严禁改动 `to_word_timing` 的单调递增校准；
 3. 严禁随意删除或破坏宏与 TextPlus 的数据绑定链；
-4. 严禁用 AutoSubs Element 2 / Element 4 画整句字幕背景；整句底只能写在 Element 5，且必须在 ApplyWordTiming 之后。
+4. 严禁用 AutoSubs Element 2 / Element 4 画整句字幕背景；整句底只写在独立的 `快剪Text` Element 4，词色只用 CLS 填充。
