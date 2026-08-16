@@ -698,6 +698,14 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
     end
     prevStart = w.startFrame
   end
+  for i, w in ipairs(result) do
+    if i < #result then
+      local nextStart = result[i + 1].startFrame
+      if w.endFrame > nextStart then
+        w.endFrame = math.max(w.startFrame + 1, nextStart)
+      end
+    end
+  end
 
   return result
 end
@@ -1172,18 +1180,23 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
 
   local keyframes = {}
   local keyIndex = 0
+  local function put(frame, array)
+    keyframes[frame] = make_key(keyIndex, array)
+    keyIndex = keyIndex + 1
+  end
+
+  -- Match 快剪 preview: active only while start <= t < end. Pause is dark.
+  local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
+  if firstStart > 0 then
+    put(0, {})
+  end
   for i, word in ipairs(wordTiming) do
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
-    local array = style_array(i)
-    keyframes[sFrame] = make_key(keyIndex, array)
-    keyIndex = keyIndex + 1
-    if i < #wordTiming then
-      local nextStart = math.max(0, tonumber(wordTiming[i + 1].startFrame) or (sFrame + 1))
-      local hold = math.max(sFrame, math.min((tonumber(word.endFrame) or nextStart) - 1, nextStart - 1))
-      if hold >= sFrame then
-        keyframes[hold] = make_key(keyIndex, array)
-        keyIndex = keyIndex + 1
-      end
+    local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 1))
+    put(sFrame, style_array(i))
+    local nextStart = wordTiming[i + 1] and tonumber(wordTiming[i + 1].startFrame)
+    if nextStart == nil or eFrame < nextStart then
+      put(eFrame, {})
     end
   end
 
