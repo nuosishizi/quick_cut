@@ -203,6 +203,8 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
     lua,
     /style_plain_text_item[\s\S]*apply_native_cls_keyframes\(comp, cls, caption, plainText, fps, style\)/,
   );
+  assert.match(lua, /StyledTextCLS/);
+  assert.match(lua, /SetKeyFrames\(keyframes, true\)/);
   assert.equal(fs.existsSync(bundledTitleSettingPath()), true);
   assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /TextPlus/);
   assert.match(fs.readFileSync(bundledTitleSettingPath(), "utf8"), /Enabled2 = Input \{ Value = 1/);

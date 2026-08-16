@@ -946,9 +946,24 @@ local function apply_style(comp, tool, item, style)
   end
 
   local plain = tostring(item.text or "")
+  local styledConnected = false
   pcall(function()
-    tool:SetInput("StyledText", plain)
+    styledConnected = tool.StyledText and tool.StyledText:GetConnectedOutput() ~= nil
   end)
+  if styledConnected then
+    pcall(function()
+      local out = tool.StyledText:GetConnectedOutput()
+      local cls = out and out:GetTool()
+      if cls then
+        cls:SetInput("Text", plain)
+        cls:SetInput("StyledText", plain)
+      end
+    end)
+  else
+    pcall(function()
+      tool:SetInput("StyledText", plain)
+    end)
+  end
   pcall(function()
     tool:SetInput("Text", plain)
   end)
@@ -966,6 +981,18 @@ local function find_cls_tool(comp, tool)
     end)
   end
   if cls then
+    local inner = nil
+    pcall(function()
+      if cls.Text and cls.Text.GetConnectedOutput then
+        local textOut = cls.Text:GetConnectedOutput()
+        if textOut then
+          inner = textOut:GetTool()
+        end
+      end
+    end)
+    if inner then
+      cls = inner
+    end
     return cls
   end
   if not comp then
@@ -1003,7 +1030,10 @@ local function ensure_text_cls(comp, tool)
   end
   if comp and comp.AddTool then
     pcall(function()
-      cls = comp:AddTool("CharacterLevelStyling")
+      cls = comp:AddTool("StyledTextCLS")
+      if not cls then
+        cls = comp:AddTool("CharacterLevelStyling")
+      end
       if cls and tool then
         tool:ConnectInput("StyledText", cls)
       end
@@ -1017,6 +1047,18 @@ local function cls_keyframe_spline(comp, cls)
     return nil
   end
   local spline = nil
+  pcall(function()
+    local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
+    if conn then
+      spline = conn:GetTool()
+    end
+  end)
+  if spline then
+    return spline
+  end
+  pcall(function()
+    cls:AddModifier("CharacterLevelStyling", "BezierSpline")
+  end)
   pcall(function()
     local conn = cls.CharacterLevelStyling and cls.CharacterLevelStyling:GetConnectedOutput()
     if conn then
@@ -1078,64 +1120,74 @@ end
 
 local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
   local cls = clsTool or find_cls_tool(comp, nil)
-  if not cls then return end
+  if not cls then return false end
 
   pcall(function() cls:SetInput("Text", plainText) end)
   pcall(function() cls:SetInput("StyledText", plainText) end)
 
   local spline = cls_keyframe_spline(comp, cls)
-  if not spline then return end
+  if not spline then return false end
 
   local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
   local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
-  if not wordTiming or #wordTiming == 0 then return end
+  if not wordTiming or #wordTiming == 0 then return false end
 
   local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
   local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
   local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
+  local baseR = tonumber(style.color and style.color[1]) or 1.0
+  local baseG = tonumber(style.color and style.color[2]) or 1.0
+  local baseB = tonumber(style.color and style.color[3]) or 1.0
 
-  local keyframes = {
-    [0] = {
-      0,
+  local function style_array(activeIndex)
+    local array = {}
+    for j, word in ipairs(wordTiming) do
+      local isHot = j == activeIndex
+      table.insert(array, { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 })
+      table.insert(array, { 2401, word.startIndex, word.endIndex, Value = isHot and hlR or baseR, Index = 0, __flags = 256 })
+      table.insert(array, { 2402, word.startIndex, word.endIndex, Value = isHot and hlG or baseG, Index = 0, __flags = 256 })
+      table.insert(array, { 2403, word.startIndex, word.endIndex, Value = isHot and hlB or baseB, Index = 0, __flags = 256 })
+    end
+    return array
+  end
+
+  local function make_key(index, array)
+    return {
+      index,
       Value = {
         __ctor = "StyledText",
-        Array = {},
-        Flags = { StepIn = true, LockedY = true, __flags = 256 }
-      }
-    }
-  }
-
-  for i, word in ipairs(wordTiming) do
-    local sFrame = math.max(0, tonumber(word.startFrame) or 0)
-    local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 5))
-
-    local activeArray = {
-      { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 },
-      { 2401, word.startIndex, word.endIndex, Value = hlR, Index = 0, __flags = 256 },
-      { 2402, word.startIndex, word.endIndex, Value = hlG, Index = 0, __flags = 256 },
-      { 2403, word.startIndex, word.endIndex, Value = hlB, Index = 0, __flags = 256 }
-    }
-
-    keyframes[sFrame] = {
-      sFrame,
-      Value = {
-        __ctor = "StyledText",
-        Array = activeArray,
-        Flags = { StepIn = true, LockedY = true, __flags = 256 }
-      }
-    }
-
-    keyframes[eFrame] = {
-      eFrame,
-      Value = {
-        __ctor = "StyledText",
-        Array = {},
+        Array = array,
         Flags = { StepIn = true, LockedY = true, __flags = 256 }
       }
     }
   end
 
-  pcall(function() spline:SetKeyFrames(keyframes) end)
+  local keyframes = {}
+  local keyIndex = 0
+  for i, word in ipairs(wordTiming) do
+    local sFrame = math.max(0, tonumber(word.startFrame) or 0)
+    local array = style_array(i)
+    keyframes[sFrame] = make_key(keyIndex, array)
+    keyIndex = keyIndex + 1
+    if i < #wordTiming then
+      local nextStart = math.max(0, tonumber(wordTiming[i + 1].startFrame) or (sFrame + 1))
+      local hold = math.max(sFrame, math.min((tonumber(word.endFrame) or nextStart) - 1, nextStart - 1))
+      if hold >= sFrame then
+        keyframes[hold] = make_key(keyIndex, array)
+        keyIndex = keyIndex + 1
+      end
+    end
+  end
+
+  local ok = pcall(function()
+    spline:SetKeyFrames(keyframes, true)
+  end)
+  if not ok then
+    pcall(function()
+      spline:SetKeyFrames(keyframes)
+    end)
+  end
+  return true
 end
 
 local function comp_has_autosubs(comp)
