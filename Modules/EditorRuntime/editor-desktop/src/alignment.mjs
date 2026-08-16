@@ -1201,9 +1201,14 @@ function rematchPrefixFalseStarts(operations = []) {
     for (let pos = 0; pos < prefix.length; pos += 1) {
       const later = extras[extraAt + pos];
       const earlier = prefix[pos];
+      if (earlier.expected && later.spoken) {
+        earlier.expected.start = later.spoken.start;
+        earlier.expected.end = later.spoken.end;
+        earlier.expected.matchType = "match";
+      }
       later.type = "match";
       later.relation = "match";
-      later.expected = { ...earlier.expected };
+      later.expected = earlier.expected || { ...earlier.expected };
       later.issueType = "";
       later.issueId = "";
       later.action = "";
