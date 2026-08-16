@@ -6309,14 +6309,28 @@
         else element.pause();
       }
       function updateCaptionWordStates(element) {
-        for (const word of element.querySelectorAll(".word[data-start]")) {
-          const start = Number(word.dataset.start || 0),
-            end = Number(word.dataset.end || start);
-          word.classList.toggle("past", state.currentTime >= end);
-          word.classList.toggle(
-            "active",
-            state.currentTime >= start && state.currentTime < end,
-          );
+        if (!element) return;
+        const words = [...element.querySelectorAll(".word[data-start]")];
+        if (!words.length) return;
+        let activeFound = false;
+        for (let i = 0; i < words.length; i++) {
+          const word = words[i];
+          const start = Number(word.dataset.start || 0);
+          const end = Number(word.dataset.end || start);
+          const nextStart = i < words.length - 1 ? Number(words[i + 1].dataset.start || end) : end;
+          const isPast = state.currentTime >= end;
+          const isActive = state.currentTime >= start && (state.currentTime < nextStart || (i === words.length - 1 && state.currentTime <= end + 0.15));
+          word.classList.toggle("past", isPast);
+          word.classList.toggle("active", isActive);
+          if (isActive) activeFound = true;
+        }
+        if (!activeFound) {
+          const firstStart = Number(words[0].dataset.start || 0);
+          if (state.currentTime < firstStart) {
+            words[0].classList.add("active");
+          } else {
+            words.at(-1).classList.add("active");
+          }
         }
         if (element.dataset.animation === "line-pulse") {
           const lines = [...element.querySelectorAll(".caption-line")];
