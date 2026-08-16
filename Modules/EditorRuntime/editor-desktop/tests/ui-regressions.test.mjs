@@ -547,3 +547,14 @@ test("media import is optimistic and export offers mainstream color spaces", () 
   for (const value of ["p3", "bt2020", "hlg", "pq"])
     assert.match(ui, new RegExp(`<option value="${value}"`));
 });
+
+test("pause cut settings modal supports noise sensitivity, min duration and caption gap trimming", () => {
+  assert.match(ui, /id="openPauseCutSettings"/);
+  assert.match(ui, /id="pauseCutModal"/);
+  assert.match(ui, /id="pauseMinDuration"/);
+  assert.match(ui, /id="pauseBuffer"/);
+  assert.match(ui, /id="pauseSensitivity"/);
+  assert.match(ui, /id="pauseTrimCaptionGaps"/);
+  assert.match(ui, /function openPauseCutSettingsModal/);
+  assert.match(ui, /function currentPauseCutOptions/);
+});

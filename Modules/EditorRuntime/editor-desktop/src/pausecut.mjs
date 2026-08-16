@@ -84,11 +84,12 @@ function sustainedVoiceFlags(frames, floor, quiet, voice) {
 }
 
 export function analyzePauseFrames(frames, options = {}) {
-  const keepSeconds = clamp(Number(options.keepSeconds ?? 0.3), 0.1, 1);
+  const keepSeconds = clamp(Number(options.keepSeconds ?? 0.3), 0.05, 1);
+  const minPauseSeconds = clamp(Number(options.minPauseSeconds ?? options.keepSeconds ?? 0.3), 0.1, 5);
   const edgeKeepSeconds = clamp(
     Number(options.edgeKeepSeconds ?? 0.1),
     0.05,
-    0.3,
+    0.5,
   );
   const sensitivity = clamp(Number(options.sensitivity ?? 0.42), 0, 1);
   if (!frames.length) return { removals: [], pauses: [], diagnostics: {} };
@@ -97,31 +98,30 @@ export function analyzePauseFrames(frames, options = {}) {
   const floor = percentile(rmsValues, 0.1);
   const quiet = percentile(rmsValues, 0.25);
   const voice = Math.max(percentile(rmsValues, 0.78), quiet * 2.4, 0.002);
-  // Higher sensitivity raises the silence threshold. The cap keeps quiet syllables
-  // protected; PauseCut intentionally prefers leaving a pause over clipping speech.
+  // Higher sensitivity raises the silence threshold to overcome steady room/mic noise
   const rmsThreshold = clamp(
-    floor * (1.8 + sensitivity * 1.2) + voice * (0.018 + sensitivity * 0.018),
+    floor * (1.5 + sensitivity * 1.5) + voice * (0.015 + sensitivity * 0.025),
     0.0007,
-    voice * 0.16,
+    voice * 0.20,
   );
   const peakThreshold = Math.max(
     percentile(peakValues, 0.2) * 2.1,
-    rmsThreshold * 3.5,
+    rmsThreshold * 3.2,
   );
-  let speech = frames.map(
-    (frame) =>
-      frame.rms > rmsThreshold ||
-      frame.peak > peakThreshold ||
-      (frame.zcr > 0.08 && frame.rms > rmsThreshold * 0.55),
-  );
-  const frameDuration = Math.max(0.005, frames[0].end - frames[0].start);
-  speech = bridgeShortRuns(speech, Math.round(0.14 / frameDuration));
   const voiceFlags = sustainedVoiceFlags(frames, floor, quiet, voice),
     firstVoiceIndex = voiceFlags.findIndex(Boolean),
     lastVoiceIndex = voiceFlags.findLastIndex(Boolean),
     hasVoice = firstVoiceIndex >= 0 && lastVoiceIndex >= firstVoiceIndex,
     voiceStart = hasVoice ? frames[firstVoiceIndex].start : 0,
     voiceEnd = hasVoice ? frames[lastVoiceIndex].end : frames.at(-1).end;
+
+  let speech = frames.map(
+    (frame, index) =>
+      (voiceFlags[index] || frame.rms > rmsThreshold * 1.8 || frame.peak > peakThreshold * 1.5) &&
+      (frame.rms > rmsThreshold || frame.peak > peakThreshold || (frame.zcr > 0.08 && frame.rms > rmsThreshold * 0.55)),
+  );
+  const frameDuration = Math.max(0.005, frames[0].end - frames[0].start);
+  speech = bridgeShortRuns(speech, Math.round(0.12 / frameDuration));
 
   const pauses = [];
   let index = 0;
@@ -136,8 +136,7 @@ export function analyzePauseFrames(frames, options = {}) {
     const end = frames[Math.min(frames.length - 1, index - 1)].end;
     const duration = end - start;
     const boundary = start <= voiceStart + frameDuration || end >= voiceEnd - frameDuration;
-    // 用户规则：内部停顿 <=0.5s 完全不动；只有明确超过 0.5s 才裁。
-    if (!boundary && duration > keepSeconds + 0.012)
+    if (!boundary && duration > Math.max(keepSeconds, minPauseSeconds) - 0.02)
       pauses.push({ start, end, duration, boundary: false });
   }
   const removals = pauses
