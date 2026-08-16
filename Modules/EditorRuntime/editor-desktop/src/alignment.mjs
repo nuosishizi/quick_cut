@@ -9,7 +9,6 @@ const wordPattern = /[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
 const numberWords = new Map(
   Object.entries({
     zero: "0",
-    oh: "0",
     one: "1",
     first: "1",
     two: "2",
@@ -58,10 +57,13 @@ const numberWords = new Map(
     seventy: "70",
     eighty: "80",
     ninety: "90",
+    hundred: "hundred",
   }),
 );
 const equivalents = new Map(
   Object.entries({
+    oh: "o",
+    o: "o",
     okay: "ok",
     yea: "yes",
     yeah: "yes",
@@ -121,7 +123,7 @@ const harmlessConnectors = new Set(
   "and but or so then also now still yet because though".split(" "),
 );
 const optionalSpeechAdditions = new Set(
-  "you know see mean friend friends dear in fact of course as to be honest honestly truly really remember listen look amen god bless blessings everyone everybody today here please".split(" "),
+  "you know see mean friend friends dear in fact of course as to be honest honestly truly really remember listen look amen god bless blessings everyone everybody today here please verse".split(" "),
 );
 const semanticCanonical = new Map(Object.entries({
   dwells: "live", dwell: "live", lives: "live", living: "live", resides: "live", remains: "stay",
@@ -273,9 +275,39 @@ function displayWords(text) {
     }
     merged.push(current);
   }
-  for (let index = 0; index < merged.length - 1; index += 1) {
-    const current = merged[index],
-      next = merged[index + 1];
+  const numberMerged = [];
+  for (let index = 0; index < merged.length; index += 1) {
+    const current = { ...merged[index] };
+    const next = merged[index + 1];
+    const afterNext = merged[index + 2];
+    const currentNum = Number(current.norm);
+    const nextNum = Number(next?.norm);
+    const afterNextNum = Number(afterNext?.norm);
+    if (
+      currentNum >= 1 &&
+      currentNum <= 9 &&
+      next?.norm === "hundred" &&
+      afterNextNum >= 1 &&
+      afterNextNum <= 99
+    ) {
+      current.display += ` ${next.display} ${afterNext.display}`;
+      current.norm = String(currentNum * 100 + afterNextNum);
+      index += 2;
+    } else if (
+      currentNum >= 1 &&
+      currentNum <= 9 &&
+      nextNum >= 10 &&
+      nextNum <= 99
+    ) {
+      current.display += ` ${next.display}`;
+      current.norm = String(currentNum * 100 + nextNum);
+      index += 1;
+    }
+    numberMerged.push(current);
+  }
+  for (let index = 0; index < numberMerged.length - 1; index += 1) {
+    const current = numberMerged[index],
+      next = numberMerged[index + 1];
     if (/^\d+:$/.test(current.display) && /^\d+$/.test(next.norm)) {
       current.display = current.display.replace(/:$/, "");
       next.display = `:${next.display}`;
@@ -285,10 +317,10 @@ function displayWords(text) {
       next.keepWithPrevious = true;
     }
   }
-  for (let index = 0; index < merged.length; index += 1) {
-    const current = merged[index],
-      previous = merged[index - 1],
-      previousPrevious = merged[index - 2];
+  for (let index = 0; index < numberMerged.length; index += 1) {
+    const current = numberMerged[index],
+      previous = numberMerged[index - 1],
+      previousPrevious = numberMerged[index - 2];
     if (
       bibleBooks.has(current.norm) &&
       previous &&
@@ -303,7 +335,7 @@ function displayWords(text) {
     )
       current.keepWithPrevious = true;
   }
-  return merged;
+  return numberMerged;
 }
 
 export function transcriptWords(segments) {
@@ -1155,6 +1187,21 @@ function looksLikeRestart(phrase, before) {
   return false;
 }
 
+function normRelation(a, b) {
+  if (!a || !b) return "mismatch";
+  if (a === b) return "match";
+  const aStem = comparisonStem(a);
+  const bStem = comparisonStem(b);
+  if (aStem && aStem === bStem) return "near";
+  const similarity = Math.max(
+    characterSimilarity(a, b),
+    characterSimilarity(aStem, bStem),
+  );
+  if (similarity >= 0.8 || (Math.min(a.length, b.length) >= 5 && similarity >= 0.72))
+    return "near";
+  return "mismatch";
+}
+
 function rematchPrefixFalseStarts(operations = []) {
   for (let index = 0; index < operations.length; index += 1) {
     if (!["match", "near"].includes(operations[index].type) || !operations[index].expected)
@@ -1171,10 +1218,14 @@ function rematchPrefixFalseStarts(operations = []) {
       ["match", "near"].includes(operations[prefixEnd].type) &&
       operations[prefixEnd].expected &&
       operations[prefixEnd].spoken
-    )
+    ) {
       prefixEnd += 1;
+    }
     const prefix = operations.slice(index, prefixEnd);
-    if (prefix.length < 2) continue;
+    const isMajorStartWord =
+      prefix.length === 1 &&
+      bibleBooks.has(prefix[0].expected?.norm);
+    if (prefix.length < 2 && !isMajorStartWord) continue;
     const extras = [];
     let cursor = prefixEnd;
     while (
@@ -1185,35 +1236,50 @@ function rematchPrefixFalseStarts(operations = []) {
       extras.push(operations[cursor]);
       cursor += 1;
     }
-    if (extras.length < 2) continue;
+    if (extras.length < (isMajorStartWord ? 1 : 2)) continue;
     const prefixNorms = prefix.map((item) => item.expected.norm);
     const extraNorms = extras.map((item) => item.spoken.norm);
     let extraAt = -1;
-    for (
-      let offset = 0;
-      offset <= Math.min(24, extraNorms.length - prefixNorms.length);
-      offset += 1
-    ) {
-      if (prefixNorms.every((norm, pos) => extraNorms[offset + pos] === norm)) {
-        extraAt = offset;
-        break;
+    let matchSpan = 0;
+    const minCount = isMajorStartWord ? 1 : 2;
+    for (let count = Math.min(prefixNorms.length, 6); count >= minCount; count -= 1) {
+      const subPrefix = prefixNorms.slice(0, count);
+      const minOffset = count === 1 ? 1 : 0;
+      for (
+        let offset = minOffset;
+        offset <= Math.min(24, extraNorms.length - count);
+        offset += 1
+      ) {
+        if (
+          subPrefix.every(
+            (norm, pos) =>
+              normRelation(norm, extraNorms[offset + pos]) !== "mismatch",
+          )
+        ) {
+          extraAt = offset;
+          matchSpan = count;
+          break;
+        }
       }
+      if (extraAt >= 0) break;
     }
     if (extraAt < 0) continue;
     for (let pos = 0; pos < prefix.length; pos += 1) {
-      const later = extras[extraAt + pos];
+      const later = pos < matchSpan ? extras[extraAt + pos] : null;
       const earlier = prefix[pos];
-      if (earlier.expected && later.spoken) {
-        earlier.expected.start = later.spoken.start;
-        earlier.expected.end = later.spoken.end;
-        earlier.expected.matchType = "match";
+      if (later) {
+        if (earlier.expected && later.spoken) {
+          earlier.expected.start = later.spoken.start;
+          earlier.expected.end = later.spoken.end;
+          earlier.expected.matchType = "match";
+        }
+        later.type = "match";
+        later.relation = "match";
+        later.expected = earlier.expected || { ...earlier.expected };
+        later.issueType = "";
+        later.issueId = "";
+        later.action = "";
       }
-      later.type = "match";
-      later.relation = "match";
-      later.expected = earlier.expected || { ...earlier.expected };
-      later.issueType = "";
-      later.issueId = "";
-      later.action = "";
       earlier.type = "extra";
       earlier.relation = "extra";
       earlier.expected = null;

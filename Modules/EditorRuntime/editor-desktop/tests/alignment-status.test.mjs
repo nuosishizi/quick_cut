@@ -132,6 +132,22 @@ test("reread with incomplete first take and stutter in second take (Every prayer
   assert.ok(completeCaption.start >= 74.0, "complete caption must be anchored to the second take");
 });
 
+test("spoken chapter expansion with restart (Psalms one thirty five ... Psalms one thirty nine verse 23) protects Psalm 139:23 and O God", () => {
+  const script = 'Psalm 139:23 — "Search me, O God, and know my heart"';
+  const aligned = alignScript({
+    segments: [
+      { text: "Psalms one thirty five", start: 85.2, end: 86.4 },
+      { text: "Psalms one thirty nine verse 23 says", start: 86.6, end: 88.7 },
+      { text: "search me, oh God, and know my heart", start: 89.0, end: 91.5 },
+    ],
+    script,
+    duration: 95,
+  });
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  assert.ok(captions.some((c) => /Psalm 139:23/i.test(c.text)), "Psalm 139:23 must be fully preserved with number 139");
+  assert.ok(captions.some((c) => /Search me, O God/i.test(c.text)), "Search me, O God must match spoken oh God");
+});
+
 test("a breath after Here does not count as a reread and keeps the sentence together", () => {
   const script = "Here are the three sins.";
   const aligned = alignScript({
