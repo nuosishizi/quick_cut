@@ -110,6 +110,28 @@ test("reread with stumble words (Save this for the next time he's ... Save this 
   assert.ok(completeCaption.start >= 222.0, "complete caption must be anchored to the second take");
 });
 
+test("reread with incomplete first take and stutter in second take (Every prayer was bless ... me Every prayer every prayer was blessed) picks the complete second take", () => {
+  const script = '"Every prayer was blessed — my family, my career, my marriage."';
+  const aligned = alignScript({
+    segments: [
+      { text: "Every prayer was bless", start: 72.5, end: 74.0 },
+      { text: "me. Every prayer every prayer was blessed", start: 74.5, end: 77.5 },
+      { text: "my family, my career, my marriage.", start: 78.0, end: 81.0 },
+    ],
+    script,
+    duration: 85,
+  });
+  const reread = aligned.issues.find(
+    (issue) => issue.type === "repeat" || /Every prayer was bless/i.test(issue.spokenText)
+  );
+  assert.ok(reread, "should find repeat issue for the incomplete first take");
+  assert.equal(reread.confirmedCut, true);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  const completeCaption = captions.find((c) => /Every prayer was blessed/i.test(c.text));
+  assert.ok(completeCaption, "should produce full caption for the complete second take");
+  assert.ok(completeCaption.start >= 74.0, "complete caption must be anchored to the second take");
+});
+
 test("a breath after Here does not count as a reread and keeps the sentence together", () => {
   const script = "Here are the three sins.";
   const aligned = alignScript({

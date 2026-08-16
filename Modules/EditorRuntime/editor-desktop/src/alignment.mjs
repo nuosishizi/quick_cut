@@ -1156,13 +1156,15 @@ function looksLikeRestart(phrase, before) {
 }
 
 function rematchPrefixFalseStarts(operations = []) {
-  for (let index = 1; index < operations.length; index += 1) {
+  for (let index = 0; index < operations.length; index += 1) {
     if (!["match", "near"].includes(operations[index].type) || !operations[index].expected)
       continue;
-    const previousDisplay = String(
-      operations[index - 1]?.expected?.display || operations[index - 1]?.spoken?.display || "",
-    );
-    if (!/[.!?…]["'”’)]*$/.test(previousDisplay.trim())) continue;
+    if (index > 0) {
+      const previousDisplay = String(
+        operations[index - 1]?.expected?.display || operations[index - 1]?.spoken?.display || "",
+      );
+      if (!/[.!?…:,—\-]["'”’)]*$/.test(previousDisplay.trim())) continue;
+    }
     let prefixEnd = index;
     while (
       prefixEnd < operations.length &&
