@@ -35,6 +35,7 @@
 ### 6. 整句底不要走 AutoSubs 宏（会拼缝、会播着消失）
 - AutoSubs Caption 的 CLS 关键帧占用 Element 4。把整句底写在 4 上，播放时会被拆成逐字块，随后再被盖掉。
 - 有整句底时必须走普通 Text+：`Type4=1` Border Fill + `Level4=0` Text，关掉描边/硬阴影。词色用 `apply_native_cls_keyframes`（只改 Element 1）。
+- Resolve 插入的标题经常仍是 AutoSubs。有底时必须 `AddTool("TextPlus")` 命名为 `快剪Text`，把 MediaOut 接到它上面，禁止再改 AutoSubs 的 Template。否则宏初始化/播放会把底盖掉。
 - AutoSubs 5 步只用于**没有整句底**的逐词高亮。
 - 不要做「在 AutoSubs 母版上再加一层」的模板，除非在达芬奇里另存一份带独立背景层的 `.setting`。
 

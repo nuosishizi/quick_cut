@@ -512,6 +512,24 @@ local function get_item_comp(item)
   return comp, count
 end
 
+local function bind_media_out(comp, tool)
+  if not comp or not tool then
+    return
+  end
+  local media_out = nil
+  pcall(function()
+    media_out = comp:FindToolByID("MediaOut") or comp:FindTool("MediaOut1")
+  end)
+  if media_out then
+    pcall(function()
+      media_out:ConnectInput("Input", tool)
+    end)
+    pcall(function()
+      media_out:SetInput("Input", tool)
+    end)
+  end
+end
+
 local function add_text_tool(comp)
   if not comp or not comp.AddTool then
     return nil
@@ -523,14 +541,47 @@ local function add_text_tool(comp)
   if not text then
     return nil
   end
-  local media_out = nil
+  bind_media_out(comp, text)
+  return text
+end
+
+local function silence_autosubs(comp)
+  if not comp then
+    return
+  end
+  local autosubs = nil
   pcall(function()
-    media_out = comp:FindToolByID("MediaOut") or comp:FindTool("MediaOut1")
+    autosubs = comp:FindTool("AutoSubs") or comp:FindToolByID("MacroOperator")
   end)
-  if media_out then
+  if not autosubs then
+    return
+  end
+  pcall(function() autosubs:SetInput("HighlightEnabled", 0) end)
+  pcall(function() autosubs:SetInput("FadeEnabled", 0) end)
+  pcall(function() autosubs:SetInput("PopInEnabled", 0) end)
+  pcall(function() autosubs:SetInput("SlideUpEnabled", 0) end)
+end
+
+local function ensure_plain_text_plus(comp)
+  if not comp then
+    return nil
+  end
+  local existing = nil
+  pcall(function()
+    existing = comp:FindTool("快剪Text")
+  end)
+  if existing then
+    silence_autosubs(comp)
+    bind_media_out(comp, existing)
+    return existing
+  end
+  local text = add_text_tool(comp)
+  if text then
     pcall(function()
-      media_out:SetInput("Input", text)
+      text:SetAttrs({ TOOLS_Name = "快剪Text" })
     end)
+    silence_autosubs(comp)
+    bind_media_out(comp, text)
   end
   return text
 end
@@ -1575,11 +1626,17 @@ local function place_captions(job, root)
         set_clip_span(item, clip_start, clip_end, root)
         local styleOk, styleErr = pcall(function()
           local comp = item.GetFusionCompByIndex and item:GetFusionCompCount() > 0 and item:GetFusionCompByIndex(1)
-          local tool = find_text_tool(comp) or add_text_tool(comp)
+          local tool
+          if style.backgroundEnabled then
+            tool = ensure_plain_text_plus(comp)
+          else
+            tool = find_text_tool(comp) or add_text_tool(comp)
+          end
           if not tool then
             error("找不到 Text+")
           end
           apply_style(comp, tool, caption, style)
+          bind_media_out(comp, tool)
         end)
         if styleOk then
           placed = placed + 1
