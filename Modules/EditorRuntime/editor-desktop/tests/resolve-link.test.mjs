@@ -185,7 +185,9 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.equal(job.templateName, "快剪字幕");
   assert.match(lua, /SetInput Enabled5 is a no-op/);
   assert.match(lua, /useAutosubs = not style.backgroundEnabled/);
-  assert.match(lua, /Using 快剪字幕 Text\+ title via AppendToTimeline/);
+  assert.match(lua, /Using 快剪Text\+ generator via AppendToTimeline/);
+  assert.match(lua, /find_named_pool_clip/);
+  assert.match(lua, /\["快剪Text\+"\] = true/);
   assert.match(lua, /apply_text_outline/);
   assert.match(lua, /pick_quickcut_text_tool/);
   assert.match(lua, /style_plain_text_item/);
@@ -278,6 +280,16 @@ test("install writes the script and caption-bin.drb into Resolve Utility folders
     const result = installResolveLink({ directories: [scriptDir] });
     assert.equal(fs.existsSync(result.installed), true);
     assert.equal(fs.existsSync(path.join(scriptDir, "caption-bin.drb")), true);
+    const packXml = path.join(
+      path.dirname(bundledResolveScriptPath()),
+      "caption-bin-src",
+      "pack",
+      "MediaPool",
+      "Master",
+      "000_QuickCut",
+      "MpFolder.xml",
+    );
+    assert.match(fs.readFileSync(packXml, "utf8"), /<Name>快剪Text\+<\/Name>/);
     assert.equal(fs.existsSync(path.join(scriptDir, RESOLVE_TITLE_SETTING)), true);
     const titleDir = path.join(temp, "Titles");
     installResolveLink({ directories: [scriptDir], titleDirectories: [titleDir] });

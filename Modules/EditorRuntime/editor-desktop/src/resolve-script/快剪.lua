@@ -400,33 +400,42 @@ local function nominal_rate(fps)
 end
 
 local function first_picture_frame(timeline, start_frame)
-  local origin = tonumber(start_frame) or 0
-  if origin >= 0 then
-    return origin
-  end
-  -- 时间线起点为负数时，画面素材通常从 0 起。再用 GetStartFrame 会把字幕写到画面前面。
   local picture = nil
+  local track_count = 0
   pcall(function()
-    local items = timeline:GetItemListInTrack("video", 1)
+    track_count = timeline:GetTrackCount("video") or 0
+  end)
+  for track = 1, track_count do
+    local items = nil
+    pcall(function()
+      items = timeline:GetItemListInTrack("video", track)
+    end)
     if type(items) == "table" then
       for _, item in ipairs(items) do
         local name = ""
         pcall(function()
           name = item:GetName() or ""
         end)
-        if name:find("快剪", 1, true) ~= 1 and name:find("Fusion Clip", 1, true) ~= 1 then
-          local at = item:GetStart()
+        if name:find("快剪", 1, true) ~= 1
+          and name:find("Fusion Clip", 1, true) ~= 1
+          and name:find("AutoSubs", 1, true) ~= 1
+          and name ~= "Text+"
+        then
+          local at = nil
+          pcall(function()
+            at = item:GetStart()
+          end)
           if at ~= nil and (picture == nil or at < picture) then
             picture = at
           end
         end
       end
     end
-  end)
+  end
   if picture ~= nil then
     return picture
   end
-  return 0
+  return tonumber(start_frame) or 0
 end
 
 local function frames_to_timecode(frame, fps)
@@ -1420,15 +1429,42 @@ local function adopt_quickcut_template_name(clip)
   if clipName == QUICKCUT_CAPTION_DISPLAY_NAME then
     return clip
   end
+  if clipName == "快剪Text+" then
+    return clip
+  end
   if clipName == ANIMATED_CAPTION_DISPLAY_NAME
     or clipName:sub(1, #ANIMATED_CAPTION_DISPLAY_NAME + 1) == ANIMATED_CAPTION_DISPLAY_NAME .. " "
     or clipName == "快剪动态字幕"
-    or clipName == "快剪Text+"
   then
     pcall(function() clip:SetClipProperty("Clip Name", QUICKCUT_CAPTION_DISPLAY_NAME) end)
     pcall(function() clip:SetName(QUICKCUT_CAPTION_DISPLAY_NAME) end)
   end
   return clip
+end
+
+local function pool_clip_name(clip)
+  local clipName = ""
+  pcall(function()
+    local props = clip:GetClipProperty()
+    clipName = (type(props) == "table" and props["Clip Name"]) or ""
+  end)
+  if clipName == "" then
+    pcall(function() clipName = clip:GetName() or "" end)
+  end
+  return clipName
+end
+
+local function find_named_pool_clip(rootFolder, wanted)
+  local template, sourceBin = nil, nil
+  walk_media_pool(rootFolder, function(clip, clipFolder)
+    local clipName = pool_clip_name(clip)
+    if wanted[clipName] then
+      template = clip
+      sourceBin = clipFolder
+      return true
+    end
+  end)
+  return template, sourceBin
 end
 
 local function get_root_subfolder(rootFolder, folderName)
@@ -1490,9 +1526,10 @@ local function find_caption_bin_file(job, root)
 end
 
 local function ensure_caption_template(mediaPool, rootFolder, job, root)
-  local template = find_template_item(rootFolder, job and job.templateName)
+  -- Prefer our own Text+ generator. Do not reuse AutoSubs Caption as the master.
+  local template, sourceBin = find_named_pool_clip(rootFolder, { ["快剪Text+"] = true })
   if template then
-    return adopt_quickcut_template_name(template)
+    return template
   end
   local binPath = find_caption_bin_file(job, root)
   if not binPath then
@@ -1516,13 +1553,17 @@ local function ensure_caption_template(mediaPool, rootFolder, job, root)
     return nil
   end
   local targetBin = get_root_subfolder(rootFolder, AUTOSUBS_BIN)
-  local sourceBin = nil
-  template, sourceBin = find_template_item(rootFolder, job and job.templateName)
+  template, sourceBin = find_named_pool_clip(rootFolder, { ["快剪Text+"] = true })
   if not template then
-    append_log(root, "Imported bin did not contain animated caption template")
+    template, sourceBin = find_template_item(rootFolder, job and job.templateName)
+  end
+  if not template then
+    append_log(root, "Imported bin did not contain 快剪Text+ template")
     return nil
   end
-  template = adopt_quickcut_template_name(template)
+  if pool_clip_name(template) ~= "快剪Text+" then
+    template = adopt_quickcut_template_name(template)
+  end
   if targetBin and sourceBin and sourceBin ~= targetBin then
     pcall(function()
       mediaPool:MoveClips({ template }, targetBin)
@@ -1772,59 +1813,16 @@ local function place_captions(job, root)
   local job_id = tostring(job.id or "")
   local origin = first_picture_frame(timeline, start_frame)
 
-  -- Prefer the 快剪 Text+ title. AutoSubs Caption is not the 快剪 look.
+  -- Same delivery as AutoSubs: import our generator bin, then AppendToTimeline.
+  -- Never start from InsertFusionTitleIntoTimeline (that makes 1-frame slivers).
   local useAutosubs = not style.backgroundEnabled
   local mediaPool = project:GetMediaPool()
-  insert_recipe = { kind = "fusion_title", name = "快剪字幕" }
-  pcall(function()
-    timeline:SetCurrentTimecode(frames_to_timecode(origin, fps))
-  end)
-  try_set_destination_track(timeline, track_index)
-  local seed = insert_title(timeline, root)
-  if seed and mediaPool then
-    local generator = nil
-    pcall(function()
-      generator = seed:GetMediaPoolItem()
-    end)
-    if generator then
-      pcall(function()
-        timeline:DeleteClips({ seed })
-      end)
-      seed = nil
-      append_log(root, "Using 快剪字幕 Text+ title via AppendToTimeline")
-      local appendResult, appendErr = place_captions_via_append(
-        mediaPool,
-        timeline,
-        generator,
-        captions,
-        fps,
-        origin,
-        track_index,
-        presetSettings,
-        style,
-        root,
-        job_id,
-        "quickcut"
-      )
-      if appendResult and appendResult.count and appendResult.count > 0 then
-        append_log(root, string.format("Batch append succeeded, placed %d captions", appendResult.count))
-        return appendResult
-      end
-      append_log(root, "快剪字幕 append failed: " .. tostring(appendErr) .. ", falling back")
-    end
-  end
-  if seed then
-    pcall(function()
-      timeline:DeleteClips({ seed })
-    end)
-  end
-
-  if useAutosubs and mediaPool then
+  if mediaPool then
     local rootFolder = mediaPool:GetRootFolder()
     if rootFolder then
       local templateItem = ensure_caption_template(mediaPool, rootFolder, job, root)
       if templateItem then
-        append_log(root, "Using AutoSubs dynamic caption template via mediaPool:AppendToTimeline")
+        append_log(root, "Using 快剪Text+ generator via AppendToTimeline")
         local appendResult, appendErr = place_captions_via_append(
           mediaPool,
           timeline,
@@ -1836,7 +1834,8 @@ local function place_captions(job, root)
           presetSettings,
           style,
           root,
-          job_id
+          job_id,
+          "quickcut"
         )
         if appendResult and appendResult.count and appendResult.count > 0 then
           append_log(root, string.format("Batch append succeeded, placed %d captions", appendResult.count))
