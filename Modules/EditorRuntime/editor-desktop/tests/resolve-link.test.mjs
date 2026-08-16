@@ -181,10 +181,11 @@ test("send job maps sentence background onto AutoSubs Element 5, not word Bubble
   assert.ok(Array.isArray(job.style.backgroundColor));
   assert.equal(job.presetSettings.BubbleEnabled, 0);
   assert.equal(job.templateName, "快剪字幕");
-  assert.match(lua, /AutoSubs owns Text\+ 1=Fill 2=Outline 3=Shadow 4=word Bubble/);
+  assert.match(lua, /AutoSubs Element 4 is word Bubble/);
   assert.match(lua, /set_number\(tool, "Enabled5", 1\)/);
-  assert.match(lua, /set_number\(tool, "Type5", 0\)/);
-  assert.match(lua, /ElementShape5/);
+  assert.match(lua, /set_number\(tool, "Type5", 1\)/);
+  assert.match(lua, /0=Text one plate, 1=Line/);
+  assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);
   assert.match(lua, /apply_autosubs_fill_color/);
 });
@@ -245,6 +246,7 @@ test("xiaohongshu gold plate keeps black fill and white word highlight", () => {
   assert.equal(job.presetSettings.HighlightColorRed, job.style.highlightColor[0]);
   assert.equal(job.presetSettings.BubbleEnabled, 0);
   assert.equal(job.presetSettings.HighlightStyle, 0);
+  assert.equal(job.presetSettings.FadeEnabled, 0);
   assert.equal(job.style.backgroundRound, 1);
 });
 

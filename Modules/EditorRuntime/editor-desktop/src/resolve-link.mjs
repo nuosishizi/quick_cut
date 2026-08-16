@@ -223,7 +223,7 @@ export function buildPresetSettings(firstStyle = {}, canvas = {}, center = {}, s
 
   const isPopIn = anim === "pop-in" || anim === "popin" || anim.startsWith("word-pop") || anim.startsWith("word-bounce") || anim === "zoom" || !!firstStyle.popIn ? 1 : 0;
   const isSlideUp = anim === "slide-up" || anim === "slideup" || anim.startsWith("word-lift") || anim.startsWith("word-rise") ? 1 : 0;
-  const isFade = anim === "fade" || anim === "typewriter" || (!isPopIn && !isSlideUp) ? 1 : 0;
+  const isFade = anim === "fade" || anim === "typewriter" ? 1 : 0;
 
   return {
     Font: pickResolveFont(firstStyle.fontFamily, ""),
