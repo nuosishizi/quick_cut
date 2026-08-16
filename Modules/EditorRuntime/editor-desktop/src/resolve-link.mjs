@@ -368,12 +368,24 @@ export function buildResolveSendJob(input = {}) {
       let rawWords = [];
       if (Array.isArray(caption.words) && caption.words.length > 0) {
         rawWords = caption.words
-          .map((w) => ({
-            word: String(w.display || w.word || "").trim(),
-            start: Math.max(start, Number(w.start || start)),
-            end: Math.min(end, Math.max(Number(w.start || start) + 0.04, Number(w.end || end))),
-          }))
+          .map((w) => {
+            const wordStart = Math.max(start, Number(w.start ?? start));
+            const spokenEnd = Number(w.end);
+            const wordEnd = Number.isFinite(spokenEnd) && spokenEnd > wordStart
+              ? Math.min(end, spokenEnd)
+              : Math.min(end, wordStart + 0.2);
+            return {
+              word: String(w.display || w.word || "").trim(),
+              start: wordStart,
+              end: Math.max(wordStart + 0.04, wordEnd),
+            };
+          })
           .filter((w) => w.word.length > 0);
+        for (let i = 0; i < rawWords.length - 1; i += 1) {
+          if (rawWords[i].end > rawWords[i + 1].start) {
+            rawWords[i].end = Math.max(rawWords[i].start + 0.04, rawWords[i + 1].start);
+          }
+        }
       }
       if (!rawWords.length) {
         rawWords = tokenizeWordsFallback(text, start, end);

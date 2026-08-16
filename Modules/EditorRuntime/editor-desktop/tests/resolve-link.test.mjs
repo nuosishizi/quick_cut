@@ -157,6 +157,35 @@ test("send job preserves explicit words timestamps and builds dynamic animation 
   assert.equal(job.presetSettings.PopInEnabled, 0);
 });
 
+test("send job keeps spoken-word pauses and does not stretch a word to the next one", () => {
+  const job = buildResolveSendJob({
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    captionStyle: { fontFamily: "Helvetica", fontSize: 54, color: "#1c1c1e", highlight: "#ffd200", highlightEnabled: true },
+    captionTransform: { x: 0, y: 538, width: 860, scale: 1 },
+    captions: [
+      {
+        text: "Single Day Proverbs",
+        start: 0,
+        end: 3,
+        words: [
+          { display: "Single", start: 0, end: 0.45 },
+          { display: "Day", start: 0.5, end: 0.75 },
+          { display: "Proverbs", start: 1.4, end: 2.2 },
+        ],
+      },
+    ],
+  });
+  assert.equal(job.items[0].words[1].word, "Day");
+  assert.equal(job.items[0].words[1].end, 0.75);
+  assert.equal(job.items[0].words[2].start, 1.4);
+  assert.ok(job.items[0].words[2].start - job.items[0].words[1].end > 0.5);
+  assert.match(lua, /media_frame/);
+  assert.match(lua, /COMPN_RenderStart/);
+  assert.match(lua, /StepOut = true/);
+});
+
 test("send job maps sentence background onto Element 4 Border Fill, not a missing Element 5", () => {
   const job = buildResolveSendJob({
     width: 1080,
@@ -201,11 +230,12 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.match(lua, /Only the spoken word goes into CLS/);
   assert.match(lua, /Pause is dark/);
   assert.match(lua, /if nextStart == nil or eFrame < nextStart then/);
+  assert.match(lua, /nextStart \+ shift - 1/);
   assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);
   assert.match(
     lua,
-    /style_plain_text_item[\s\S]*apply_native_cls_keyframes\(comp, cls, caption, plainText, fps, style\)/,
+    /style_plain_text_item[\s\S]*apply_native_cls_keyframes\(comp, cls, caption, plainText, fps, style, origin\)/,
   );
   assert.match(lua, /StyledTextCLS/);
   assert.match(lua, /SetKeyFrames\(keyframes, true\)/);

@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Version = "2.7.18"
+$Version = "2.7.19"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-macOS-$Version"
 $StageRoot = "D:\QuickCut-mac-pack"

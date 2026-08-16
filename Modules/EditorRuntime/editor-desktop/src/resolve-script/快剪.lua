@@ -622,8 +622,12 @@ local function apply_rgb(tool, channel, color, alpha)
   set_number(tool, "Opacity" .. channel, a)
 end
 
+local function media_frame(seconds, fps, origin)
+  return (tonumber(origin) or 0) + math.floor((tonumber(seconds) or 0) * fps + 0.5)
+end
+
 -- WordTiming calculation for word-level timestamps
-local function to_word_timing(transcript_words, plainText, frameRate, segmentStart)
+local function to_word_timing(transcript_words, plainText, frameRate, segmentStart, origin)
   local result = {}
   if type(transcript_words) ~= "table" or #transcript_words == 0 then
     return result
@@ -677,8 +681,14 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
 
     local w_start = tonumber(word.start) or segmentStart
     local w_end = tonumber(word["end"] or word.endFrame) or (w_start + 0.2)
-    local s_frame = math.max(0, math.floor((w_start - segmentStart) * frameRate + 0.5))
-    local e_frame = math.max(s_frame + 1, math.floor((w_end - segmentStart) * frameRate + 0.5))
+    if w_end <= w_start then
+      w_end = w_start + 0.04
+    end
+    -- Same integer grid as AppendToTimeline / set_clip_span, so a word
+    -- cannot light before its spoken time on the timeline.
+    local clip0 = media_frame(segmentStart, frameRate, origin)
+    local s_frame = math.max(0, media_frame(w_start, frameRate, origin) - clip0)
+    local e_frame = math.max(s_frame, media_frame(w_end, frameRate, origin) - clip0)
 
     table.insert(result, {
       startIndex = start_idx,
@@ -1134,7 +1144,7 @@ local function lock_plain_renderer(comp, tool)
   bind_media_out(comp, tool)
 end
 
-local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style, origin)
   local cls = clsTool or find_cls_tool(comp, nil)
   if not cls then return false end
 
@@ -1144,8 +1154,23 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   local spline = cls_keyframe_spline(comp, cls)
   if not spline then return false end
 
-  local framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or fps or 30
-  local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0)
+  -- Use the same timeline fps that placed the clip. Comp prefs can be 24
+  -- while the edit is 30, which lights the next word too early.
+  local framerate = tonumber(fps)
+  if not framerate or framerate <= 0 then
+    framerate = 30
+    pcall(function()
+      framerate = tonumber(comp:GetPrefs("Comp.FrameFormat.Rate")) or 30
+    end)
+  end
+  local shift = 0
+  pcall(function()
+    local attrs = comp:GetAttrs()
+    if attrs then
+      shift = tonumber(attrs.COMPN_RenderStart) or 0
+    end
+  end)
+  local wordTiming = to_word_timing(caption.words, plainText, framerate, tonumber(caption.start) or 0, origin)
   if not wordTiming or #wordTiming == 0 then return false end
 
   local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
@@ -1173,7 +1198,7 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
       Value = {
         __ctor = "StyledText",
         Array = array,
-        Flags = { StepIn = true, LockedY = true, __flags = 256 }
+        Flags = { StepIn = true, StepOut = true, LockedY = true, __flags = 256 }
       }
     }
   end
@@ -1188,15 +1213,18 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   -- Match 快剪 preview: active only while start <= t < end. Pause is dark.
   local firstStart = math.max(0, tonumber(wordTiming[1].startFrame) or 0)
   if firstStart > 0 then
-    put(0, {})
+    put(shift, {})
   end
   for i, word in ipairs(wordTiming) do
     local sFrame = math.max(0, tonumber(word.startFrame) or 0)
-    local eFrame = math.max(sFrame + 1, tonumber(word.endFrame) or (sFrame + 1))
-    put(sFrame, style_array(i))
+    local eFrame = math.max(sFrame, tonumber(word.endFrame) or (sFrame + 1))
+    put(sFrame + shift, style_array(i))
     local nextStart = wordTiming[i + 1] and tonumber(wordTiming[i + 1].startFrame)
     if nextStart == nil or eFrame < nextStart then
-      put(eFrame, {})
+      put(eFrame + shift, {})
+      if nextStart and nextStart > eFrame + 1 then
+        put(nextStart + shift - 1, {})
+      end
     end
   end
 
@@ -1236,7 +1264,7 @@ local function pick_quickcut_text_tool(comp)
   return tool or find_text_tool(comp) or add_text_tool(comp)
 end
 
-local function style_plain_text_item(comp, item, caption, fps, style, index)
+local function style_plain_text_item(comp, item, caption, fps, style, index, origin)
   if not comp then
     error("找不到 Fusion 合成")
   end
@@ -1253,7 +1281,7 @@ local function style_plain_text_item(comp, item, caption, fps, style, index)
   if highlight_is_on(style) then
     local cls = ensure_text_cls(comp, tool)
     if cls then
-      apply_native_cls_keyframes(comp, cls, caption, plainText, fps, style)
+      apply_native_cls_keyframes(comp, cls, caption, plainText, fps, style, origin)
     end
   end
   apply_sentence_plate(tool, style)
@@ -1710,7 +1738,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
         local comp = item:GetFusionCompByIndex(1)
         if comp then
           if renderer == "quickcut" or style.backgroundEnabled then
-            style_plain_text_item(comp, item, caption, fps, style, index)
+            style_plain_text_item(comp, item, caption, fps, style, index, origin)
             return
           end
 
@@ -1787,7 +1815,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
               apply_style(comp, templateTool, caption, style)
             end
             if clsTool then
-              apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style)
+              apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps, style, origin)
             end
           end
         end
@@ -1955,7 +1983,7 @@ local function place_captions(job, root)
         set_clip_span(item, clip_start, clip_end, root)
         local styleOk, styleErr = pcall(function()
           local comp = item.GetFusionCompByIndex and item:GetFusionCompCount() > 0 and item:GetFusionCompByIndex(1)
-          style_plain_text_item(comp, item, caption, fps, style, index)
+          style_plain_text_item(comp, item, caption, fps, style, index, origin)
         end)
         if styleOk then
           placed = placed + 1
