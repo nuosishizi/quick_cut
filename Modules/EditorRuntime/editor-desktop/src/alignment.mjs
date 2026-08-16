@@ -1347,10 +1347,14 @@ function collectFalseStartGapIssues(operations = []) {
       const gap =
         Number(operation.spoken.start || 0) - Number(previous.spoken.end || 0);
       const startedAPhrase = sameSentenceMatchCount(operations, last) >= 2;
+      const clauseEnds = /[,;:!?…—–-]["'”’)]*$/.test(
+        String(previous.expected.display || "").trim(),
+      );
       if (
         !between &&
         gap >= 1.15 &&
         gap <= 3.2 &&
+        !clauseEnds &&
         sentenceContinues(previous.expected.display) &&
         startedAPhrase &&
         !isBreathLeadWord(previous.expected)
@@ -1796,8 +1800,11 @@ export function buildCaptions(expectedWords, options = {}) {
     const priorEnds = /[.!?][\"'\u201d\u2019)]*$/.test(
       priorWord?.display || "",
     );
+    const priorClauseEnds = /[,;:—–-][\"'\u201d\u2019)]*$/.test(
+      priorWord?.display || "",
+    );
     const keepReferenceTogether = !!word.keepWithPrevious;
-    const splitGap = priorEnds ? 0.62 : 1.85;
+    const splitGap = priorEnds ? 0.62 : priorClauseEnds ? 0.75 : 1.85;
     if (
       group.length &&
       !keepReferenceTogether &&
@@ -1805,7 +1812,8 @@ export function buildCaptions(expectedWords, options = {}) {
         timingGap < -0.02 ||
         group.length >= maxWords ||
         candidate.length > maxChars ||
-        priorEnds)
+        priorEnds ||
+        (priorClauseEnds && group.length >= 3 && timingGap >= 0.45))
     )
       flush();
     group.push(word);
