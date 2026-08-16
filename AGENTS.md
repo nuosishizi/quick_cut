@@ -35,7 +35,7 @@
 ### 6. 整句背景必须写在 Text+ Element 5（禁止占用 AutoSubs 1–4）
 - AutoSubs 通道占用：`1=Fill`、`2=Outline`、`3=Shadow`、`4=逐词高亮 Bubble`。
 - `ApplyHighlight` 会在高亮样式不是 Bubble 时强制 `Enabled4 = 0`，因此整句背景绝不能写在 Element 4。
-- 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_autosubs_sentence_background`，只用 Element 5 画整句/整行圆角底。
+- 必须在第 5 步 `ApplyWordTiming` **之后**，对 `Template` 调用 `apply_quickcut_caption_look`：先写回 Fill 字色，再只用 Element 5（Type 0 + 圆角形状）画整句/整行底。**严禁**把 Element 5 设成文字填充，否则金色会画在字形上。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。
 - **严禁**把快剪预览背景映射成 AutoSubs 的 `BubbleEnabled` 当整句底用。`Bubble` 只服务于当前词高亮框。
 - 发送任务的母版名是 `快剪字幕`。媒体池里若仍是 `AutoSubs Caption`，导入后必须改名为 `快剪字幕`，引擎仍走同一套宏 5 步。

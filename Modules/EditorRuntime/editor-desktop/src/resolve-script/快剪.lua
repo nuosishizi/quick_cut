@@ -643,7 +643,24 @@ local function to_word_timing(transcript_words, plainText, frameRate, segmentSta
 end
 
 -- AutoSubs owns Text+ 1=Fill 2=Outline 3=Shadow 4=word Bubble.
--- Sentence background must use Element 5, after ApplyWordTiming.
+-- Sentence background must use Element 5 as a SHAPE box, never Type=text fill.
+local function apply_autosubs_fill_color(tool, style)
+  if not tool or not style then
+    return
+  end
+  local r = tonumber(style.color and style.color[1]) or 1.0
+  local g = tonumber(style.color and style.color[2]) or 1.0
+  local b = tonumber(style.color and style.color[3]) or 1.0
+  set_number(tool, "SelectElement", 1)
+  set_number(tool, "Enabled1", 1)
+  set_number(tool, "Type1", 0)
+  set_number(tool, "Red1", r)
+  set_number(tool, "Green1", g)
+  set_number(tool, "Blue1", b)
+  set_number(tool, "Alpha1", 1.0)
+  set_number(tool, "Opacity1", 1.0)
+end
+
 local function apply_autosubs_sentence_background(tool, style)
   if not tool then
     return
@@ -656,17 +673,18 @@ local function apply_autosubs_sentence_background(tool, style)
   local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
   local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
   local bgA = tonumber(style.backgroundOpacity) or 0.94
-  local extX = math.max(0.04, tonumber(style.backgroundExtendX) or 0.12)
-  local extY = math.max(0.04, tonumber(style.backgroundExtendY) or 0.08)
+  local extX = math.max(0.08, tonumber(style.backgroundExtendX) or 0.16)
+  local extY = math.max(0.05, tonumber(style.backgroundExtendY) or 0.10)
   local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
   local bgMode = tostring(style.backgroundMode or "block")
   local bgLevel = (bgMode == "line") and 2 or 3
 
+  -- Type 0 + ElementShape 2 = solid rounded plate. Type 1 here paints the glyphs gold.
   set_number(tool, "SelectElement", 5)
   set_number(tool, "Enabled5", 1)
   set_number(tool, "Element5", 2)
   set_number(tool, "ElementShape5", 2)
-  set_number(tool, "Type5", 1)
+  set_number(tool, "Type5", 0)
   set_number(tool, "Thickness5", 1.0)
   set_number(tool, "Level5", bgLevel)
   set_number(tool, "Red5", bgR)
@@ -682,6 +700,17 @@ local function apply_autosubs_sentence_background(tool, style)
   set_number(tool, "Round5X", round)
   set_number(tool, "Round5Y", round)
   set_number(tool, "Softness5", 0)
+end
+
+local function apply_quickcut_caption_look(comp, style)
+  local template = comp and (comp:FindTool("Template") or find_text_tool(comp))
+  local follower = comp and comp:FindTool("Follower1")
+  apply_autosubs_fill_color(template, style)
+  apply_autosubs_fill_color(follower, style)
+  if follower then
+    set_number(follower, "Enabled5", 0)
+  end
+  apply_autosubs_sentence_background(template, style)
 end
 
 local function apply_style(comp, tool, item, style)
@@ -1355,7 +1384,7 @@ local function place_captions_via_append(mediaPool, timeline, templateItem, capt
               pcall(function() fnApplyWordTiming(comp, autosubsTool, wordTiming) end)
             end
 
-            apply_autosubs_sentence_background(templateTool or comp:FindTool("Template"), style)
+            apply_quickcut_caption_look(comp, style)
           else
             local templateTool = comp:FindTool("Template") or comp:FindToolByID("TextPlus") or find_text_tool(comp)
             local clsTool = comp:FindTool("CharacterLevelStyling1")

@@ -163,15 +163,15 @@ export function fusionBackground(style = {}) {
   const paddingX = Math.max(4, Number(style.backgroundWidth ?? style.padding ?? 14));
   const paddingY = Math.max(4, Number(style.backgroundHeight ?? style.padding ?? 14));
   const rawRadius = Number(style.backgroundRadius ?? style.radius ?? 12);
-  const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 35;
+  const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 18;
   const fontSize = Math.max(10, Number(style.fontSize) || 58);
   return {
     enabled: true,
     color,
     opacity,
-    extendX: Math.max(0.12, Math.min(0.40, (paddingX / fontSize) * 0.45)),
-    extendY: Math.max(0.06, Math.min(0.30, (paddingY / fontSize) * 0.30)),
-    round: isCapsule ? 1.0 : Math.max(0, Math.min(1.0, rawRadius / 28)),
+    extendX: Math.max(0.14, Math.min(0.45, (paddingX / fontSize) * 0.55)),
+    extendY: Math.max(0.08, Math.min(0.34, (paddingY / fontSize) * 0.38)),
+    round: isCapsule ? 1.0 : Math.max(0, Math.min(1.0, rawRadius / 20)),
   };
 }
 

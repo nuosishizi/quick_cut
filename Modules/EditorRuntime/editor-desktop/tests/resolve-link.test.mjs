@@ -47,7 +47,7 @@ test("bundled Resolve script has AutoSubs dynamic template engine and text fallb
   assert.match(lua, /快剪已连接达芬奇/);
   assert.match(lua, /apply_autosubs_sentence_background/);
   assert.match(lua, /Enabled5/);
-  assert.match(lua, /fnApplyWordTiming\(comp, autosubsTool, wordTiming\)[\s\S]*apply_autosubs_sentence_background/);
+  assert.match(lua, /fnApplyWordTiming\(comp, autosubsTool, wordTiming\)[\s\S]*apply_quickcut_caption_look/);
 });
 
 test("font and color mapping stay readable in Fusion", () => {
@@ -183,7 +183,10 @@ test("send job maps sentence background onto AutoSubs Element 5, not word Bubble
   assert.equal(job.templateName, "快剪字幕");
   assert.match(lua, /AutoSubs owns Text\+ 1=Fill 2=Outline 3=Shadow 4=word Bubble/);
   assert.match(lua, /set_number\(tool, "Enabled5", 1\)/);
-  assert.match(lua, /set_number\(tool, "Type5", 1\)/);
+  assert.match(lua, /set_number\(tool, "Type5", 0\)/);
+  assert.match(lua, /ElementShape5/);
+  assert.match(lua, /apply_quickcut_caption_look/);
+  assert.match(lua, /apply_autosubs_fill_color/);
 });
 
 test("word-pill highlight uses AutoSubs Bubble, sentence background stays on Element 5", () => {
@@ -205,6 +208,44 @@ test("word-pill highlight uses AutoSubs Bubble, sentence background stays on Ele
   assert.equal(job.presetSettings.HighlightStyle, 3);
   assert.equal(job.presetSettings.BubbleEnabled, 1);
   assert.equal(job.style.backgroundEnabled, true);
+});
+
+test("xiaohongshu gold plate keeps black fill and white word highlight", () => {
+  const job = buildResolveSendJob({
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    captionStyle: {
+      fontFamily: "Helvetica",
+      fontSize: 54,
+      fontWeight: 800,
+      color: "#1c1c1e",
+      highlight: "#ffffff",
+      highlightEnabled: true,
+      backgroundEnabled: true,
+      background: "#f6d365",
+      backgroundOpacity: 0.96,
+      backgroundMode: "block",
+      backgroundWidth: 24,
+      backgroundHeight: 14,
+      radius: 20,
+      animation: "karaoke",
+    },
+    captionTransform: { x: 0, y: 538, width: 860, scale: 1 },
+    captions: [{ text: "Not just a weakness.", start: 0, end: 1.6 }],
+  });
+  assert.equal(job.style.backgroundEnabled, true);
+  assert.ok(job.style.backgroundColor[0] > 0.9);
+  assert.ok(job.style.backgroundColor[1] > 0.75);
+  assert.ok(job.style.color[0] < 0.15);
+  assert.ok(job.style.color[1] < 0.15);
+  assert.ok(job.style.highlightColor[0] > 0.95);
+  assert.ok(job.style.highlightColor[1] > 0.95);
+  assert.equal(job.presetSettings.FillColorRed, job.style.color[0]);
+  assert.equal(job.presetSettings.HighlightColorRed, job.style.highlightColor[0]);
+  assert.equal(job.presetSettings.BubbleEnabled, 0);
+  assert.equal(job.presetSettings.HighlightStyle, 0);
+  assert.equal(job.style.backgroundRound, 1);
 });
 
 test("install writes the script and caption-bin.drb into Resolve Utility folders", () => {
