@@ -91,6 +91,15 @@ test("screenshot sentence never overflows a 2-line box at common widths", () => 
   }
 });
 
+test("scripture title wraps to two lines at the Resolve preview width", () => {
+  const style = { fontFamily: "Helvetica", fontSize: 56, fontWeight: 800, backgroundEnabled: true, backgroundWidth: 26 };
+  const text = `Proverbs 12 :22: "Lying lips are`;
+  const lines = wrapWords(text, style, 860, 2, 1);
+  assert.equal(lines.length, 2, `expected 2 lines, got ${JSON.stringify(lines)}`);
+  assert.match(lines[0], /Proverbs/);
+  assert.match(lines.at(-1), /are/);
+});
+
 test("wrapWords never dumps leftover words onto an overflowing last line", () => {
   const style = { fontFamily: "Helvetica", fontSize: 58, fontWeight: 800 };
   const lines = wrapWords(screenshotText, style, 520, 2, 1);

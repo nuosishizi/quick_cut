@@ -6745,20 +6745,20 @@
         if (!Array.isArray(words) || words.length < 2) return [];
         const limit = captionWrapLineLimit(lineMode ?? state.captionLines);
         if (limit <= 1) return [];
-        const padding = state.captionStyle.backgroundEnabled
-            ? Number(state.captionStyle.backgroundWidth || 14) * 2
-            : 0,
-          width = Math.max(
-            80,
-            Math.min(state.width * 0.92, Number(requestedWidth || state.width * 0.8) - padding) * 0.94,
-          );
+        // Same width as wrapCaptionText / captionLayoutMetrics so preview
+        // matches the 2-line card sent to Resolve. The old pad*0.94 box was
+        // narrower and forced a third line (Proverbs 12 / :22: … / are).
+        const canvas = Number(state.width || 1080);
+        const box = Number(requestedWidth || state.captionTransform?.width || canvas * 0.8);
+        const width = Math.max(160, Math.min(canvas, box));
         const displays = words.map((word) => word.display);
         if (estimatedCaptionLineWidth(displays) <= width) return [];
+        const maxBreaks = Math.max(0, limit - 1);
         const breaks = [];
         let lineStart = 0;
         for (let index = 0; index < words.length; index += 1) {
           const candidate = estimatedCaptionLineWidth(displays.slice(lineStart, index + 1));
-          if (index > lineStart && candidate > width) {
+          if (index > lineStart && candidate > width && breaks.length < maxBreaks) {
             breaks.push(index);
             lineStart = index;
           }
