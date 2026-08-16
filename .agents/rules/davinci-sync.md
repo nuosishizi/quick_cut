@@ -38,7 +38,7 @@
 - 快剪自己的母版和 AutoSubs 一样走媒体池：`caption-bin.drb` 里的生成器名叫 `快剪Text+`（普通 Fusion Title / Text+，不是 AutoSubs 宏）。铺条只用 `AppendToTimeline` + `recordFrame`。
 - `快剪字幕.setting` 仍装到 Fusion Titles，只作备用。禁止把逐条 `InsertFusionTitleIntoTimeline` 当主路径。
 - 字色 Element 1、描边 Element 2、整句底 Element 4（`Type4=1` Border Fill）。三者写在**同一个** Text+ 上。
-- 逐词高亮必须走 `StyledTextCLS`（Text+ 的 Character Level Styling 修改器），关键帧 `SetKeyFrames(kf, true)`，每一帧写全句每个词的填充色（Index 0）。禁止 `AddTool("CharacterLevelStyling")`，那个工具 ID 不存在。
+- 逐词高亮必须走 `StyledTextCLS`，关键帧 `SetKeyFrames(kf, true)`，**只写当前词**的填充色（Index 0）。给每个词都写区间会把 Element 4 整句底切成一词一块。禁止 `AddTool("CharacterLevelStyling")`。高亮写完后必须再锁一次 `Level4=0`。
 - 有 AutoSubs 宏的旧合成才另建 `快剪Text` 并断开宏。新母版不要导入 `caption-bin.drb`。
 - AutoSubs 5 步只留给「没有快剪标题、也没有整句底」的旧回退。
 - **严禁**在 AutoSubs 成功路径上调用 `apply_style()` 去画背景（会覆盖描边与逐词高亮）。

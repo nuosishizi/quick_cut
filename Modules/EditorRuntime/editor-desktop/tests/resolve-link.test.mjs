@@ -195,8 +195,10 @@ test("send job maps sentence background onto Element 4 Border Fill, not a missin
   assert.match(lua, /ensure_text_cls/);
   assert.match(lua, /快剪Text/);
   assert.match(lua, /set_number\(tool, "Enabled4", 1\)/);
+  assert.match(lua, /apply_sentence_plate/);
   assert.match(lua, /set_number\(tool, "Type4", 1\)/);
   assert.match(lua, /set_number\(tool, "Level4", bgLevel\)/);
+  assert.match(lua, /Only the spoken word goes into CLS/);
   assert.match(lua, /harden_text_opacity/);
   assert.match(lua, /apply_quickcut_caption_look/);
   assert.match(

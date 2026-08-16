@@ -836,6 +836,45 @@ local function apply_text_outline(tool, style)
   return true
 end
 
+-- Element 4 Border Fill. Level must stay Text (0) or Line (1).
+-- Word (2) splits the plate into one pill per word.
+local function apply_sentence_plate(tool, style)
+  if not tool or not style or not style.backgroundEnabled then
+    return false
+  end
+  local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
+  local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
+  local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
+  local bgA = tonumber(style.backgroundOpacity) or 0.94
+  local extX = math.max(0.08, tonumber(style.backgroundExtendX) or 0.16)
+  local extY = math.max(0.05, tonumber(style.backgroundExtendY) or 0.10)
+  local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
+  local bgMode = tostring(style.backgroundMode or "block")
+  local bgLevel = (bgMode == "line") and 1 or 0
+
+  set_number(tool, "SelectElement", 4)
+  set_number(tool, "Enabled4", 1)
+  set_number(tool, "Type4", 1)
+  set_number(tool, "Level4", bgLevel)
+  set_number(tool, "Level", bgLevel)
+  set_number(tool, "Red4", bgR)
+  set_number(tool, "Green4", bgG)
+  set_number(tool, "Blue4", bgB)
+  set_number(tool, "Alpha4", 1.0)
+  set_number(tool, "Opacity4", bgA)
+  set_number(tool, "ExtendHorizontal4", extX)
+  set_number(tool, "ExtendVertical4", extY)
+  set_number(tool, "ExtendX4", extX)
+  set_number(tool, "ExtendY4", extY)
+  set_number(tool, "Round4", round)
+  set_number(tool, "Round4X", round)
+  set_number(tool, "Round4Y", round)
+  set_number(tool, "Softness4", 0)
+  set_number(tool, "SoftnessX4", 0)
+  set_number(tool, "SoftnessY4", 0)
+  return true
+end
+
 local function apply_style(comp, tool, item, style)
   if not tool then
     return false
@@ -879,38 +918,7 @@ local function apply_style(comp, tool, item, style)
   end)
 
   if style.backgroundEnabled then
-    -- One official plate: Border Fill at Text level. Dual Element 2+4 looks stitched.
-    local bgR = tonumber(style.backgroundColor and style.backgroundColor[1]) or 0.05
-    local bgG = tonumber(style.backgroundColor and style.backgroundColor[2]) or 0.07
-    local bgB = tonumber(style.backgroundColor and style.backgroundColor[3]) or 0.10
-    local bgA = tonumber(style.backgroundOpacity) or 0.94
-    local extX = math.max(0.08, tonumber(style.backgroundExtendX) or 0.16)
-    local extY = math.max(0.05, tonumber(style.backgroundExtendY) or 0.10)
-    local round = math.min(1.0, math.max(0.0, tonumber(style.backgroundRound) or 0.22))
-    local bgMode = tostring(style.backgroundMode or "block")
-    local bgLevel = (bgMode == "line") and 1 or 0
-
-    set_number(tool, "SelectElement", 4)
-    set_number(tool, "Enabled4", 1)
-    set_number(tool, "Type4", 1)
-    set_number(tool, "Level4", bgLevel)
-    set_number(tool, "Red4", bgR)
-    set_number(tool, "Green4", bgG)
-    set_number(tool, "Blue4", bgB)
-    set_number(tool, "Alpha4", 1.0)
-    set_number(tool, "Opacity4", bgA)
-    set_number(tool, "ExtendHorizontal4", extX)
-    set_number(tool, "ExtendVertical4", extY)
-    set_number(tool, "ExtendX4", extX)
-    set_number(tool, "ExtendY4", extY)
-    set_number(tool, "Round4", round)
-    set_number(tool, "Round4X", round)
-    set_number(tool, "Round4Y", round)
-    set_number(tool, "Softness4", 0)
-    set_number(tool, "SoftnessX4", 0)
-    set_number(tool, "SoftnessY4", 0)
-
-    -- Plate is Element 4. Outline is Element 2. They can coexist on our Text+.
+    apply_sentence_plate(tool, style)
     if not apply_text_outline(tool, style) then
       set_number(tool, "Enabled2", 0)
     end
@@ -1135,20 +1143,20 @@ local function apply_native_cls_keyframes(comp, clsTool, caption, plainText, fps
   local hlR = tonumber(style.highlightColor and style.highlightColor[1]) or 1.0
   local hlG = tonumber(style.highlightColor and style.highlightColor[2]) or 0.95
   local hlB = tonumber(style.highlightColor and style.highlightColor[3]) or 0.46
-  local baseR = tonumber(style.color and style.color[1]) or 1.0
-  local baseG = tonumber(style.color and style.color[2]) or 1.0
-  local baseB = tonumber(style.color and style.color[3]) or 1.0
 
+  -- Only the spoken word goes into CLS. Styling every word splits Element 4
+  -- Border Fill into one capsule per word.
   local function style_array(activeIndex)
-    local array = {}
-    for j, word in ipairs(wordTiming) do
-      local isHot = j == activeIndex
-      table.insert(array, { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 })
-      table.insert(array, { 2401, word.startIndex, word.endIndex, Value = isHot and hlR or baseR, Index = 0, __flags = 256 })
-      table.insert(array, { 2402, word.startIndex, word.endIndex, Value = isHot and hlG or baseG, Index = 0, __flags = 256 })
-      table.insert(array, { 2403, word.startIndex, word.endIndex, Value = isHot and hlB or baseB, Index = 0, __flags = 256 })
+    local word = wordTiming[activeIndex]
+    if not word then
+      return {}
     end
-    return array
+    return {
+      { 2000, word.startIndex, word.endIndex, Value = 1, Index = 0, __flags = 256 },
+      { 2401, word.startIndex, word.endIndex, Value = hlR, Index = 0, __flags = 256 },
+      { 2402, word.startIndex, word.endIndex, Value = hlG, Index = 0, __flags = 256 },
+      { 2403, word.startIndex, word.endIndex, Value = hlB, Index = 0, __flags = 256 },
+    }
   end
 
   local function make_key(index, array)
@@ -1235,6 +1243,7 @@ local function style_plain_text_item(comp, item, caption, fps, style, index)
       apply_native_cls_keyframes(comp, cls, caption, plainText, fps, style)
     end
   end
+  apply_sentence_plate(tool, style)
   bind_media_out(comp, tool)
   if item then
     pcall(function()
