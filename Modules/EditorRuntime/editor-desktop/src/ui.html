@@ -4023,7 +4023,7 @@
               <button class="btn iconbtn active" id="selectTool" title="选择模式（A）：修剪当前片段，前后锁定不动">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7 18 3-7 7-3L3 3z"/><path d="M13 13l6 6"/></svg>
               </button
-              ><button class="btn iconbtn" id="trimTool" title="波纹修剪模式（T / 按住Shift）：拖动边缘全轨道跟随推移">
+              ><button class="btn iconbtn" id="trimTool" title="波纹修剪模式（T）：拖动边缘全轨道跟随推移。Shift 加选后可整组左右移动">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><polyline points="8 4 4 8 8 12"/><polyline points="16 12 20 16 16 20"/></svg>
               </button
               ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
@@ -5956,6 +5956,22 @@
             )
           )
             state.selectedItems.push({ type: item.type, id: item.id });
+        if (anchorType === "video" && anchorId && anchorId !== "main") {
+          const pair = mainAudioClips().find((clip) => clip.id === anchorId);
+          if (
+            pair &&
+            !state.selectedItems.some((item) => item.type === "audio" && item.id === pair.id)
+          )
+            state.selectedItems.push({ type: "audio", id: pair.id });
+        }
+        if (anchorType === "audio" && anchorId && anchorId !== "main") {
+          const pair = mainClips().find((clip) => clip.id === anchorId);
+          if (
+            pair &&
+            !state.selectedItems.some((item) => item.type === "video" && item.id === pair.id)
+          )
+            state.selectedItems.push({ type: "video", id: pair.id });
+        }
       }
       function expandLinkedSelection(items) {
         if (!state.avLinked) return [...(items || [])];
@@ -5971,6 +5987,8 @@
           if (obj?.linkedVideoId) push("videolayer", obj.linkedVideoId);
           for (const partner of linkedTimelineObjects(item.type, item.id))
             push(partner.type, partner.id);
+          if (item.type === "video" && item.id && item.id !== "main") push("audio", item.id);
+          if (item.type === "audio" && item.id && item.id !== "main") push("video", item.id);
         }
         return expanded;
       }
@@ -6114,6 +6132,242 @@
           manualCuts: cleanCuts.sort((a, b) => a - b),
           deltaSource,
         };
+      }
+      function sourceOverlap(left = {}, right = {}) {
+        return Math.max(
+          0,
+          Math.min(Number(left.sourceEnd || 0), Number(right.sourceEnd || 0)) -
+            Math.max(Number(left.sourceStart || 0), Number(right.sourceStart || 0)),
+        );
+      }
+      function matchClipBySource(clip, list = []) {
+        let best = null;
+        let bestOverlap = 0;
+        for (const item of list || []) {
+          const overlap = sourceOverlap(clip, item);
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap;
+            best = item;
+          }
+        }
+        return bestOverlap > 0.02 ? best : null;
+      }
+      function buildPackedMainClips(removals, manualCuts, sourceDuration, speed = 1) {
+        const previousRemovals = state.removals;
+        const previousCuts = state.manualCuts;
+        const previousDuration = state.sourceDuration;
+        const previousSpeed = state.audio.speed;
+        state.removals = removals || [];
+        state.manualCuts = manualCuts || [];
+        state.sourceDuration = sourceDuration;
+        state.audio.speed = speed;
+        const packed = baseMainClips();
+        state.removals = previousRemovals;
+        state.manualCuts = previousCuts;
+        state.sourceDuration = previousDuration;
+        state.audio.speed = previousSpeed;
+        return packed;
+      }
+      function rebuildClipOffsets({
+        snapshot = [],
+        packed = [],
+        globalOffset = 0,
+        mode = "ripple",
+        editedClip = null,
+        edge = "end",
+        targetSource = 0,
+        speed = 1,
+        rippleFrom = 0,
+      } = {}) {
+        const offsets = {};
+        const rate = Math.max(0.05, Number(speed || 1));
+        for (const next of packed || []) {
+          const previous = matchClipBySource(next, snapshot);
+          let desired = next.start + Number(globalOffset || 0);
+          if (mode === "ripple") {
+            if (previous && editedClip && previous.id === editedClip.id)
+              desired = Number(editedClip.start);
+            else if (previous && Number(previous.start) < Number(rippleFrom) - 0.01)
+              desired = Number(previous.start);
+            else desired = next.start + Number(globalOffset || 0);
+          } else if (previous && editedClip && previous.id === editedClip.id) {
+            if (edge === "end") desired = Number(editedClip.start);
+            else
+              desired =
+                Number(editedClip.start) +
+                (Number(targetSource) - Number(editedClip.sourceStart || 0)) / rate;
+          } else if (previous) desired = Number(previous.start);
+          const offset = desired - next.start - Number(globalOffset || 0);
+          if (Math.abs(offset) > 0.001) offsets[next.id] = offset;
+        }
+        return offsets;
+      }
+      function overlayRippleWindow(clip = {}, edge = "end", deltaTimeline = 0) {
+        const start = Number(clip.start || 0);
+        const end = Number(clip.end || start);
+        if (Math.abs(deltaTimeline) <= 0.001) return { from: end, delta: 0 };
+        if (edge === "start") return { from: start, delta: deltaTimeline };
+        return {
+          from: deltaTimeline < 0 ? end + deltaTimeline : end,
+          delta: deltaTimeline,
+        };
+      }
+      function neighborClips(clip = {}, snapshot = []) {
+        const start = Number(clip.start || 0);
+        const end = Number(clip.end || start);
+        const others = (snapshot || []).filter((item) => item && item.id !== clip.id);
+        const previous = others
+          .filter((item) => Number(item.end || 0) <= start + 0.05)
+          .sort((left, right) => Number(right.end || 0) - Number(left.end || 0))[0] || null;
+        const next = others
+          .filter((item) => Number(item.start || 0) >= end - 0.05)
+          .sort((left, right) => Number(left.start || 0) - Number(right.start || 0))[0] || null;
+        return { previous, next };
+      }
+      function absorbTrimSourceRange(clip = {}, edge = "end", targetSource = 0, snapshot = []) {
+        const { previous, next } = neighborClips(clip, snapshot);
+        const srcStart = Number(clip.sourceStart || 0);
+        const srcEnd = Number(clip.sourceEnd || srcStart);
+        const target = Number(targetSource || 0);
+        if (edge === "end" && target < srcEnd - 0.002) {
+          const removeEnd = next ? Math.max(srcEnd, Number(next.sourceStart || srcEnd)) : srcEnd;
+          return { start: Math.max(srcStart + 0.04, target), end: removeEnd };
+        }
+        if (edge === "start" && target > srcStart + 0.002) {
+          const removeStart = previous
+            ? Math.min(srcStart, Number(previous.sourceEnd || srcStart))
+            : srcStart;
+          return { start: removeStart, end: Math.min(srcEnd - 0.04, target) };
+        }
+        return null;
+      }
+      function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1) {
+        const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < 1 / 30);
+        if (!tiny.length) return { packed, removals, manualCuts };
+        const nextRemovals = normalizeRemovalsList([
+          ...removals,
+          ...tiny.map((clip) => ({
+            start: Number(clip.sourceStart),
+            end: Number(clip.sourceEnd),
+            source: "edge-trim",
+          })),
+        ]);
+        const nextCuts = (manualCuts || []).filter((cut) =>
+          tiny.every(
+            (clip) => Number(cut) <= Number(clip.sourceStart) + 0.002 || Number(cut) >= Number(clip.sourceEnd) - 0.002,
+          ),
+        );
+        return {
+          packed: buildPackedMainClips(nextRemovals, nextCuts, sourceDuration, speed),
+          removals: nextRemovals,
+          manualCuts: nextCuts,
+        };
+      }
+      function collectMainMoveIds(anchorType, anchorId) {
+        const ids = new Set();
+        if (anchorId) ids.add(anchorId);
+        for (const item of expandLinkedSelection(state.selectedItems || [])) {
+          if (item?.type === "video" || item?.type === "audio") ids.add(item.id);
+        }
+        if (state.avLinked && anchorId) ids.add(anchorId);
+        return [...ids].filter(Boolean);
+      }
+      function commitMainEdgeTrim({
+        removals = state.removals,
+        manualCuts = state.manualCuts,
+        clip,
+        edge,
+        targetSource,
+        sourceDuration = state.sourceDuration,
+        mode = "ripple",
+        snapshot = [],
+        globalOffset = Math.max(0, Number(state.mainTimelineOffset || 0)),
+        speed = Math.max(0.05, Number(state.audio.speed || 1)),
+      } = {}) {
+        const trim = applyMainTrimEdge(
+          removals,
+          manualCuts,
+          clip,
+          edge,
+          targetSource,
+          sourceDuration,
+        );
+        // In ripple mode the inter-clip gaps must be preserved so downstream
+        // tracks shift by exactly delta.  absorbTrimSourceRange is only needed
+        // in select ("trim") mode where the gap itself should vanish.
+        const absorbed = mode !== "ripple"
+          ? absorbTrimSourceRange(clip, edge, targetSource, snapshot)
+          : null;
+        let nextRemovals = trim.removals;
+        let nextCuts = trim.manualCuts;
+        if (absorbed && absorbed.end > absorbed.start + 0.002) {
+          // Clamp to clip's own source boundaries – never delete a neighbor's gap
+          const safeStart = Math.max(absorbed.start, Number(clip.sourceStart || 0));
+          const safeEnd = Math.min(absorbed.end, Number(clip.sourceEnd || absorbed.end));
+          if (safeEnd > safeStart + 0.002) {
+            nextRemovals = normalizeRemovalsList([
+              ...nextRemovals,
+              { start: safeStart, end: safeEnd, source: "edge-trim" },
+            ]);
+            nextCuts = (nextCuts || []).filter(
+              (cut) => Number(cut) <= safeStart + 0.002 || Number(cut) >= safeEnd - 0.002,
+            );
+          }
+        }
+        let packed = buildPackedMainClips(
+          nextRemovals,
+          nextCuts,
+          sourceDuration,
+          speed,
+        );
+        const pruned = dropSubframeClips(packed, nextRemovals, nextCuts, sourceDuration, speed);
+        packed = pruned.packed;
+        nextRemovals = pruned.removals;
+        nextCuts = pruned.manualCuts;
+        const deltaTimeline = Number(trim.deltaSource || 0) / speed;
+        const offsets = rebuildClipOffsets({
+          snapshot,
+          packed,
+          globalOffset,
+          mode,
+          editedClip: clip,
+          edge,
+          targetSource,
+          speed,
+          rippleFrom: Number(clip.start || 0),
+        });
+        const window = mode === "ripple"
+          ? overlayRippleWindow(clip, edge, deltaTimeline)
+          : { from: Number(clip.end || 0), delta: 0 };
+        return {
+          ...trim,
+          removals: nextRemovals,
+          manualCuts: nextCuts,
+          packed,
+          videoOffsets: offsets,
+          audioOffsets: { ...offsets },
+          overlayFrom: window.from,
+          overlayDelta: window.delta,
+        };
+      }
+      function adoptClipMaps(snapshot, packed) {
+        for (const next of packed || []) {
+          const previous = matchClipBySource(next, snapshot);
+          if (!previous || previous.id === next.id) continue;
+          if (state.mainVideoClipSettings?.[previous.id])
+            state.mainVideoClipSettings[next.id] = { ...state.mainVideoClipSettings[previous.id] };
+          if (state.mainVideoTrackMap?.[previous.id])
+            state.mainVideoTrackMap[next.id] = state.mainVideoTrackMap[previous.id];
+          if (state.mainAudioTrackMap?.[previous.id])
+            state.mainAudioTrackMap[next.id] = state.mainAudioTrackMap[previous.id];
+          delete state.mainVideoClipSettings[previous.id];
+          delete state.mainVideoTrackMap[previous.id];
+          delete state.mainAudioTrackMap[previous.id];
+        }
+      }
+      function applyOverlayRipple(from, delta) {
+        if (delta < -0.001) shiftTracks(from, -delta);
+        else if (delta > 0.001) rippleShiftAllTracks(state, from, delta);
       }
       function rollingEditMainClips(removals = [], manualCuts = [], leftClip = {}, rightClip = {}, targetSource = 0) {
         const cleanRemovals = (removals || []).map((r) => ({ ...r }));
@@ -10737,16 +10991,23 @@
           }
           snapshot();
           const sourceAt = timelineToSource(time);
-          const range =
-            side === "left"
-              ? { start: mainClip.sourceStart, end: sourceAt }
-              : { start: sourceAt, end: mainClip.sourceEnd };
-          const at = side === "left" ? mainClip.start : time;
-          const len = range.end - range.start;
-          state.removals.push({ ...range, source: `trim-${side}` });
+          const snapshotClips = mainClips();
+          const committed = commitMainEdgeTrim({
+            clip: mainClip,
+            edge: side === "left" ? "start" : "end",
+            targetSource: sourceAt,
+            mode: "ripple",
+            snapshot: snapshotClips,
+          });
+          state.removals = committed.removals;
+          state.manualCuts = committed.manualCuts;
           normalizeRemovals();
-          shiftTracks(at, len);
-          seekTimeline(Math.min(at, state.duration));
+          state.mainVideoClipOffsets = committed.videoOffsets;
+          state.mainAudioClipOffsets = committed.audioOffsets;
+          adoptClipMaps(snapshotClips, committed.packed);
+          applyOverlayRipple(committed.overlayFrom, committed.overlayDelta);
+          recomputeContentDuration();
+          seekTimeline(Math.min(side === "left" ? mainClip.start : time, state.duration));
           renderAll();
           return;
         }
@@ -10758,9 +11019,40 @@
         if (!guardUnlocked(selectedOverlay?.type || state.selected.type, object.id))
           return;
         snapshot();
+        const originStart = Number(object.start || 0);
+        const originEnd = Number(object.end || originStart);
         if (side === "left")
           object.start = clamp(time, object.start, object.end - 0.04);
         else object.end = clamp(time, object.start + 0.04, object.end);
+        if (editTool === "trim") {
+          const delta = (Number(object.end) - Number(object.start)) - (originEnd - originStart);
+          const type = selectedOverlay?.type || state.selected.type;
+          const list =
+            type === "videolayer"
+              ? state.videoLayers
+              : type === "audioasset"
+                ? state.audioAssets
+                : type === "image"
+                  ? state.images
+                  : type === "text"
+                    ? state.titles
+                    : type === "caption"
+                      ? state.captions
+                      : type === "review"
+                        ? state.reviewCaptions
+                        : null;
+          const from = side === "left" ? originStart : Math.min(originEnd, Number(object.end));
+          if (delta < -0.001 && list)
+            rippleOverlayTrack(list, overlayTrackId(type, object), type, from, from - delta);
+          else if (delta > 0.001 && list) {
+            for (const item of list) {
+              if (item === object || overlayTrackId(type, item) !== overlayTrackId(type, object)) continue;
+              if (Number(item.start || 0) < from - 0.002) continue;
+              item.start = Number(item.start || 0) + delta;
+              item.end = Number(item.end || 0) + delta;
+            }
+          }
+        }
         if (state.avLinked && object.linkGroupId) {
           const linked = [...state.videoLayers, ...state.audioAssets].find(
             (item) => item !== object && item.linkGroupId === object.linkGroupId,
@@ -10923,13 +11215,14 @@
         const audioIds = ids("audio");
         audioIds.delete("main");
         const removeWholeMain = false;
-        const shouldRippleAudio = ripple && state.avLinked;
+        const shouldRippleAudio = state.avLinked;
         const sourceClips = mainClips();
-        const rippleClips = sourceClips
+        const selectedMainClips = sourceClips
           .filter(
             (clip) => videoIds.has(clip.id) || (shouldRippleAudio && audioIds.has(clip.id)),
           )
           .sort((a, b) => b.start - a.start);
+        const rippleClips = selectedMainClips;
         const overlayHoles = selected
           .filter((item) => !["video", "audio"].includes(item.type))
           .map((item) => {
@@ -10944,13 +11237,13 @@
           })
           .filter((hole) => hole && hole.end > hole.start + 0.001)
           .sort((a, b) => b.start - a.start);
-        for (const clip of rippleClips) {
+        for (const clip of selectedMainClips) {
           state.removals.push({
             start: clip.sourceStart,
             end: clip.sourceEnd,
             source: "manual",
           });
-          shiftTracks(clip.start, clip.end - clip.start);
+          if (ripple) shiftTracks(clip.start, clip.end - clip.start);
         }
         const audioOnly = mainAudioClips().filter(
           (clip) => audioIds.has(clip.id) && !shouldRippleAudio,
@@ -10998,8 +11291,23 @@
           }
         }
         if (removeWholeMain) clearOrPromoteMainVideo();
-        if (rippleClips.length) {
+        if (selectedMainClips.length) {
           normalizeRemovals();
+          const packed = baseMainClips();
+          const rippleFrom = selectedMainClips.reduce(
+            (min, clip) => Math.min(min, Number(clip.start || 0)),
+            Infinity,
+          );
+          const offsets = rebuildClipOffsets({
+            snapshot: sourceClips,
+            packed,
+            globalOffset: Math.max(0, Number(state.mainTimelineOffset || 0)),
+            mode: ripple ? "ripple" : "trim",
+            rippleFrom,
+          });
+          state.mainVideoClipOffsets = offsets;
+          state.mainAudioClipOffsets = { ...offsets };
+          adoptClipMaps(sourceClips, packed);
           if (!mainClips().length) clearOrPromoteMainVideo();
         }
         cleanupEmptyDynamicTracks();
@@ -14546,7 +14854,7 @@
                 trimType: clip.dataset.type,
                 trimObject: object,
                 mainTrimClip: mainClip,
-                isRipple: editTool === "trim" || !e.altKey,
+                isRipple: editTool === "trim",
                 mainClipsSnapshot: mainClips().map((c) => ({
                   id: c.id,
                   start: Number(c.start),
@@ -14597,6 +14905,40 @@
             ).find((item) => item.id === clip.dataset.id);
             if (sourceClip) {
               snapshot();
+              const moveIds = collectMainMoveIds(clip.dataset.type, sourceClip.id);
+              const movingMains = [];
+              for (const id of moveIds) {
+                const video = mainClips().find((item) => item.id === id);
+                if (video) {
+                  movingMains.push({
+                    id: video.id,
+                    type: "video",
+                    originStart: Number(video.start || 0),
+                    originOffset: Number(state.mainVideoClipOffsets?.[video.id] || 0),
+                  });
+                }
+                if (!state.avLinked) {
+                  const audio = mainAudioClips().find(
+                    (item) => item.id === id || item.parentId === id,
+                  );
+                  if (audio)
+                    movingMains.push({
+                      id: audio.parentId || audio.id,
+                      type: "audio",
+                      originStart: Number(audio.start || 0),
+                      originOffset: Number(
+                        state.mainAudioClipOffsets?.[audio.parentId || audio.id] || 0,
+                      ),
+                    });
+                }
+              }
+              if (state.avLinked && !movingMains.some((item) => item.id === sourceClip.id))
+                movingMains.push({
+                  id: sourceClip.id,
+                  type: "video",
+                  originStart: Number(sourceClip.start || 0),
+                  originOffset: Number(state.mainVideoClipOffsets?.[sourceClip.id] || 0),
+                });
               timelineDrag = {
                 pointer: e.pointerId,
                 element: clip,
@@ -14606,15 +14948,19 @@
                 mainTrackType: clip.dataset.type,
                 mainTrackClip: sourceClip,
                 originClipStart: Number(sourceClip.start || 0),
-                originClipOffset:
-                  clip.dataset.type === "video" || state.avLinked
-                    ? Number(state.mainVideoClipOffsets?.[sourceClip.id] || 0)
-                    : Number(
-                        state.mainAudioClipOffsets?.[
-                          sourceClip.parentId || sourceClip.id
-                        ] || 0,
-                      ),
-                linkedMoving: [],
+                originClipOffset: Number(state.mainVideoClipOffsets?.[sourceClip.id] || 0),
+                movingMains,
+                linkedMoving: expandLinkedSelection(state.selectedItems || [])
+                  .map((item) => ({
+                    ...item,
+                    obj: timelineObjectFor(item.type, item.id),
+                  }))
+                  .filter((item) => item.obj)
+                  .map((item) => ({
+                    ...item,
+                    originStart: Number(item.obj.start || 0),
+                    originEnd: Number(item.obj.end || 0),
+                  })),
               };
             }
           }
@@ -14814,18 +15160,17 @@
                 timelineDrag.mainTrackClip,
               );
               const appliedDelta = nextStart - timelineDrag.originClipStart;
-              const clipKey =
-                timelineDrag.mainTrackClip.parentId ||
-                timelineDrag.mainTrackClip.id;
-              if (
-                timelineDrag.mainTrackType === "video" ||
-                state.avLinked
-              ) {
-                state.mainVideoClipOffsets[clipKey] =
-                  timelineDrag.originClipOffset + appliedDelta;
-              } else {
-                state.mainAudioClipOffsets[clipKey] =
-                  timelineDrag.originClipOffset + appliedDelta;
+              const movers = timelineDrag.movingMains?.length
+                ? timelineDrag.movingMains
+                : [{
+                    id: timelineDrag.mainTrackClip.parentId || timelineDrag.mainTrackClip.id,
+                    type: timelineDrag.mainTrackType,
+                    originOffset: timelineDrag.originClipOffset,
+                  }];
+              for (const mover of movers) {
+                const nextOffset = Number(mover.originOffset || 0) + appliedDelta;
+                state.mainVideoClipOffsets[mover.id] = nextOffset;
+                state.mainAudioClipOffsets[mover.id] = nextOffset;
               }
               for (const item of timelineDrag.linkedMoving || []) {
                 item.obj.start = Math.max(0, item.originStart + appliedDelta);
@@ -14922,6 +15267,49 @@
               renderTimeline();
             }
           }
+          if (timelineDrag.trim && timelineDrag.trimObject && timelineDrag.isRipple) {
+            const object = timelineDrag.trimObject;
+            const originStart = Number(timelineDrag.originStart);
+            const originEnd = Number(timelineDrag.originEnd);
+            const delta = (Number(object.end) - Number(object.start)) - (originEnd - originStart);
+            if (Math.abs(delta) > 0.001) {
+              const type = timelineDrag.trimType;
+              const list =
+                type === "videolayer"
+                  ? state.videoLayers
+                  : type === "audioasset"
+                    ? state.audioAssets
+                    : type === "image"
+                      ? state.images
+                      : type === "text"
+                        ? state.titles
+                        : type === "caption"
+                          ? state.captions
+                          : type === "review"
+                            ? state.reviewCaptions
+                            : null;
+              const trackId = overlayTrackId(type, object);
+              const from = timelineDrag.trimEdge === "start"
+                ? originStart
+                : Math.min(originEnd, Number(object.end));
+              if (delta < 0 && list)
+                rippleOverlayTrack(list, trackId, type, from, from - delta);
+              else if (list) {
+                for (const item of list) {
+                  if (item === object || overlayTrackId(type, item) !== trackId) continue;
+                  if (Number(item.start || 0) < from - 0.002) continue;
+                  item.start = Number(item.start || 0) + delta;
+                  item.end = Number(item.end || 0) + delta;
+                  if (Array.isArray(item.words)) {
+                    for (const word of item.words) {
+                      word.start = Number(word.start || 0) + delta;
+                      word.end = Number(word.end || 0) + delta;
+                    }
+                  }
+                }
+              }
+            }
+          }
           if (timelineDrag.trim && timelineDrag.mainTrimClip &&
               Number.isFinite(timelineDrag.mainTrimTime)) {
             const clip = timelineDrag.mainTrimClip;
@@ -14936,134 +15324,27 @@
               const originStart = Number(timelineDrag.originStart);
               const originEnd = Number(timelineDrag.originEnd);
               const edgeTime = Number(timelineDrag.mainTrimTime);
-              const globalOffset = Math.max(0, Number(state.mainTimelineOffset || 0));
-
-              const targetStart = (timelineDrag.isRipple || timelineDrag.trimEdge === "end")
-                ? originStart
-                : edgeTime;
               const delta = timelineDrag.trimEdge === "start"
                 ? (edgeTime - originStart)
                 : (edgeTime - originEnd);
-
               const targetSource = timelineDrag.trimEdge === "start"
                 ? Math.max(0, Number(clip.sourceStart || 0) + delta * speed)
                 : Math.max(0, Number(clip.sourceEnd || 0) + delta * speed);
-
-              const trimResult = applyMainTrimEdge(
-                state.removals,
-                state.manualCuts,
+              const snapshot = timelineDrag.mainClipsSnapshot || mainClips();
+              const committed = commitMainEdgeTrim({
                 clip,
-                timelineDrag.trimEdge,
+                edge: timelineDrag.trimEdge,
                 targetSource,
-                state.sourceDuration,
-              );
-
-              state.removals = trimResult.removals;
-              state.manualCuts = trimResult.manualCuts;
+                mode: timelineDrag.isRipple ? "ripple" : "trim",
+                snapshot,
+              });
+              state.removals = committed.removals;
+              state.manualCuts = committed.manualCuts;
               normalizeRemovals();
-
-              // Transfer settings and compute exact required offset for the new clip
-              const baseClips = baseMainClips();
-              const matchingClip = baseClips.find(
-                (item) => item.sourceStart >= targetSource - 0.05 && item.sourceStart <= targetSource + 0.05,
-              ) || baseClips.find(
-                (item) => item.sourceEnd >= targetSource - 0.05 && item.sourceEnd <= targetSource + 0.05,
-              ) || baseClips.find(
-                (item) => targetSource >= item.sourceStart && targetSource <= item.sourceEnd,
-              );
-
-              if (matchingClip) {
-                const requiredOffset = targetStart - matchingClip.start - globalOffset;
-                state.mainVideoClipOffsets[matchingClip.id] = requiredOffset;
-                state.mainAudioClipOffsets[matchingClip.id] = requiredOffset;
-
-                if (state.mainVideoClipSettings?.[clip.id]) {
-                  state.mainVideoClipSettings[matchingClip.id] = { ...state.mainVideoClipSettings[clip.id] };
-                }
-                if (state.mainVideoTrackMap?.[clip.id]) {
-                  state.mainVideoTrackMap[matchingClip.id] = state.mainVideoTrackMap[clip.id];
-                }
-                if (state.mainAudioTrackMap?.[clip.id]) {
-                  state.mainAudioTrackMap[matchingClip.id] = state.mainAudioTrackMap[clip.id];
-                }
-              }
-
-              if (timelineDrag.isRipple) {
-                const deltaTimeline = trimResult.deltaSource / speed;
-
-                // Clear any stored static offsets for downstream clips so they flow naturally with the rippled timeline
-                const downstreamSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
-                  (s) => s.id !== clip.id && s.start >= originStart - 0.01,
-                );
-                for (const snap of downstreamSnapshots) {
-                  delete state.mainVideoClipOffsets[snap.id];
-                  delete state.mainAudioClipOffsets[snap.id];
-                }
-
-                if (timelineDrag.trimEdge === "start") {
-                  if (deltaTimeline < -0.001) {
-                    // Head trimmed inward (shortened): audio in [originStart, originStart - deltaTimeline] removed
-                    shiftTracks(originStart, -deltaTimeline);
-                  } else if (deltaTimeline > 0.001) {
-                    // Head trimmed outward (recovered/lengthened): shift downstream tracks from originEnd
-                    rippleShiftAllTracks(state, originEnd, deltaTimeline);
-                  }
-                } else if (timelineDrag.trimEdge === "end") {
-                  if (deltaTimeline < -0.001) {
-                    // Tail trimmed inward (shortened): audio in [originEnd + deltaTimeline, originEnd] removed
-                    const cutLength = -deltaTimeline;
-                    const cutAt = originEnd - cutLength;
-                    shiftTracks(cutAt, cutLength);
-                  } else if (deltaTimeline > 0.001) {
-                    // Tail trimmed outward (recovered/lengthened): shift downstream tracks from originEnd
-                    rippleShiftAllTracks(state, originEnd, deltaTimeline);
-                  }
-                }
-              } else {
-                // Lock all other untouched clips to their exact pre-trim timeline positions!
-                const untouchedSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
-                  (s) => s.id !== clip.id,
-                );
-                for (const snap of untouchedSnapshots) {
-                  const otherBase = baseClips.find(
-                    (item) => item !== matchingClip && (
-                      (item.sourceStart >= snap.sourceStart - 0.05 && item.sourceEnd <= snap.sourceEnd + 0.05) ||
-                      Math.abs(item.sourceStart - snap.sourceStart) < 0.05 ||
-                      Math.abs(item.sourceEnd - snap.sourceEnd) < 0.05
-                    ),
-                  );
-                  if (otherBase) {
-                    const otherOffset = snap.start - otherBase.start - globalOffset;
-                    state.mainVideoClipOffsets[otherBase.id] = otherOffset;
-                    state.mainAudioClipOffsets[otherBase.id] = otherOffset;
-                    if (snap.id && snap.id !== otherBase.id) {
-                      if (state.mainVideoClipSettings?.[snap.id]) {
-                        state.mainVideoClipSettings[otherBase.id] = { ...state.mainVideoClipSettings[snap.id] };
-                      }
-                      if (state.mainVideoTrackMap?.[snap.id]) {
-                        state.mainVideoTrackMap[otherBase.id] = state.mainVideoTrackMap[snap.id];
-                      }
-                      if (state.mainAudioTrackMap?.[snap.id]) {
-                        state.mainAudioTrackMap[otherBase.id] = state.mainAudioTrackMap[snap.id];
-                      }
-                      delete state.mainVideoClipOffsets[snap.id];
-                      delete state.mainAudioClipOffsets[snap.id];
-                      delete state.mainVideoTrackMap[snap.id];
-                      delete state.mainAudioTrackMap[snap.id];
-                      delete state.mainVideoClipSettings[snap.id];
-                    }
-                  }
-                }
-              }
-
-              if (clip.id && matchingClip && clip.id !== matchingClip.id) {
-                delete state.mainVideoClipOffsets[clip.id];
-                delete state.mainAudioClipOffsets[clip.id];
-                delete state.mainVideoTrackMap[clip.id];
-                delete state.mainAudioTrackMap[clip.id];
-                delete state.mainVideoClipSettings[clip.id];
-              }
-
+              state.mainVideoClipOffsets = committed.videoOffsets;
+              state.mainAudioClipOffsets = committed.audioOffsets;
+              adoptClipMaps(snapshot, committed.packed);
+              applyOverlayRipple(committed.overlayFrom, committed.overlayDelta);
               recomputeContentDuration();
             }
             renderAll();

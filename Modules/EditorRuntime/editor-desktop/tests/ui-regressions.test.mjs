@@ -36,8 +36,8 @@ test("new main media resets prior material modifiers", () => {
 
 test("main timeline drag is smooth and persisted", () => {
   assert.match(ui, /mainTimelineOffset:\s*0/);
-  assert.match(ui, /state\.mainVideoClipOffsets\[clipKey\]\s*=/);
-  assert.match(ui, /state\.mainAudioClipOffsets\[clipKey\]\s*=/);
+  assert.match(ui, /state\.mainVideoClipOffsets\[mover\.id\]\s*=/);
+  assert.match(ui, /state\.mainAudioClipOffsets\[mover\.id\]\s*=/);
   assert.match(ui, /mainTimelineOffset:\s*state\.mainTimelineOffset/);
   assert.match(ui, /snapClipStart\(/);
 });
@@ -744,7 +744,15 @@ test("timeline linking follows DaVinci linked selection, not time overlap", () =
   assert.doesNotMatch(linker, /overlap/);
   assert.match(ui, /function expandLinkedSelection\(/);
   assert.match(ui, /function rippleOverlayTrack\(/);
-  assert.match(ui, /linkedMoving: \[\]/);
+  assert.match(ui, /isRipple: editTool === "trim"/);
+  assert.doesNotMatch(ui, /isRipple: editTool === "trim" \|\| e\.shiftKey/);
+  assert.doesNotMatch(ui, /isRipple: editTool === "trim" \|\| !e\.altKey/);
+  assert.match(ui, /function commitMainEdgeTrim\(/);
+  assert.match(ui, /mode: timelineDrag\.isRipple \? "ripple" : "trim"/);
+  assert.match(ui, /function collectMainMoveIds\(/);
+  assert.match(ui, /movingMains/);
+  assert.match(ui, /item\.type === "video" && item\.id && item\.id !== "main"\) push\("audio"/);
+  assert.match(ui, /linkedMoving:/);
   assert.match(ui, /deleteSelected\(!!e\.shiftKey\)/);
   assert.match(ui, /联动选择已开启：成组音画一起选、移、剪、删/);
   assert.doesNotMatch(ui, /全部轨道已联动/);

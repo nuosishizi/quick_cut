@@ -28,6 +28,12 @@ import {
   slipClipSource,
   rippleShiftAllTracks,
   splitTimedItem,
+  buildPackedMainClips,
+  commitMainEdgeTrim,
+  overlayRippleWindow,
+  matchClipBySource,
+  collectMainMoveIds,
+  absorbTrimSourceRange,
 } from "../src/timeline-edit.mjs";
 
 test("linked selection only follows the same-source A/V group", () => {
@@ -349,6 +355,134 @@ test("trimming head of downstream clip preserves timeline gap and does not colla
   const trimResult = applyMainTrimEdge(removals, [], clip, "start", 18, 30);
   assert.equal(trimResult.deltaSource, -3);
   assert.deepEqual(trimResult.removals, [{ start: 10, end: 18, source: "pause" }]);
+});
+
+test("DaVinci ripple trim keeps earlier clips and packs later clips", () => {
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-12.0000-20.0000", sourceStart: 12, sourceEnd: 20, start: 10, end: 18 },
+    { id: "v-20.0000-30.0000", sourceStart: 20, sourceEnd: 30, start: 18, end: 28 },
+  ];
+  const tail = commitMainEdgeTrim({
+    removals: [{ start: 10, end: 12 }],
+    manualCuts: [20],
+    clip: snapshot[1],
+    edge: "end",
+    targetSource: 16,
+    sourceDuration: 30,
+    mode: "ripple",
+    snapshot,
+  });
+  assert.ok(tail.deltaSource < 0);
+  const later = tail.packed.find((clip) => clip.sourceStart >= 19.9);
+  const trimmed = matchClipBySource(snapshot[1], tail.packed);
+  const earlier = matchClipBySource(snapshot[0], tail.packed);
+  assert.ok(trimmed);
+  assert.ok(later);
+  assert.equal(Number(tail.videoOffsets[earlier.id] || 0), 0);
+  const laterStart = later.start + Number(tail.videoOffsets[later.id] || 0);
+  const trimmedEnd = trimmed.end + Number(tail.videoOffsets[trimmed.id] || 0);
+  assert.ok(laterStart < 18, "later clip must move left after ripple");
+  assert.ok(Math.abs(laterStart - trimmedEnd) < 0.05, "later clip must pack against the new tail");
+  assert.equal(overlayRippleWindow(snapshot[1], "end", -4).from, 14);
+});
+
+test("ripple tail trim does not leave a sliver clip between neighbors", () => {
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-10.0300-20.0000", sourceStart: 10.03, sourceEnd: 20, start: 10, end: 19.97 },
+  ];
+  const absorbed = absorbTrimSourceRange(snapshot[0], "end", 8, snapshot);
+  assert.ok(absorbed);
+  assert.equal(absorbed.start, 8);
+  assert.ok(absorbed.end >= 10.03);
+  const result = commitMainEdgeTrim({
+    removals: [],
+    manualCuts: [10, 10.03],
+    clip: snapshot[0],
+    edge: "end",
+    targetSource: 8,
+    sourceDuration: 20,
+    mode: "ripple",
+    snapshot,
+  });
+  assert.equal(result.packed.length, 2);
+  assert.ok(result.packed.every((clip) => clip.end - clip.start >= 1 / 30));
+  const later = result.packed.find((clip) => clip.sourceStart >= 10);
+  const trimmed = result.packed.find((clip) => clip.sourceStart < 1);
+  const laterStart = later.start + Number(result.videoOffsets[later.id] || 0);
+  const trimmedEnd = trimmed.end + Number(result.videoOffsets[trimmed.id] || 0);
+  assert.ok(Math.abs(laterStart - trimmedEnd) < 0.05);
+});
+
+test("shift-drag selection moves every selected main clip id", () => {
+  assert.deepEqual(
+    collectMainMoveIds({
+      anchorType: "video",
+      anchorId: "v-0.0000-10.0000",
+      selected: [
+        { type: "video", id: "v-0.0000-10.0000" },
+        { type: "audio", id: "v-0.0000-10.0000" },
+      ],
+      avLinked: true,
+    }),
+    ["v-0.0000-10.0000"],
+  );
+  const group = collectMainMoveIds({
+    anchorType: "video",
+    anchorId: "v-a",
+    selected: [
+      { type: "video", id: "v-a" },
+      { type: "video", id: "v-b" },
+    ],
+    avLinked: false,
+  });
+  assert.ok(group.includes("v-a"));
+  assert.ok(group.includes("v-b"));
+});
+
+test("select-mode trim locks later clips instead of rippling them", () => {
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-10.0000-20.0000", sourceStart: 10, sourceEnd: 20, start: 10, end: 20 },
+  ];
+  const locked = commitMainEdgeTrim({
+    removals: [],
+    manualCuts: [10],
+    clip: snapshot[0],
+    edge: "end",
+    targetSource: 6,
+    sourceDuration: 20,
+    mode: "trim",
+    snapshot,
+  });
+  const later = matchClipBySource(snapshot[1], locked.packed);
+  const laterStart = later.start + Number(locked.videoOffsets[later.id] || 0);
+  assert.ok(Math.abs(laterStart - 10) < 0.05, "select-mode must leave a gap, not pull the next clip");
+  assert.equal(locked.overlayDelta, 0);
+});
+
+test("ripple head trim closes from the incoming edit so later words are not swallowed", () => {
+  const clip = { id: "v-10.0000-20.0000", sourceStart: 10, sourceEnd: 20, start: 8, end: 18 };
+  const window = overlayRippleWindow(clip, "start", -2);
+  assert.equal(window.from, 8);
+  assert.equal(window.delta, -2);
+  const captions = [
+    { start: 5, end: 7, words: [{ display: "keep", start: 5, end: 7 }] },
+    { start: 8, end: 10, words: [{ display: "cut", start: 8, end: 10 }] },
+    {
+      start: 12,
+      end: 16,
+      words: [
+        { display: "my", start: 12, end: 13 },
+        { display: "family", start: 13, end: 16 },
+      ],
+    },
+  ];
+  rippleItemsOnTrack(captions, "caption", "caption", 8, 10);
+  assert.equal(captions[0].start, 5);
+  assert.equal(captions[2].start, 10);
+  assert.equal(captions[2].words[1].display, "family");
 });
 
 test("rippleShiftAllTracks shifts captions, words, issues and overlays seamlessly", () => {

@@ -339,6 +339,268 @@ export function snapGroupDelta(moving, delta, points, threshold) {
   };
 }
 
+export function sourceOverlap(left = {}, right = {}) {
+  return Math.max(
+    0,
+    Math.min(Number(left.sourceEnd || 0), Number(right.sourceEnd || 0)) -
+      Math.max(Number(left.sourceStart || 0), Number(right.sourceStart || 0)),
+  );
+}
+
+export function matchClipBySource(clip, list = []) {
+  let best = null;
+  let bestOverlap = 0;
+  for (const item of list || []) {
+    const overlap = sourceOverlap(clip, item);
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      best = item;
+    }
+  }
+  return bestOverlap > 0.02 ? best : null;
+}
+
+export function buildPackedMainClips(
+  removals = [],
+  manualCuts = [],
+  sourceDuration = 0,
+  speed = 1,
+) {
+  const rate = Math.max(0.05, Number(speed || 1));
+  const duration = Math.max(0, Number(sourceDuration || 0));
+  const base = [];
+  let source = 0;
+  let timeline = 0;
+  for (const removal of normalizeRemovalsList(removals)) {
+    if (removal.start > source + 0.002) {
+      base.push({
+        sourceStart: source,
+        sourceEnd: removal.start,
+        start: timeline / rate,
+        end: (timeline + removal.start - source) / rate,
+      });
+      timeline += removal.start - source;
+    }
+    source = Math.max(source, Number(removal.end));
+  }
+  if (source < duration - 0.002)
+    base.push({
+      sourceStart: source,
+      sourceEnd: duration,
+      start: timeline / rate,
+      end: (timeline + duration - source) / rate,
+    });
+  const clips = [];
+  for (const block of base) {
+    const cuts = (manualCuts || [])
+      .map(Number)
+      .filter((cut) => cut > block.sourceStart + 0.002 && cut < block.sourceEnd - 0.002)
+      .sort((left, right) => left - right);
+    const points = [block.sourceStart, ...cuts, block.sourceEnd];
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const sourceStart = points[index];
+      const sourceEnd = points[index + 1];
+      const start = block.start + (sourceStart - block.sourceStart) / rate;
+      clips.push({
+        id: `v-${sourceStart.toFixed(4)}-${sourceEnd.toFixed(4)}`,
+        sourceStart,
+        sourceEnd,
+        start,
+        end: start + (sourceEnd - sourceStart) / rate,
+      });
+    }
+  }
+  return clips;
+}
+
+export function rebuildClipOffsets({
+  snapshot = [],
+  packed = [],
+  globalOffset = 0,
+  mode = "ripple",
+  editedClip = null,
+  edge = "end",
+  targetSource = 0,
+  speed = 1,
+  rippleFrom = 0,
+} = {}) {
+  const offsets = {};
+  const rate = Math.max(0.05, Number(speed || 1));
+  for (const next of packed || []) {
+    const previous = matchClipBySource(next, snapshot);
+    let desired = next.start + Number(globalOffset || 0);
+    if (mode === "ripple") {
+      if (previous && editedClip && previous.id === editedClip.id)
+        desired = Number(editedClip.start);
+      else if (previous && Number(previous.start) < Number(rippleFrom) - 0.01)
+        desired = Number(previous.start);
+      else desired = next.start + Number(globalOffset || 0);
+    } else if (previous && editedClip && previous.id === editedClip.id) {
+      if (edge === "end") desired = Number(editedClip.start);
+      else
+        desired =
+          Number(editedClip.start) +
+          (Number(targetSource) - Number(editedClip.sourceStart || 0)) / rate;
+    } else if (previous) desired = Number(previous.start);
+    const offset = desired - next.start - Number(globalOffset || 0);
+    if (Math.abs(offset) > 0.001) offsets[next.id] = offset;
+  }
+  return offsets;
+}
+
+export function overlayRippleWindow(clip = {}, edge = "end", deltaTimeline = 0) {
+  const start = Number(clip.start || 0);
+  const end = Number(clip.end || start);
+  if (Math.abs(deltaTimeline) <= 0.001) return { from: end, delta: 0 };
+  if (edge === "start") return { from: start, delta: deltaTimeline };
+  return {
+    from: deltaTimeline < 0 ? end + deltaTimeline : end,
+    delta: deltaTimeline,
+  };
+}
+
+export function neighborClips(clip = {}, snapshot = []) {
+  const selfId = clip.id;
+  const start = Number(clip.start || 0);
+  const end = Number(clip.end || start);
+  const others = (snapshot || []).filter((item) => item && item.id !== selfId);
+  const previous = others
+    .filter((item) => Number(item.end || 0) <= start + 0.05)
+    .sort((left, right) => Number(right.end || 0) - Number(left.end || 0))[0] || null;
+  const next = others
+    .filter((item) => Number(item.start || 0) >= start - 0.05)
+    .sort((left, right) => Number(left.start || 0) - Number(right.start || 0))[0] || null;
+  const nextAfter = others
+    .filter((item) => Number(item.start || 0) >= end - 0.05)
+    .sort((left, right) => Number(left.start || 0) - Number(right.start || 0))[0] || next;
+  return { previous, next: nextAfter };
+}
+
+export function absorbTrimSourceRange(clip = {}, edge = "end", targetSource = 0, snapshot = []) {
+  const { previous, next } = neighborClips(clip, snapshot);
+  const srcStart = Number(clip.sourceStart || 0);
+  const srcEnd = Number(clip.sourceEnd || srcStart);
+  const target = Number(targetSource || 0);
+  if (edge === "end" && target < srcEnd - 0.002) {
+    const removeEnd = next ? Math.max(srcEnd, Number(next.sourceStart || srcEnd)) : srcEnd;
+    return { start: Math.max(srcStart + 0.04, target), end: removeEnd };
+  }
+  if (edge === "start" && target > srcStart + 0.002) {
+    const removeStart = previous
+      ? Math.min(srcStart, Number(previous.sourceEnd || srcStart))
+      : srcStart;
+    return { start: removeStart, end: Math.min(srcEnd - 0.04, target) };
+  }
+  return null;
+}
+
+export function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1) {
+  const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < 1 / 30);
+  if (!tiny.length) return { packed, removals, manualCuts };
+  const nextRemovals = normalizeRemovalsList([
+    ...removals,
+    ...tiny.map((clip) => ({
+      start: Number(clip.sourceStart),
+      end: Number(clip.sourceEnd),
+      source: "edge-trim",
+    })),
+  ]);
+  const nextCuts = (manualCuts || []).filter((cut) =>
+    tiny.every(
+      (clip) => Number(cut) <= Number(clip.sourceStart) + 0.002 || Number(cut) >= Number(clip.sourceEnd) - 0.002,
+    ),
+  );
+  return {
+    packed: buildPackedMainClips(nextRemovals, nextCuts, sourceDuration, speed),
+    removals: nextRemovals,
+    manualCuts: nextCuts,
+  };
+}
+
+export function collectMainMoveIds({
+  anchorType = "video",
+  anchorId = "",
+  selected = [],
+  avLinked = true,
+} = {}) {
+  const ids = new Set();
+  if (anchorId && (anchorType === "video" || anchorType === "audio" || avLinked))
+    ids.add(anchorId);
+  for (const item of selected || []) {
+    if (item?.type === "video" || item?.type === "audio") ids.add(item.id);
+  }
+  return [...ids].filter(Boolean);
+}
+
+export function commitMainEdgeTrim({
+  removals = [],
+  manualCuts = [],
+  clip = {},
+  edge = "end",
+  targetSource = 0,
+  sourceDuration = 0,
+  mode = "ripple",
+  snapshot = [],
+  globalOffset = 0,
+  speed = 1,
+} = {}) {
+  const trim = applyMainTrimEdge(
+    removals,
+    manualCuts,
+    clip,
+    edge,
+    targetSource,
+    sourceDuration,
+  );
+  const absorbed = absorbTrimSourceRange(clip, edge, targetSource, snapshot);
+  let nextRemovals = trim.removals;
+  let nextCuts = trim.manualCuts;
+  if (absorbed && absorbed.end > absorbed.start + 0.002) {
+    nextRemovals = normalizeRemovalsList([
+      ...nextRemovals,
+      { ...absorbed, source: "edge-trim" },
+    ]);
+    nextCuts = (nextCuts || []).filter(
+      (cut) => Number(cut) <= absorbed.start + 0.002 || Number(cut) >= absorbed.end - 0.002,
+    );
+  }
+  let packed = buildPackedMainClips(
+    nextRemovals,
+    nextCuts,
+    sourceDuration,
+    speed,
+  );
+  const pruned = dropSubframeClips(packed, nextRemovals, nextCuts, sourceDuration, speed);
+  packed = pruned.packed;
+  nextRemovals = pruned.removals;
+  nextCuts = pruned.manualCuts;
+  const deltaTimeline = Number(trim.deltaSource || 0) / Math.max(0.05, Number(speed || 1));
+  const offsets = rebuildClipOffsets({
+    snapshot,
+    packed,
+    globalOffset,
+    mode,
+    editedClip: clip,
+    edge,
+    targetSource,
+    speed,
+    rippleFrom: Number(clip.start || 0),
+  });
+  const window = mode === "ripple"
+    ? overlayRippleWindow(clip, edge, deltaTimeline)
+    : { from: Number(clip.end || 0), delta: 0 };
+  return {
+    ...trim,
+    removals: nextRemovals,
+    manualCuts: nextCuts,
+    packed,
+    videoOffsets: offsets,
+    audioOffsets: { ...offsets },
+    overlayFrom: window.from,
+    overlayDelta: window.delta,
+  };
+}
+
 export function normalizeRemovalsList(removals = []) {
   const clean = (removals || [])
     .filter((r) => Number(r?.end) > Number(r?.start) + 0.002)
