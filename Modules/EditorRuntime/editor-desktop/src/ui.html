@@ -704,14 +704,34 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 9px;
+        gap: 5px;
+        padding: 5px 12px;
         border-top: 1px solid var(--line);
-        background: #17191b;
+        background: #151719;
       }
-      .timecode {
+      .transport .iconbtn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: #d1d5db;
+      }
+      .transport #play {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+      }
+      .transport .timecode {
         font-variant-numeric: tabular-nums;
+        font-family: monospace;
+        font-size: 12px;
         color: #c8ccd1;
-        min-width: 105px;
+        margin-left: 10px;
+        min-width: 140px;
       }
       .ratio {
         position: absolute;
@@ -3016,10 +3036,15 @@
             </div>
           </div>
           <div class="transport">
-            <button class="btn iconbtn" id="toStart">↶</button
-            ><button class="btn iconbtn primary" id="play">▶</button
-            ><span class="timecode" id="timecode">00:00.000 / 00:00.000</span
-            ><button class="btn iconbtn" id="toEnd">↷</button>
+            <button class="btn iconbtn" id="toStart" title="跳至时间线开头（Home）">|◀</button>
+            <button class="btn iconbtn" id="jumpPrevCut" title="跳转到上一个剪切点（↑）">⤒</button>
+            <button class="btn iconbtn" id="stepBack" title="后退一帧（←）">‹</button>
+            <button class="btn iconbtn primary" id="play" title="播放 / 暂停（空格键）">▶</button>
+            <button class="btn iconbtn" id="stepForward" title="前进一帧（→）">›</button>
+            <button class="btn iconbtn" id="jumpNextCut" title="跳转到下一个剪切点（↓）">⤓</button>
+            <button class="btn iconbtn" id="toEnd" title="跳至时间线结尾（End）">▶|</button>
+            <button class="btn iconbtn" id="loopPlayback" title="循环播放">🔁</button>
+            <span class="timecode" id="timecode">00:00.000 / 00:00.000</span>
           </div>
         </main>
         <div class="panel-resizer" id="rightPanelResizer" data-resize="inspector"></div>
@@ -3513,23 +3538,7 @@
       <section class="timeline" id="timeline" data-drop-zone="timeline">
         <div class="timeline-resizer" id="timelineResizer"></div>
         <div class="timelinebar">
-          <button
-            class="btn"
-            id="pauseCut"
-            title="自动剪停顿：根据气口设置快速剪除多余停顿与底噪"
-          >
-            自动剪停顿</button
-          ><button
-            class="btn iconbtn"
-            id="openPauseCutSettings"
-            title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
-            style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
-          >
-            ⚙</button>
-
-          <span class="tool-separator"></span>
-
-          <!-- 达芬奇标准组 1: 核心编辑工具 -->
+          <!-- 达芬奇标准组 1: 核心剪辑工具 -->
           <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
             ↖</button
           ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
@@ -3559,19 +3568,7 @@
 
           <span class="tool-separator"></span>
 
-          <!-- 达芬奇标准组 3: 逐帧微调与切点极速跳转 -->
-          <button class="btn iconbtn" id="stepBack" title="后退一帧（←）">
-            ‹</button
-          ><button class="btn iconbtn" id="stepForward" title="前进一帧（→）">
-            ›</button
-          ><button class="btn iconbtn" id="jumpPrevCut" title="跳转到上一个剪切点（↑）">
-            ⤒</button
-          ><button class="btn iconbtn" id="jumpNextCut" title="跳转到下一个剪切点（↓）">
-            ⤓</button>
-
-          <span class="tool-separator"></span>
-
-          <!-- 达芬奇标准组 4: 删除、撤销重做与辅助 -->
+          <!-- 达芬奇标准组 3: 删除、撤销与辅助 -->
           <button
             class="btn iconbtn danger"
             id="deleteClip"
@@ -3587,7 +3584,24 @@
           ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">↶</button
           ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">↷</button
           ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
-            ▣</button
+            ▣</button>
+
+          <span class="tool-separator"></span>
+
+          <!-- 达芬奇标准组 4: 智能工具与轨道 -->
+          <button
+            class="btn"
+            id="pauseCut"
+            title="自动剪停顿：根据气口设置快速剪除多余停顿与底噪"
+          >
+            自动剪停顿</button
+          ><button
+            class="btn iconbtn"
+            id="openPauseCutSettings"
+            title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
+            style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
+          >
+            ⚙</button
           ><button class="btn iconbtn" id="addTrack" title="添加文本/轨道">
             T＋</button>
 
@@ -9537,17 +9551,26 @@
           return;
         state.currentTime = mapSourceTime(source);
         if (state.currentTime >= state.duration - 0.03) {
-          state.playing = false;
-          $("video").pause();
-          $("play").textContent = "▶";
+          if (state.loopPlayback) {
+            seekTimeline(0);
+          } else {
+            state.playing = false;
+            $("video").pause();
+            $("play").textContent = "▶";
+          }
         }
         syncPreviewAudio();
       };
       $("video").onended = () => {
-        state.playing = false;
-        syncPreviewAudio();
-        renderPreviewObjects(false);
-        $("play").textContent = "▶";
+        if (state.loopPlayback) {
+          seekTimeline(0);
+          $("video").play().catch(() => {});
+        } else {
+          state.playing = false;
+          syncPreviewAudio();
+          renderPreviewObjects(false);
+          $("play").textContent = "▶";
+        }
       };
       const previewAudioPlayers = new Map();
       function previewAudioPlayer(key, url) {
@@ -12644,6 +12667,13 @@
       };
       $("toStart").onclick = () => seekTimeline(0);
       $("toEnd").onclick = () => seekTimeline(state.duration);
+      if ($("loopPlayback"))
+        $("loopPlayback").onclick = () => {
+          state.loopPlayback = !state.loopPlayback;
+          $("loopPlayback").classList.toggle("active", state.loopPlayback);
+          $("loopPlayback").classList.toggle("primary", state.loopPlayback);
+          toast(state.loopPlayback ? "循环播放已开启" : "循环播放已关闭");
+        };
       $("pauseCut").onclick = runPauseCut;
       $("addTrack").onclick = () => {
         addText();
