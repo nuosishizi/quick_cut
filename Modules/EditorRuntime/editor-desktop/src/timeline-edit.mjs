@@ -480,6 +480,8 @@ export function rippleShiftAllTracks(collections = {}, fromTimelineTime = 0, del
   shiftList(collections.titles);
   shiftList(collections.captions);
   shiftList(collections.reviewCaptions);
+  shiftList(collections.audioMutes);
+  shiftList(collections.issues);
   return collections;
 }
 

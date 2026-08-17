@@ -351,3 +351,26 @@ test("trimming head of downstream clip preserves timeline gap and does not colla
   assert.deepEqual(trimResult.removals, [{ start: 10, end: 18, source: "pause" }]);
 });
 
+test("rippleShiftAllTracks shifts captions, words, issues and overlays seamlessly", () => {
+  const state = {
+    videoLayers: [{ start: 10, end: 15 }],
+    audioAssets: [{ start: 5, end: 8 }, { start: 12, end: 18 }],
+    captions: [{
+      start: 10, end: 14,
+      words: [{ start: 10, end: 11 }, { start: 12, end: 14 }],
+    }],
+    issues: [{ start: 11, end: 13 }],
+    audioMutes: [{ start: 10.5, end: 11.5 }],
+  };
+  rippleShiftAllTracks(state, 10, 2.5);
+  assert.equal(state.videoLayers[0].start, 12.5);
+  assert.equal(state.audioAssets[0].start, 5); // before 10 untouched
+  assert.equal(state.audioAssets[1].start, 14.5);
+  assert.equal(state.captions[0].start, 12.5);
+  assert.equal(state.captions[0].words[0].start, 12.5);
+  assert.equal(state.captions[0].words[1].start, 14.5);
+  assert.equal(state.issues[0].start, 13.5);
+  assert.equal(state.audioMutes[0].start, 13);
+});
+
+

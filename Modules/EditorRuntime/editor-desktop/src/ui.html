@@ -6168,6 +6168,8 @@
         shiftList(collections.titles);
         shiftList(collections.captions);
         shiftList(collections.reviewCaptions);
+        shiftList(collections.audioMutes);
+        shiftList(collections.issues);
         return collections;
       }
       function clipUnderPlayhead(type = "video", time = state.currentTime) {
@@ -14544,7 +14546,7 @@
                 trimType: clip.dataset.type,
                 trimObject: object,
                 mainTrimClip: mainClip,
-                isRipple: editTool === "trim" || e.shiftKey,
+                isRipple: editTool === "trim" || !e.altKey,
                 mainClipsSnapshot: mainClips().map((c) => ({
                   id: c.id,
                   start: Number(c.start),
@@ -14988,11 +14990,34 @@
 
               if (timelineDrag.isRipple) {
                 const deltaTimeline = trimResult.deltaSource / speed;
-                const shiftFrom = originEnd;
-                if (deltaTimeline > 0.001) {
-                  rippleShiftAllTracks(state, shiftFrom, deltaTimeline);
-                } else if (deltaTimeline < -0.001) {
-                  shiftTracks(shiftFrom, -deltaTimeline);
+
+                // Clear any stored static offsets for downstream clips so they flow naturally with the rippled timeline
+                const downstreamSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
+                  (s) => s.id !== clip.id && s.start >= originStart - 0.01,
+                );
+                for (const snap of downstreamSnapshots) {
+                  delete state.mainVideoClipOffsets[snap.id];
+                  delete state.mainAudioClipOffsets[snap.id];
+                }
+
+                if (timelineDrag.trimEdge === "start") {
+                  if (deltaTimeline < -0.001) {
+                    // Head trimmed inward (shortened): audio in [originStart, originStart - deltaTimeline] removed
+                    shiftTracks(originStart, -deltaTimeline);
+                  } else if (deltaTimeline > 0.001) {
+                    // Head trimmed outward (recovered/lengthened): shift downstream tracks from originEnd
+                    rippleShiftAllTracks(state, originEnd, deltaTimeline);
+                  }
+                } else if (timelineDrag.trimEdge === "end") {
+                  if (deltaTimeline < -0.001) {
+                    // Tail trimmed inward (shortened): audio in [originEnd + deltaTimeline, originEnd] removed
+                    const cutLength = -deltaTimeline;
+                    const cutAt = originEnd - cutLength;
+                    shiftTracks(cutAt, cutLength);
+                  } else if (deltaTimeline > 0.001) {
+                    // Tail trimmed outward (recovered/lengthened): shift downstream tracks from originEnd
+                    rippleShiftAllTracks(state, originEnd, deltaTimeline);
+                  }
                 }
               } else {
                 // Lock all other untouched clips to their exact pre-trim timeline positions!
