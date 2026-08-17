@@ -733,6 +733,47 @@
         margin-left: 10px;
         min-width: 140px;
       }
+      .playback-speed-control {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 2px;
+      }
+      .speed-pill-btn {
+        height: 24px;
+        min-width: 44px;
+        padding: 0 6px;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 4px;
+        border: 1px solid #33383f;
+        background: #1e2124;
+        color: #d1d5db;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+      }
+      .speed-pill-btn:hover {
+        background: #2a2e34;
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .speed-pill-btn.speed-boosted {
+        border-color: var(--blue);
+        color: #60a5fa;
+        background: rgba(37, 99, 235, 0.15);
+      }
+      .speed-select-overlay {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+      }
       .ratio {
         position: absolute;
         right: 12px;
@@ -3434,6 +3475,20 @@
             <button class="btn iconbtn" id="loopPlayback" title="循环播放">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
             </button>
+            <div class="playback-speed-control" id="playbackSpeedControl" title="播放倍速（点击切换或下拉选择，Shift+[ 减速，Shift+] 加速）">
+              <button class="speed-pill-btn" id="playbackSpeedBtn" type="button">1.0×</button>
+              <select class="speed-select-overlay" id="playbackSpeedSelect" aria-label="播放倍速选择">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1.0×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+                <option value="1.75">1.75×</option>
+                <option value="2">2.0×</option>
+                <option value="2.5">2.5×</option>
+                <option value="3">3.0×</option>
+              </select>
+            </div>
             <span class="timecode" id="timecode">00:00.000 / 00:00.000</span>
           </div>
         </main>
@@ -4486,6 +4541,7 @@
         mainVideoClipOffsets: {},
         mainAudioClipOffsets: {},
         currentTime: 0,
+        playbackSpeed: 1.0,
         followPlayhead: true,
         zoom: 60,
         canvasZoom: 1,
@@ -5231,6 +5287,7 @@
           mainVideoClipOffsets: {},
           mainAudioClipOffsets: {},
           currentTime: 0,
+          playbackSpeed: 1.0,
           followPlayhead: true,
           zoom: 60,
           canvasZoom: 1,
@@ -5341,6 +5398,13 @@
         $("video").load?.();
         $("stage").classList.add("empty");
         $("scriptText").value = "";
+        if ($("playbackSpeedBtn")) {
+          $("playbackSpeedBtn").textContent = "1.0×";
+          $("playbackSpeedBtn").classList.remove("speed-boosted");
+        }
+        if ($("playbackSpeedSelect")) {
+          $("playbackSpeedSelect").value = "1";
+        }
       }
       async function enterProject(record) {
         state.initializing = true;
@@ -7652,7 +7716,7 @@
         );
         if (element.readyState > 0 && Math.abs(element.currentTime - local) > 0.16)
           element.currentTime = local;
-        element.playbackRate = clamp(Number(state.audio.speed || 1), 0.5, 2);
+        applyMediaPlaybackRate(element, Number(state.audio.speed || 1));
         if (state.playing) element.play().catch(() => {});
         else element.pause();
       }
@@ -9583,7 +9647,7 @@
           String(Math.min(0.9, Number(c.vignette || 0) / 105)),
         );
         $("video").muted = state.trackVisibility.audio === false;
-        $("video").playbackRate = state.audio.speed || 1;
+        applyMediaPlaybackRate($("video"));
         updateBeautyPreviewState();
       }
       let beautyGL = null, beautyGLUnavailable = false,
@@ -9841,6 +9905,50 @@
       }
       let shuttleSpeed = 0;
       let shuttleTimer = null;
+      function effectivePlaybackRate(baseSpeed = 1) {
+        const previewRate = Number(state.playbackSpeed || 1);
+        const clipRate = Number(baseSpeed || state.audio?.speed || 1);
+        const shuttle = shuttleSpeed ? Math.abs(shuttleSpeed) : 1;
+        return clamp(previewRate * clipRate * shuttle, 0.25, 16);
+      }
+      function applyMediaPlaybackRate(mediaEl, baseSpeed = 1) {
+        if (!mediaEl) return;
+        const rate = effectivePlaybackRate(baseSpeed);
+        mediaEl.playbackRate = rate;
+        if (mediaEl.preservesPitch !== undefined) mediaEl.preservesPitch = true;
+        if (mediaEl.webkitPreservesPitch !== undefined) mediaEl.webkitPreservesPitch = true;
+        if (mediaEl.mozPreservesPitch !== undefined) mediaEl.mozPreservesPitch = true;
+      }
+      const PLAYBACK_SPEED_TIERS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+      function setPlaybackSpeed(speed, notify = true) {
+        const val = clamp(Number(speed) || 1.0, 0.25, 8.0);
+        state.playbackSpeed = val;
+        const btn = $("playbackSpeedBtn");
+        if (btn) {
+          const text = val % 1 === 0 ? `${val.toFixed(1)}×` : `${val}×`;
+          btn.textContent = text;
+          btn.classList.toggle("speed-boosted", val !== 1.0);
+        }
+        const select = $("playbackSpeedSelect");
+        if (select) {
+          select.value = String(val);
+        }
+        applyMediaPlaybackRate($("video"));
+        for (const player of previewAudioPlayers.values()) {
+          applyMediaPlaybackRate(player);
+        }
+        if (notify) toast(`⚡ 播放倍速：${val}×`);
+      }
+      function stepPlaybackSpeed(direction = 1) {
+        const current = Number(state.playbackSpeed || 1.0);
+        let idx = PLAYBACK_SPEED_TIERS.findIndex(s => Math.abs(s - current) < 0.05);
+        if (idx === -1) {
+          idx = PLAYBACK_SPEED_TIERS.findIndex(s => s >= current);
+          if (idx === -1) idx = PLAYBACK_SPEED_TIERS.length - 1;
+        }
+        const nextIdx = clamp(idx + direction, 0, PLAYBACK_SPEED_TIERS.length - 1);
+        setPlaybackSpeed(PLAYBACK_SPEED_TIERS[nextIdx], true);
+      }
       function stopShuttle(pauseVideo = true) {
         if (shuttleTimer) {
           clearInterval(shuttleTimer);
@@ -9854,8 +9962,7 @@
           syncPreviewAudio();
           renderPreviewObjects(false);
         }
-        const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
-        $("video").playbackRate = baseSpeed;
+        applyMediaPlaybackRate($("video"));
       }
       function handleShuttleKey(key) {
         if (!state.video) return;
@@ -9874,22 +9981,20 @@
           } else if (shuttleSpeed < 16) {
             shuttleSpeed *= 2;
           }
-          const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
           if (!state.playing) {
             state.playing = true;
             $("video").play().catch(() => {});
             startPlaybackAnimationLoop();
             $("play").textContent = "❚❚";
           }
-          $("video").playbackRate = Math.min(16, baseSpeed * shuttleSpeed);
+          applyMediaPlaybackRate($("video"));
           toast(`⚡ 快进穿梭播放：${shuttleSpeed}x (L)`);
           return;
         }
         if (key === "KeyJ") {
           if (shuttleSpeed > 1) {
             shuttleSpeed = Math.floor(shuttleSpeed / 2);
-            const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
-            $("video").playbackRate = Math.min(16, baseSpeed * shuttleSpeed);
+            applyMediaPlaybackRate($("video"));
             toast(`⚡ 快进穿梭播放：${shuttleSpeed}x (L)`);
             return;
           }
@@ -9926,7 +10031,7 @@
           shuttleTimer = null;
         }
         shuttleSpeed = 0;
-        $("video").playbackRate = clamp(Number(state.audio.speed || 1), 0.5, 2);
+        applyMediaPlaybackRate($("video"));
         if (state.playing) {
           $("video").pause();
           state.playing = false;
@@ -9944,6 +10049,7 @@
           if (next) seekTimeline(next.start);
         }
         state.playing = true;
+        applyMediaPlaybackRate($("video"));
         await $("video").play();
         keepPlayheadInView("play");
         updateBeautyPreviewState();
@@ -10019,7 +10125,7 @@
           return;
         }
         player.volume = clamp(Number(options.volume ?? 1), 0, 1);
-        player.playbackRate = clamp(Number(options.speed ?? 1), 0.5, 2);
+        applyMediaPlaybackRate(player, Number(options.speed ?? 1));
         if (Math.abs(Number(player.currentTime || 0) - sourceTime) > 0.14)
           player.currentTime = Math.max(0, sourceTime);
         if (state.playing) player.play().catch(() => {});
@@ -13646,6 +13752,16 @@
         };
       if ($("toStart")) $("toStart").onclick = () => seekTimeline(0);
       if ($("toEnd")) $("toEnd").onclick = () => seekTimeline(state.duration);
+      if ($("playbackSpeedSelect")) {
+        $("playbackSpeedSelect").onchange = (e) => {
+          setPlaybackSpeed(Number(e.target.value) || 1.0, true);
+        };
+      }
+      if ($("playbackSpeedBtn")) {
+        $("playbackSpeedBtn").onclick = () => {
+          stepPlaybackSpeed(1);
+        };
+      }
       if ($("loopPlayback"))
         $("loopPlayback").onclick = () => {
           state.loopPlayback = !state.loopPlayback;
@@ -16184,6 +16300,15 @@
         } else if (code === "KeyL") {
           e.preventDefault();
           handleShuttleKey("KeyL");
+        } else if (e.shiftKey && (code === "BracketRight" || code === "Period")) {
+          e.preventDefault();
+          stepPlaybackSpeed(1);
+        } else if (e.shiftKey && (code === "BracketLeft" || code === "Comma")) {
+          e.preventDefault();
+          stepPlaybackSpeed(-1);
+        } else if (e.shiftKey && code === "KeyR") {
+          e.preventDefault();
+          setPlaybackSpeed(1.0, true);
         } else if (code === "Escape") {
           if (editTool === "blade") {
             setEditTool("select");
