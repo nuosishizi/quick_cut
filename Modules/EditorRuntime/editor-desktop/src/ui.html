@@ -135,6 +135,12 @@
         cursor: not-allowed;
         transform: none;
       }
+      .btn.active,
+      .iconbtn.active {
+        background: var(--blue, #2b91ff) !important;
+        border-color: var(--blue, #2b91ff) !important;
+        color: #fff !important;
+      }
       .iconbtn {
         width: 32px;
         padding: 0;
@@ -3516,9 +3522,11 @@
             title="删除播放头左侧（Q）"
           >
             ◀|</button
-          ><button class="btn iconbtn" id="splitClip" title="在播放头切割经过的片段（⌘B）">
+          ><button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
+            ↖</button
+          ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
             ✂</button
-          ><button class="btn iconbtn" id="bladeTool" title="剃刀：点击片段切割（B）">
+          ><button class="btn iconbtn" id="splitClip" title="在播放头切割经过的片段（⌘B）">
             ╎</button
           ><button
             class="btn iconbtn"
@@ -5660,8 +5668,48 @@
       function setEditTool(tool) {
         editTool = tool === "blade" ? "blade" : "select";
         $("timeline")?.classList.toggle("blade-mode", editTool === "blade");
+        $("timelineMain")?.classList.toggle("blade-mode", editTool === "blade");
+        $("selectTool")?.classList.toggle("active", editTool === "select");
+        $("bladeTool")?.classList.toggle("active", editTool === "blade");
         $("bladeTool")?.classList.toggle("primary", editTool === "blade");
         if (editTool !== "blade") setBladeGuide(0, false);
+      }
+      function collectAllCutPoints() {
+        const points = new Set([0, Number((state.duration || 0).toFixed(3))]);
+        for (const clip of mainClips()) {
+          points.add(Number(Number(clip.start || 0).toFixed(3)));
+          points.add(Number(Number(clip.end || 0).toFixed(3)));
+        }
+        for (const list of [state.videoLayers, state.audioAssets, state.images, state.titles, state.captions]) {
+          for (const item of list || []) {
+            points.add(Number(Number(item.start || 0).toFixed(3)));
+            points.add(Number(Number(item.end || 0).toFixed(3)));
+          }
+        }
+        return [...points].sort((a, b) => a - b);
+      }
+      function jumpToCutPoint(direction) {
+        const cuts = collectAllCutPoints();
+        const current = Number(Number(state.currentTime || 0).toFixed(3));
+        if (direction === "prev") {
+          const prevs = cuts.filter((p) => p < current - 0.03);
+          if (prevs.length) {
+            const target = prevs[prevs.length - 1];
+            seekTimeline(target);
+            toast(`跳到上一个切点 (${formatTime(target)})`);
+          } else {
+            seekTimeline(0);
+          }
+        } else if (direction === "next") {
+          const nexts = cuts.filter((p) => p > current + 0.03);
+          if (nexts.length) {
+            const target = nexts[0];
+            seekTimeline(target);
+            toast(`跳到下一个切点 (${formatTime(target)})`);
+          } else {
+            seekTimeline(state.duration);
+          }
+        }
       }
       function timelineTimeFromClientX(clientX) {
         const scroll = $("timelineScroll");
@@ -12700,13 +12748,18 @@
       $("stepBack").onclick = () => seekTimeline(state.currentTime - 1 / 30);
       $("stepForward").onclick = () => seekTimeline(state.currentTime + 1 / 30);
       $("splitClip").onclick = splitSelected;
+      if ($("selectTool"))
+        $("selectTool").onclick = () => {
+          setEditTool("select");
+          toast("选择模式 (A)");
+        };
       if ($("bladeTool"))
         $("bladeTool").onclick = () => {
           setEditTool(editTool === "blade" ? "select" : "blade");
-          toast(editTool === "blade" ? "剃刀：点击片段切割" : "已退出剃刀");
+          toast(editTool === "blade" ? "剃刀模式 (B)：点击片段切割" : "选择模式 (A)");
         };
-      $("deleteClip").onclick = () => deleteSelected(false);
-      $("rippleDelete").onclick = () => deleteSelected(true);
+      $("deleteClip").onclick = () => deleteSelected(true);
+      $("rippleDelete").onclick = () => deleteSelected(false);
       $("undo").onclick = restoreSnapshot;
       $("redo").onclick = redoSnapshot;
       $("openProject").onclick = openProject;
@@ -13437,16 +13490,13 @@
                     return rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom;
                   })
                   .map((clip) => ({ type: clip.dataset.type, id: clip.dataset.id }));
-              if (!applyTimelineRangeSelection(range, hits, timelineDrag.additive)) {
-                const merged = timelineDrag.additive
-                  ? [...(state.selectedItems || []), ...hits]
-                  : hits;
-                state.timelineRange = null;
-                state.selectedItems = expandLinkedSelection(
-                  [...new Map(merged.map((item) => [selectionKey(item.type, item.id), item])).values()],
-                );
-                state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
-              }
+              const merged = timelineDrag.additive
+                ? [...(state.selectedItems || []), ...hits]
+                : hits;
+              state.selectedItems = expandLinkedSelection(
+                [...new Map(merged.map((item) => [selectionKey(item.type, item.id), item])).values()],
+              );
+              state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
               renderTimeline();
               renderPreviewObjects();
               updateInspector();
@@ -14906,6 +14956,20 @@
         } else if (code === "ArrowRight") {
           e.preventDefault();
           seekTimeline(state.currentTime + (e.shiftKey ? 1 : 1 / 30));
+        } else if (code === "ArrowUp") {
+          e.preventDefault();
+          jumpToCutPoint("prev");
+        } else if (code === "ArrowDown") {
+          e.preventDefault();
+          jumpToCutPoint("next");
+        } else if (code === "Home") {
+          e.preventDefault();
+          seekTimeline(0);
+          toast("时间线开头 (Home)");
+        } else if (code === "End") {
+          e.preventDefault();
+          seekTimeline(state.duration);
+          toast("时间线结尾 (End)");
         } else if (code === "KeyQ") trimAtPlayhead("left");
         else if (code === "KeyW") trimAtPlayhead("right");
         else if (code === "KeyJ") {
