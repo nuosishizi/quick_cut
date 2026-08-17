@@ -2173,12 +2173,12 @@ function buildExportGraph(config, info) {
       transformFilters = [
         ...oriented.filters,
       ];
+    const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+    const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
+    transformFilters.push(`scale=iw*${clipScale.toFixed(5)}:ih*${clipScale.toFixed(5)}:flags=lanczos+accurate_rnd`);
     if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
-      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
-      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
       transformFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
     }
-    transformFilters.push(`scale=iw*${clipScale.toFixed(5)}:ih*${clipScale.toFixed(5)}:flags=lanczos+accurate_rnd`);
     if (Math.abs(rotation) > 0.001)
       transformFilters.push(
         `rotate=${rotation.toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`,
@@ -2193,8 +2193,12 @@ function buildExportGraph(config, info) {
     graph.push(
       `[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},${padded}[mainraw${index}]`,
     );
-    const clipX = `(W-w)/2+${Math.round(Number(settings.x || 0))}`,
-      clipY = `(H-h)/2+${Math.round(Number(settings.y || 0))}`;
+    const clipX = (cropLeft > 0 || cropRight > 0)
+      ? `(W-w/${cropW.toFixed(5)})/2+${Math.round(Number(settings.x || 0))}+${(cropLeft / 100).toFixed(5)}*w/${cropW.toFixed(5)}`
+      : `(W-w)/2+${Math.round(Number(settings.x || 0))}`;
+    const clipY = (cropTop > 0 || cropBottom > 0)
+      ? `(H-h/${cropH.toFixed(5)})/2+${Math.round(Number(settings.y || 0))}+${(cropTop / 100).toFixed(5)}*h/${cropH.toFixed(5)}`
+      : `(H-h)/2+${Math.round(Number(settings.y || 0))}`;
     graph.push(
       `[maincanvas${index}][mainraw${index}]overlay=x='${clipX}':y='${clipY}':enable='between(t,${start.toFixed(5)},${end.toFixed(5)})':eof_action=pass:shortest=0[maincanvas${index + 1}]`,
     );
@@ -2371,14 +2375,14 @@ function buildExportGraph(config, info) {
     );
     const sourceDuration = clipDuration * speed;
     const videoFilters = [];
-    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
-      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
-      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
-      videoFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
-    }
+    const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+    const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
     videoFilters.push(
       `scale=w=${Math.max(8, Math.round(width * videoScale))}:h=${Math.max(8, Math.round(height * videoScale))}:force_original_aspect_ratio=decrease:flags=lanczos+accurate_rnd`,
     );
+    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
+      videoFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
+    }
     if (Math.abs(Number(video.rotation || 0)) > 0.001)
       videoFilters.push(
         `rotate=${Number(video.rotation).toFixed(4)}*PI/180:ow=rotw(iw):oh=roth(ih):c=none`,
@@ -2404,11 +2408,8 @@ function buildExportGraph(config, info) {
     const cropRight = Math.max(0, Math.min(95, Number(image.cropRight || 0)));
     const imageScale = Math.max(0.03, Number(image.scale ?? 1));
     const imageFilters = [];
-    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
-      const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
-      const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
-      imageFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
-    }
+    const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
+    const cropH = Math.max(0.01, 1 - (cropTop + cropBottom) / 100);
     if (!image.pixelExact) {
       if (image.sourceWidth && image.sourceHeight) {
         const targetW = Math.max(8, Math.round(Number(image.sourceWidth) * imageScale));
@@ -2417,6 +2418,9 @@ function buildExportGraph(config, info) {
       } else if (Math.abs(imageScale - 1) > 0.001) {
         imageFilters.push(`scale=trunc(iw*${imageScale.toFixed(4)}/2)*2:trunc(ih*${imageScale.toFixed(4)}/2)*2:flags=lanczos+accurate_rnd`);
       }
+    }
+    if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
+      imageFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
     }
     if (Math.abs(Number(image.rotation || 0)) > 0.001)
       imageFilters.push(
@@ -2543,8 +2547,20 @@ function buildExportGraph(config, info) {
           (!item.video.trackId && key === "video-overlay"),
       )) {
         layer += 1;
+        const vCropTop = Math.max(0, Math.min(95, Number(video.cropTop || 0)));
+        const vCropBottom = Math.max(0, Math.min(95, Number(video.cropBottom || 0)));
+        const vCropLeft = Math.max(0, Math.min(95, Number(video.cropLeft || 0)));
+        const vCropRight = Math.max(0, Math.min(95, Number(video.cropRight || 0)));
+        const vCropW = Math.max(0.01, 1 - (vCropLeft + vCropRight) / 100);
+        const vCropH = Math.max(0.01, 1 - (vCropTop + vCropBottom) / 100);
+        const vBaseX = (vCropLeft > 0 || vCropRight > 0)
+          ? `(W-w/${vCropW.toFixed(5)})/2+${Math.round(Number(video.x || 0))}+${(vCropLeft / 100).toFixed(5)}*w/${vCropW.toFixed(5)}`
+          : `(W-w)/2+${Math.round(Number(video.x || 0))}`;
+        const vBaseY = (vCropTop > 0 || vCropBottom > 0)
+          ? `(H-h/${vCropH.toFixed(5)})/2+${Math.round(Number(video.y || 0))}+${(vCropTop / 100).toFixed(5)}*h/${vCropH.toFixed(5)}`
+          : `(H-h)/2+${Math.round(Number(video.y || 0))}`;
         graph.push(
-          `[layer${layer - 1}]${label}overlay=x='(W-w)/2+${Math.round(Number(video.x || 0))}':y='(H-h)/2+${Math.round(Number(video.y || 0))}':enable='between(t,${Number(video.start || 0).toFixed(3)},${Number(video.end || info.duration).toFixed(3)})':eof_action=pass:shortest=0[layer${layer}]`,
+          `[layer${layer - 1}]${label}overlay=x='${vBaseX}':y='${vBaseY}':enable='between(t,${Number(video.start || 0).toFixed(3)},${Number(video.end || info.duration).toFixed(3)})':eof_action=pass:shortest=0[layer${layer}]`,
         );
       }
     } else if (kind === "image") {
@@ -2554,16 +2570,28 @@ function buildExportGraph(config, info) {
           (item.image.trackId === key || (!item.image.trackId && key === "image")),
       )) {
         layer += 1;
+        const iCropTop = Math.max(0, Math.min(95, Number(image.cropTop || 0)));
+        const iCropBottom = Math.max(0, Math.min(95, Number(image.cropBottom || 0)));
+        const iCropLeft = Math.max(0, Math.min(95, Number(image.cropLeft || 0)));
+        const iCropRight = Math.max(0, Math.min(95, Number(image.cropRight || 0)));
+        const iCropW = Math.max(0.01, 1 - (iCropLeft + iCropRight) / 100);
+        const iCropH = Math.max(0.01, 1 - (iCropTop + iCropBottom) / 100);
+        const iBaseX = (iCropLeft > 0 || iCropRight > 0)
+          ? `(W-w/${iCropW.toFixed(5)})/2+${Math.round(Number(image.x || 0))}+${(iCropLeft / 100).toFixed(5)}*w/${iCropW.toFixed(5)}`
+          : `(W-w)/2+${Math.round(Number(image.x || 0))}`;
+        const iBaseY = (iCropTop > 0 || iCropBottom > 0)
+          ? `(H-h/${iCropH.toFixed(5)})/2+${Math.round(Number(image.y || 0))}+${(iCropTop / 100).toFixed(5)}*h/${iCropH.toFixed(5)}`
+          : `(H-h)/2+${Math.round(Number(image.y || 0))}`;
         const imageX = animatedPosition(
           image,
           "x",
-          `(W-w)/2+${Math.round(Number(image.x || 0))}`,
+          iBaseX,
           220,
         );
         const imageY = animatedPosition(
           image,
           "y",
-          `(H-h)/2+${Math.round(Number(image.y || 0))}`,
+          iBaseY,
           220,
         );
         graph.push(
