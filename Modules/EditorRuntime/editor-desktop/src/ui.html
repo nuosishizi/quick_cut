@@ -12722,12 +12722,13 @@
           toast(error.message);
         }
       };
-      $("play").onclick = () => {
-        blurActiveTextField();
-        togglePlay();
-      };
-      $("toStart").onclick = () => seekTimeline(0);
-      $("toEnd").onclick = () => seekTimeline(state.duration);
+      if ($("play"))
+        $("play").onclick = () => {
+          blurActiveTextField();
+          togglePlay();
+        };
+      if ($("toStart")) $("toStart").onclick = () => seekTimeline(0);
+      if ($("toEnd")) $("toEnd").onclick = () => seekTimeline(state.duration);
       if ($("loopPlayback"))
         $("loopPlayback").onclick = () => {
           state.loopPlayback = !state.loopPlayback;
@@ -12735,15 +12736,16 @@
           $("loopPlayback").classList.toggle("primary", state.loopPlayback);
           toast(state.loopPlayback ? "循环播放已开启" : "循环播放已关闭");
         };
-      $("pauseCut").onclick = runPauseCut;
-      $("addTrack").onclick = () => {
-        addText();
-        document.querySelector('[data-inspect="basic"]')?.click();
-        requestAnimationFrame(() => {
-          $("objectText").focus();
-          $("objectText").select();
-        });
-      };
+      if ($("pauseCut")) $("pauseCut").onclick = runPauseCut;
+      if ($("addTrack"))
+        $("addTrack").onclick = () => {
+          addText();
+          document.querySelector('[data-inspect="basic"]')?.click();
+          requestAnimationFrame(() => {
+            $("objectText")?.focus();
+            $("objectText")?.select();
+          });
+        };
       $("trackMenu").onclick = (event) => {
         if (event.target.closest("[data-add-text]")) {
           $("trackMenu").classList.remove("on");
