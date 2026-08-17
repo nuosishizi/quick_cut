@@ -14886,9 +14886,17 @@
               recomputeContentDuration();
             } else {
               const speed = Math.max(0.05, Number(state.audio.speed || 1));
+              const originStart = Number(timelineDrag.originStart);
+              const originEnd = Number(timelineDrag.originEnd);
+              const edgeTime = Number(timelineDrag.mainTrimTime);
+              const globalOffset = Math.max(0, Number(state.mainTimelineOffset || 0));
+
+              const targetStart = timelineDrag.trimEdge === "start" ? edgeTime : originStart;
+              const targetEnd = timelineDrag.trimEdge === "end" ? edgeTime : originEnd;
+
               const targetSource = timelineDrag.trimEdge === "start"
-                ? Math.max(0, Number(clip.sourceStart || 0) + (Number(timelineDrag.mainTrimTime) - Number(timelineDrag.originStart)) * speed)
-                : Math.max(0, Number(clip.sourceEnd || 0) + (Number(timelineDrag.mainTrimTime) - Number(timelineDrag.originEnd)) * speed);
+                ? Math.max(0, Number(clip.sourceStart || 0) + (edgeTime - originStart) * speed)
+                : Math.max(0, Number(clip.sourceEnd || 0) + (edgeTime - originEnd) * speed);
 
               const trimResult = applyMainTrimEdge(
                 state.removals,
@@ -14901,20 +14909,42 @@
 
               state.removals = trimResult.removals;
               state.manualCuts = trimResult.manualCuts;
-
-              const deltaTimeline = trimResult.deltaSource / speed;
-              const shiftFrom = timelineDrag.trimEdge === "start"
-                ? Number(timelineDrag.originStart)
-                : Number(timelineDrag.originEnd);
-
-              if (deltaTimeline > 0.001) {
-                // Outward recovery / expansion: shift downstream items right
-                rippleShiftAllTracks(state, shiftFrom, deltaTimeline);
-              } else if (deltaTimeline < -0.001) {
-                // Inward trim / cutting: shift downstream items left
-                shiftTracks(shiftFrom, -deltaTimeline);
-              }
               normalizeRemovals();
+
+              // Transfer settings and compute exact required offset for the new clip
+              const baseClips = baseMainClips();
+              const matchingClip = baseClips.find(
+                (item) => item.sourceStart >= targetSource - 0.05 && item.sourceStart <= targetSource + 0.05,
+              ) || baseClips.find(
+                (item) => item.sourceEnd >= targetSource - 0.05 && item.sourceEnd <= targetSource + 0.05,
+              ) || baseClips.find(
+                (item) => targetSource >= item.sourceStart && targetSource <= item.sourceEnd,
+              );
+
+              if (matchingClip) {
+                const requiredOffset = targetStart - matchingClip.start - globalOffset;
+                state.mainVideoClipOffsets[matchingClip.id] = requiredOffset;
+                state.mainAudioClipOffsets[matchingClip.id] = requiredOffset;
+
+                if (state.mainVideoClipSettings?.[clip.id]) {
+                  state.mainVideoClipSettings[matchingClip.id] = { ...state.mainVideoClipSettings[clip.id] };
+                }
+                if (state.mainVideoTrackMap?.[clip.id]) {
+                  state.mainVideoTrackMap[matchingClip.id] = state.mainVideoTrackMap[clip.id];
+                }
+                if (state.mainAudioTrackMap?.[clip.id]) {
+                  state.mainAudioTrackMap[matchingClip.id] = state.mainAudioTrackMap[clip.id];
+                }
+              }
+
+              if (clip.id && matchingClip && clip.id !== matchingClip.id) {
+                delete state.mainVideoClipOffsets[clip.id];
+                delete state.mainAudioClipOffsets[clip.id];
+                delete state.mainVideoTrackMap[clip.id];
+                delete state.mainAudioTrackMap[clip.id];
+                delete state.mainVideoClipSettings[clip.id];
+              }
+
               recomputeContentDuration();
             }
             renderAll();

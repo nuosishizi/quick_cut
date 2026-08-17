@@ -343,3 +343,11 @@ test("ripple shift shifts downstream items across all tracks", () => {
   assert.equal(state.captions[0].words[0].start, 13);
 });
 
+test("trimming head of downstream clip preserves timeline gap and does not collapse into front clip", () => {
+  const removals = [{ start: 10, end: 15, source: "pause" }];
+  const clip = { id: "v-15.0000-30.0000", sourceStart: 15, sourceEnd: 30, start: 15, end: 30 };
+  const trimResult = applyMainTrimEdge(removals, [], clip, "start", 18, 30);
+  assert.equal(trimResult.deltaSource, -3);
+  assert.deepEqual(trimResult.removals, [{ start: 10, end: 18, source: "pause" }]);
+});
+
