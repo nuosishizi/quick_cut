@@ -9299,8 +9299,94 @@
         };
         playbackAnimationFrame = requestAnimationFrame(tick);
       }
+      let shuttleSpeed = 0;
+      let shuttleTimer = null;
+      function stopShuttle(pauseVideo = true) {
+        if (shuttleTimer) {
+          clearInterval(shuttleTimer);
+          shuttleTimer = null;
+        }
+        shuttleSpeed = 0;
+        if (pauseVideo && state.playing) {
+          $("video").pause();
+          state.playing = false;
+          $("play").textContent = "▶";
+          syncPreviewAudio();
+          renderPreviewObjects(false);
+        }
+        const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
+        $("video").playbackRate = baseSpeed;
+      }
+      function handleShuttleKey(key) {
+        if (!state.video) return;
+        if (key === "KeyK") {
+          stopShuttle(true);
+          toast("暂停 (K)");
+          return;
+        }
+        if (key === "KeyL") {
+          if (shuttleTimer) {
+            clearInterval(shuttleTimer);
+            shuttleTimer = null;
+          }
+          if (shuttleSpeed <= 0) {
+            shuttleSpeed = 1;
+          } else if (shuttleSpeed < 16) {
+            shuttleSpeed *= 2;
+          }
+          const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
+          if (!state.playing) {
+            state.playing = true;
+            $("video").play().catch(() => {});
+            startPlaybackAnimationLoop();
+            $("play").textContent = "❚❚";
+          }
+          $("video").playbackRate = Math.min(16, baseSpeed * shuttleSpeed);
+          toast(`⚡ 快进穿梭播放：${shuttleSpeed}x (L)`);
+          return;
+        }
+        if (key === "KeyJ") {
+          if (shuttleSpeed > 1) {
+            shuttleSpeed = Math.floor(shuttleSpeed / 2);
+            const baseSpeed = clamp(Number(state.audio.speed || 1), 0.5, 2);
+            $("video").playbackRate = Math.min(16, baseSpeed * shuttleSpeed);
+            toast(`⚡ 快进穿梭播放：${shuttleSpeed}x (L)`);
+            return;
+          }
+          if (state.playing) {
+            $("video").pause();
+            state.playing = false;
+            $("play").textContent = "▶";
+          }
+          if (shuttleSpeed >= 0) {
+            shuttleSpeed = -1;
+          } else if (shuttleSpeed > -16) {
+            shuttleSpeed *= 2;
+          }
+          if (shuttleTimer) clearInterval(shuttleTimer);
+          const absSpeed = Math.abs(shuttleSpeed);
+          const stepInterval = 40;
+          const stepDuration = (stepInterval / 1000) * absSpeed;
+          shuttleTimer = setInterval(() => {
+            const next = state.currentTime - stepDuration;
+            if (next <= 0) {
+              seekTimeline(0);
+              stopShuttle(true);
+            } else {
+              seekTimeline(next);
+            }
+          }, stepInterval);
+          toast(`⏪ 倒放穿梭：${absSpeed}x (J)`);
+        }
+      }
       async function togglePlay() {
         if (!state.video) return;
+        if (shuttleTimer) {
+          clearInterval(shuttleTimer);
+          shuttleTimer = null;
+        }
+        shuttleSpeed = 0;
+        $("video").playbackRate = clamp(Number(state.audio.speed || 1), 0.5, 2);
         if (state.playing) {
           $("video").pause();
           state.playing = false;
@@ -9973,6 +10059,23 @@
           requested.filter((item) => !selectionIsLocked(item.type, item.id)),
         );
         if (!selected.length) {
+          // Check if playhead is situated inside an empty gap between video clips (DaVinci Gap Ripple Delete)
+          const time = state.currentTime;
+          const clips = mainClips().sort((a, b) => a.start - b.start);
+          for (let i = 0; i < clips.length; i++) {
+            const prevEnd = i === 0 ? 0 : clips[i - 1].end;
+            const nextStart = clips[i].start;
+            if (nextStart > prevEnd + 0.04 && time >= prevEnd && time <= nextStart) {
+              const gapLen = nextStart - prevEnd;
+              snapshot();
+              shiftTracks(prevEnd, gapLen);
+              recomputeContentDuration();
+              seekTimeline(prevEnd);
+              renderAll();
+              toast(`已波纹闭合空白间隙 (${gapLen.toFixed(2)}s)`);
+              return;
+            }
+          }
           toast(requested.length ? "所选轨道已锁定" : "请先选择一个或多个片段");
           return;
         }
@@ -14709,6 +14812,47 @@
           }
           return;
         }
+        if (code === "KeyA" && !command && !textEditing) {
+          e.preventDefault();
+          if (editTool !== "select") {
+            setEditTool("select");
+            toast("选择模式 (A)");
+          }
+          return;
+        }
+        if (code === "KeyZ" && e.shiftKey && !command && !textEditing) {
+          e.preventDefault();
+          zoomToFitTimeline();
+          toast("缩放以适应时间线 (Shift+Z)");
+          return;
+        }
+        if (code === "KeyI" && !command && !textEditing) {
+          e.preventDefault();
+          const end = state.timelineRange?.end && state.timelineRange.end > state.currentTime
+            ? state.timelineRange.end
+            : state.duration;
+          state.timelineRange = { start: state.currentTime, end, types: [] };
+          syncTimelineRangeOverlay();
+          toast(`标记入点 In (${formatTime(state.currentTime)})`);
+          return;
+        }
+        if (code === "KeyO" && !command && !textEditing) {
+          e.preventDefault();
+          const start = state.timelineRange?.start && state.timelineRange.start < state.currentTime
+            ? state.timelineRange.start
+            : 0;
+          state.timelineRange = { start, end: state.currentTime, types: [] };
+          syncTimelineRangeOverlay();
+          toast(`标记出点 Out (${formatTime(state.currentTime)})`);
+          return;
+        }
+        if (code === "KeyX" && e.altKey && !textEditing) {
+          e.preventDefault();
+          state.timelineRange = null;
+          syncTimelineRangeOverlay();
+          toast("已清除入点/出点选区 (Alt+X)");
+          return;
+        }
         if (command && code === "KeyA" && !textEditing) {
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -14736,7 +14880,7 @@
         if (code === "KeyB" && !command && !textEditing) {
           e.preventDefault();
           setEditTool(editTool === "blade" ? "select" : "blade");
-          toast(editTool === "blade" ? "剃刀：点击片段切割" : "已退出剃刀");
+          toast(editTool === "blade" ? "剃刀模式 (B)：点击片段切割" : "选择模式 (A)");
           return;
         }
         if (code === "KeyN" && !command && !textEditing) {
@@ -14748,8 +14892,13 @@
         if (code === "Space") {
           e.preventDefault();
           togglePlay();
-        } else if (code === "Delete" || code === "Backspace") {
+        } else if (code === "Delete") {
           e.preventDefault();
+          // 达芬奇标准：Delete 键为波纹删除（Ripple Delete，后方片段自动靠拢）
+          deleteSelected(!e.shiftKey);
+        } else if (code === "Backspace") {
+          e.preventDefault();
+          // 达芬奇标准：Backspace 键为普通删除（Lift 原地留空），Shift+Backspace 为波纹删除
           deleteSelected(!!e.shiftKey);
         } else if (code === "ArrowLeft") {
           e.preventDefault();
@@ -14760,17 +14909,18 @@
         } else if (code === "KeyQ") trimAtPlayhead("left");
         else if (code === "KeyW") trimAtPlayhead("right");
         else if (code === "KeyJ") {
-          snapshot();
-          retimeTracksForSpeed((state.audio.speed || 1) - 0.1);
-          renderAll();
+          e.preventDefault();
+          handleShuttleKey("KeyJ");
+        } else if (code === "KeyK") {
+          e.preventDefault();
+          handleShuttleKey("KeyK");
         } else if (code === "KeyL") {
-          snapshot();
-          retimeTracksForSpeed((state.audio.speed || 1) + 0.1);
-          renderAll();
+          e.preventDefault();
+          handleShuttleKey("KeyL");
         } else if (code === "Escape") {
           if (editTool === "blade") {
             setEditTool("select");
-            toast("已退出剃刀");
+            toast("选择模式 (A)");
           }
           hideSnapGuide();
           state.selectedItems = [];
