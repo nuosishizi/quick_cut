@@ -2827,17 +2827,12 @@
         padding-right: 2px;
         margin-bottom: 6px;
       }
-      .polish-bottom-actions {
-        flex-shrink: 0;
-        padding-top: 8px;
-        border-top: 1px solid var(--line);
-        background: inherit;
+      .polish-actions-bar {
+        margin-top: 4px;
+        margin-bottom: 8px;
         display: flex;
         gap: 6px;
         align-items: center;
-        position: sticky;
-        bottom: 0;
-        z-index: 10;
       }
       .polish-card {
         background: #1a1c1e;
@@ -3218,18 +3213,18 @@
                   <button class="btn small" data-polish-filter="missing" id="filterPolishMissing">缺读待补 (0)</button>
                   <button class="btn small" data-polish-filter="notes" id="filterPolishNotes">已清备注 (0)</button>
                 </div>
+
+                <!-- 顶部固定批量动作栏（紧随分类标签，不随列表滚动） -->
+                <div class="polish-actions-bar">
+                  <button class="btn small" id="selectAllPolishBtn">全选建议</button>
+                  <button class="btn small" id="invertSelectPolishBtn">反选</button>
+                  <button class="btn primary small grow" id="applyPauseGapsSidebarBtn" style="font-weight:600;">✂ 切勾选气口 (<span id="checkedGapsCount">0</span>)</button>
+                </div>
               </div>
 
-              <!-- 体检卡片列表 -->
+              <!-- 体检卡片独立向下滚动列表 -->
               <div class="polish-list" id="globalPolishListSidebar">
                 <div class="small" style="text-align:center; padding:24px 0; color:var(--muted);">暂无体检结果，请先点击上方「⚡ 一键体检」</div>
-              </div>
-
-              <!-- 底部批量动作栏 -->
-              <div class="polish-bottom-actions">
-                <button class="btn small" id="selectAllPolishBtn">全选建议</button>
-                <button class="btn small" id="invertSelectPolishBtn">反选</button>
-                <button class="btn primary small grow" id="applyPauseGapsSidebarBtn" style="font-weight:600;">✂ 切勾选气口 (<span id="checkedGapsCount">0</span>)</button>
               </div>
             </div>
             <div class="sidepage" id="side-style">
