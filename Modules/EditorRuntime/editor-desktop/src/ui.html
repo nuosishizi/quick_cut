@@ -14529,6 +14529,13 @@
                 trimType: clip.dataset.type,
                 trimObject: object,
                 mainTrimClip: mainClip,
+                mainClipsSnapshot: mainClips().map((c) => ({
+                  id: c.id,
+                  start: Number(c.start),
+                  end: Number(c.end),
+                  sourceStart: Number(c.sourceStart),
+                  sourceEnd: Number(c.sourceEnd),
+                })),
                 startX: e.clientX,
                 originStart: Number((object || mainClip).start),
                 originEnd: Number((object || mainClip).end),
@@ -14731,12 +14738,18 @@
             } else if (timelineDrag.mainTrimClip) {
               const clip = timelineDrag.mainTrimClip;
               const speed = Math.max(0.05, Number(state.audio.speed || 1));
+              const prevClip = (timelineDrag.mainClipsSnapshot || []).filter(
+                (c) => c.id !== clip.id && c.end <= timelineDrag.originStart + 0.01,
+              ).sort((a, b) => b.end - a.end)[0];
+              const nextClip = (timelineDrag.mainClipsSnapshot || []).filter(
+                (c) => c.id !== clip.id && c.start >= timelineDrag.originEnd - 0.01,
+              ).sort((a, b) => a.start - b.start)[0];
               const minTimeline = edge === "start"
-                ? Math.max(0, timelineDrag.originStart - Number(clip.sourceStart || 0) / speed)
+                ? Math.max(prevClip ? prevClip.end : 0, timelineDrag.originStart - Number(clip.sourceStart || 0) / speed)
                 : timelineDrag.originStart + 0.04;
               const maxTimeline = edge === "start"
                 ? timelineDrag.originEnd - 0.04
-                : timelineDrag.originStart + (Number(state.sourceDuration || 0) - Number(clip.sourceStart || 0)) / speed;
+                : Math.min(nextClip ? nextClip.start : Infinity, timelineDrag.originStart + (Number(state.sourceDuration || 0) - Number(clip.sourceStart || 0)) / speed);
               const rawTime = clamp(
                 (edge === "start" ? timelineDrag.originStart : timelineDrag.originEnd) + delta,
                 minTimeline,
@@ -14934,6 +14947,41 @@
                 }
                 if (state.mainAudioTrackMap?.[clip.id]) {
                   state.mainAudioTrackMap[matchingClip.id] = state.mainAudioTrackMap[clip.id];
+                }
+              }
+
+              // Lock all other untouched clips to their exact pre-trim timeline positions!
+              const untouchedSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
+                (s) => s.id !== clip.id,
+              );
+              for (const snap of untouchedSnapshots) {
+                const otherBase = baseClips.find(
+                  (item) => item !== matchingClip && (
+                    (item.sourceStart >= snap.sourceStart - 0.05 && item.sourceEnd <= snap.sourceEnd + 0.05) ||
+                    Math.abs(item.sourceStart - snap.sourceStart) < 0.05 ||
+                    Math.abs(item.sourceEnd - snap.sourceEnd) < 0.05
+                  ),
+                );
+                if (otherBase) {
+                  const otherOffset = snap.start - otherBase.start - globalOffset;
+                  state.mainVideoClipOffsets[otherBase.id] = otherOffset;
+                  state.mainAudioClipOffsets[otherBase.id] = otherOffset;
+                  if (snap.id && snap.id !== otherBase.id) {
+                    if (state.mainVideoClipSettings?.[snap.id]) {
+                      state.mainVideoClipSettings[otherBase.id] = { ...state.mainVideoClipSettings[snap.id] };
+                    }
+                    if (state.mainVideoTrackMap?.[snap.id]) {
+                      state.mainVideoTrackMap[otherBase.id] = state.mainVideoTrackMap[snap.id];
+                    }
+                    if (state.mainAudioTrackMap?.[snap.id]) {
+                      state.mainAudioTrackMap[otherBase.id] = state.mainAudioTrackMap[snap.id];
+                    }
+                    delete state.mainVideoClipOffsets[snap.id];
+                    delete state.mainAudioClipOffsets[snap.id];
+                    delete state.mainVideoTrackMap[snap.id];
+                    delete state.mainAudioTrackMap[snap.id];
+                    delete state.mainVideoClipSettings[snap.id];
+                  }
                 }
               }
 
