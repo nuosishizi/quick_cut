@@ -14782,12 +14782,18 @@
                 maxTimeline,
               );
               timelineDrag.mainTrimTime = snapTime(rawTime, clip);
-              const start = edge === "start"
+              let start, end;
+              if (timelineDrag.isRipple && edge === "start") {
+                start = timelineDrag.originStart;
+                end = Math.max(start + 0.04, timelineDrag.originEnd - delta);
+              } else {
+                start = edge === "start"
                   ? timelineDrag.mainTrimTime
-                  : timelineDrag.originStart,
+                  : timelineDrag.originStart;
                 end = edge === "end"
                   ? timelineDrag.mainTrimTime
                   : timelineDrag.originEnd;
+              }
               if (timelineDrag.element) {
                 timelineDrag.element.style.left = `${start * state.zoom}px`;
                 timelineDrag.element.style.width = `${Math.max(3, (end - start) * state.zoom)}px`;
@@ -14930,12 +14936,16 @@
               const edgeTime = Number(timelineDrag.mainTrimTime);
               const globalOffset = Math.max(0, Number(state.mainTimelineOffset || 0));
 
-              const targetStart = timelineDrag.trimEdge === "start" ? edgeTime : originStart;
-              const targetEnd = timelineDrag.trimEdge === "end" ? edgeTime : originEnd;
+              const targetStart = (timelineDrag.isRipple || timelineDrag.trimEdge === "end")
+                ? originStart
+                : edgeTime;
+              const delta = timelineDrag.trimEdge === "start"
+                ? (edgeTime - originStart)
+                : (edgeTime - originEnd);
 
               const targetSource = timelineDrag.trimEdge === "start"
-                ? Math.max(0, Number(clip.sourceStart || 0) + (edgeTime - originStart) * speed)
-                : Math.max(0, Number(clip.sourceEnd || 0) + (edgeTime - originEnd) * speed);
+                ? Math.max(0, Number(clip.sourceStart || 0) + delta * speed)
+                : Math.max(0, Number(clip.sourceEnd || 0) + delta * speed);
 
               const trimResult = applyMainTrimEdge(
                 state.removals,
@@ -14978,7 +14988,7 @@
 
               if (timelineDrag.isRipple) {
                 const deltaTimeline = trimResult.deltaSource / speed;
-                const shiftFrom = timelineDrag.trimEdge === "start" ? originStart : originEnd;
+                const shiftFrom = originEnd;
                 if (deltaTimeline > 0.001) {
                   rippleShiftAllTracks(state, shiftFrom, deltaTimeline);
                 } else if (deltaTimeline < -0.001) {
