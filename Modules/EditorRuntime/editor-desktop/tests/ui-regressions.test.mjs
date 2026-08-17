@@ -454,6 +454,12 @@ test("export defaults balance Apple hardware speed and Rec. 709 quality", () => 
   assert.match(media, /preferredExportDecodeKind/);
   assert.match(media, /exportIsStalled/);
   assert.match(media, /EXPORT_ENCODE_STALL_MS/);
+  assert.match(media, /EXPORT_SOFTWARE_STALL_MS/);
+  assert.match(media, /shouldSkipHardwareForBusyGpu/);
+  assert.match(media, /encoderStallMessage/);
+  assert.match(media, /forceKillProcess/);
+  assert.match(media, /mainClipsUseConcat/);
+  assert.match(media, /concat=n=\$\{labels\.length\}:v=1:a=0/);
   assert.match(ui, /NVIDIA 显卡加速导出/);
   assert.match(ui, /function hardwareExportLabel/);
   assert.match(ui, /id="exportUseGpu"/);

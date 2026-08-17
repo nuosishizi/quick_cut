@@ -7898,22 +7898,32 @@
             if (end <= start + 0.01) continue;
             const shot = paintCaptionFrame(caption, style, start + 0.001, boxWidth, scale);
             if (!shot?.canvas) continue;
+            const frame = document.createElement("canvas");
+            frame.width = frameW;
+            frame.height = frameH;
+            const ctx = frame.getContext("2d");
+            ctx.clearRect(0, 0, frameW, frameH);
+            ctx.drawImage(
+              shot.canvas,
+              frameW / 2 + shiftX - shot.width / 2,
+              frameH / 2 + shiftY - shot.height / 2,
+            );
             const dest = await nativeCall("writeCaptionRaster", {
               directory,
               name: `c${serial}.png`,
-              dataUrl: shot.canvas.toDataURL("image/png"),
+              dataUrl: frame.toDataURL("image/png"),
             });
             serial += 1;
-            const sx = frameW / 2 + shiftX - shot.width / 2;
-            const sy = frameH / 2 + shiftY - shot.height / 2;
-            const offset = captionRasterOverlayOffset(frameW, frameH, sx, sy, shot.width, shot.height);
             images.push({
               path: dest,
               start,
               end,
-              x: offset.x,
-              y: offset.y,
+              x: 0,
+              y: 0,
               pixelExact: true,
+              fullFrame: true,
+              sourceWidth: frameW,
+              sourceHeight: frameH,
               opacity: 1,
               _quickCutCaptionRaster: true,
               trackId: "caption",

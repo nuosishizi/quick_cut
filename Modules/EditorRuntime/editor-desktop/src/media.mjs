@@ -265,9 +265,87 @@ export function encoderDisplayName(encoder = "") {
 }
 
 export const EXPORT_ENCODE_STALL_MS = 15_000;
+export const EXPORT_SOFTWARE_STALL_MS = 90_000;
+export const EXPORT_BUSY_GPU_STALL_MS = 8_000;
+const BUSY_GPU_PROCESS_LABELS = [
+  ["resolve.exe", "达芬奇"],
+  ["davinci resolve.exe", "达芬奇"],
+  ["adobe premiere pro.exe", "Premiere"],
+  ["premiere pro.exe", "Premiere"],
+  ["afterfx.exe", "After Effects"],
+  ["adobe media encoder.exe", "Media Encoder"],
+];
+
+export function isHardwareEncoder(encoder = "") {
+  return /videotoolbox|nvenc|amf|qsv|_mf$/.test(String(encoder || ""));
+}
+
+export function listBusyGpuApps() {
+  if (!isWindows) return [];
+  try {
+    const result = spawnSync("tasklist", ["/FO", "CSV", "/NH"], {
+      encoding: "utf8",
+      timeout: 4000,
+      windowsHide: true,
+    });
+    const text = `${result.stdout || ""}`.toLowerCase();
+    const found = [];
+    for (const [exe, label] of BUSY_GPU_PROCESS_LABELS) {
+      if (text.includes(exe) && !found.includes(label)) found.push(label);
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
+export function shouldSkipHardwareForBusyGpu(encoder, busyApps = []) {
+  return Array.isArray(busyApps) && busyApps.length > 0 && /qsv/i.test(String(encoder || ""));
+}
+
+export function exportStallLimit(job = {}) {
+  if (isHardwareEncoder(job.encoder))
+    return job.gpuBusy ? EXPORT_BUSY_GPU_STALL_MS : EXPORT_ENCODE_STALL_MS;
+  if (String(job.encoder || "").startsWith("libx") || job.encoder === "copy")
+    return EXPORT_SOFTWARE_STALL_MS;
+  return EXPORT_ENCODE_STALL_MS;
+}
+
+export function encoderStallMessage(job = {}) {
+  if (isHardwareEncoder(job.encoder))
+    return "编码器长时间没有输出画面。请改勾 CPU，或先关掉达芬奇/其他占用显卡的软件。";
+  return "编码器长时间没有输出画面。请检查素材是否能打开，或先关掉占满 CPU 的软件后重试。";
+}
+
+export function forceKillProcess(child) {
+  if (!child) return;
+  try {
+    child.kill();
+  } catch {
+    /* already stopped */
+  }
+  const pid = Number(child.pid || 0);
+  if (!pid) return;
+  if (process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        timeout: 4000,
+      });
+    } catch {
+      /* process already gone */
+    }
+    return;
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    /* already stopped */
+  }
+}
 
 export function preferredExportDecodeKind(encoder, hardwareDecode = "") {
-  const hardwareEncode = /videotoolbox|nvenc|amf|qsv|_mf$/.test(String(encoder || ""));
+  const hardwareEncode = isHardwareEncoder(encoder);
   if (!hardwareEncode) return "";
   // CUDA/QSV/D3D11 decode + CPU filter_complex (captions, color, scale)
   // often sits on frame 0. GPU encode still runs; only skip GPU decode.
@@ -276,11 +354,12 @@ export function preferredExportDecodeKind(encoder, hardwareDecode = "") {
   return "";
 }
 
-export function exportIsStalled(job, now = Date.now(), limit = EXPORT_ENCODE_STALL_MS) {
+export function exportIsStalled(job, now = Date.now(), limit) {
   if (!job || job.frameProgress) return false;
   if (!["exporting", "preparing"].includes(String(job.state || ""))) return false;
   const last = Number(job.lastProgressAt || job.startedAt || now);
-  return now - last >= limit;
+  const wait = Number(limit > 0 ? limit : exportStallLimit(job));
+  return now - last >= wait;
 }
 
 function decodeAccelArgs(kind) {
@@ -323,7 +402,7 @@ export function videoEncodeArgs(encoder, options = {}) {
     args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1", "-realtime", "true");
   if (encoder === "h264_nvenc" || encoder === "hevc_nvenc") {
     const preset = qualityMode === "fast" ? "p7" : qualityMode === "maximum" ? "p3" : "p5";
-    const lookahead = qualityMode === "fast" ? 0 : qualityMode === "maximum" ? 20 : 8;
+    const lookahead = options.gpuBusy || qualityMode === "fast" ? 0 : qualityMode === "maximum" ? 20 : 8;
     args.push("-preset", preset, "-rc", "vbr", "-gpu", "0", "-rc-lookahead", String(lookahead));
     if (encoder === "hevc_nvenc")
       args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1");
@@ -340,6 +419,7 @@ export function videoEncodeArgs(encoder, options = {}) {
   }
   if (encoder === "h264_qsv" || encoder === "hevc_qsv") {
     args.push("-preset", qualityMode === "fast" ? "veryfast" : qualityMode === "maximum" ? "slow" : "medium");
+    if (options.gpuBusy) args.push("-async_depth", "1");
     if (encoder === "hevc_qsv")
       args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1");
   }
@@ -937,11 +1017,125 @@ export function collectExportExtraInputs(config = {}) {
   const extraInputs = [];
   for (const video of config.videoLayers || []) extraInputs.push("-i", video.path);
   for (const image of config.images || []) {
+    if (image?._quickCutCaptionConcat) {
+      extraInputs.push("-f", "concat", "-safe", "0", "-i", image.path);
+      continue;
+    }
     if (viaMovie && image?._quickCutCaptionRaster) continue;
     extraInputs.push("-loop", "1", "-i", image.path);
   }
   for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
   return { extraInputs, captionRastersViaMovie: viaMovie };
+}
+
+function concatFileRef(filePath) {
+  return `'${String(filePath || "").replace(/\\/g, "/").replace(/'/g, "'\\''")}'`;
+}
+
+function writeTransparentPng(dest, width, height) {
+  const result = spawnSync(
+    mediaBinary("ffmpeg"),
+    [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      `color=c=black@0.0:s=${Math.max(2, width)}x${Math.max(2, height)}:r=1:d=0.04`,
+      "-vf",
+      "format=rgba,colorchannelmixer=aa=0",
+      "-frames:v",
+      "1",
+      dest,
+    ],
+    { windowsHide: true, timeout: 20000 },
+  );
+  return result.status === 0 && fs.existsSync(dest);
+}
+
+function padRasterToFrame(image, dest, frameW, frameH) {
+  const srcW = Math.max(0, Number(image.sourceWidth || 0));
+  const srcH = Math.max(0, Number(image.sourceHeight || 0));
+  const vf = srcW > 0 && srcH > 0
+    ? `pad=${frameW}:${frameH}:${Math.round((frameW - srcW) / 2 + Number(image.x || 0))}:${Math.round((frameH - srcH) / 2 + Number(image.y || 0))}:black@0`
+    : `pad=${frameW}:${frameH}:(ow-iw)/2+${Number(image.x || 0)}:(oh-ih)/2+${Number(image.y || 0)}:black@0`;
+  const result = spawnSync(
+    mediaBinary("ffmpeg"),
+    [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      image.path,
+      "-vf",
+      vf,
+      "-frames:v",
+      "1",
+      dest,
+    ],
+    { windowsHide: true, timeout: 30000 },
+  );
+  return result.status === 0 && fs.existsSync(dest) ? dest : "";
+}
+
+export function composeCaptionRasterConcat(config = {}, info = {}) {
+  const rasters = captionRasterItems(config).sort(
+    (left, right) => Number(left.start || 0) - Number(right.start || 0),
+  );
+  if (rasters.length < 2) return "";
+  const width = Math.max(2, Math.round(Number(config.width || info.width || 1080)));
+  const height = Math.max(2, Math.round(Number(config.height || info.height || 1920)));
+  const duration = Math.max(0.04, Number(config.outputDuration || info.duration || 1));
+  const directory = config.captionRasterDirectory
+    || path.join(supportRoot(), "temp", `caption-concat-${crypto.randomUUID()}`);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const emptyPath = path.join(directory, "empty.png");
+  if (!writeTransparentPng(emptyPath, width, height)) return "";
+  const files = rasters.map((image, index) => {
+    if (image.fullFrame || (Number(image.sourceWidth) === width && Number(image.sourceHeight) === height))
+      return image.path;
+    return padRasterToFrame(image, path.join(directory, `full-${index}.png`), width, height) || image.path;
+  });
+  const lines = ["ffconcat version 1.0"];
+  let cursor = 0;
+  rasters.forEach((image, index) => {
+    const start = Math.max(0, Number(image.start || 0));
+    const end = Math.max(start + 0.02, Number(image.end || start));
+    if (start > cursor + 0.005) {
+      lines.push(`file ${concatFileRef(emptyPath)}`);
+      lines.push(`duration ${(start - cursor).toFixed(3)}`);
+    }
+    lines.push(`file ${concatFileRef(files[index])}`);
+    lines.push(`duration ${(end - start).toFixed(3)}`);
+    cursor = Math.max(cursor, end);
+  });
+  if (cursor < duration - 0.005) {
+    lines.push(`file ${concatFileRef(emptyPath)}`);
+    lines.push(`duration ${(duration - cursor).toFixed(3)}`);
+  }
+  lines.push(`file ${concatFileRef(emptyPath)}`);
+  const listPath = path.join(directory, "captions.concat");
+  fs.writeFileSync(listPath, `${lines.join("\n")}\n`, "utf8");
+  config.images = [
+    ...(config.images || []).filter((image) => !image?._quickCutCaptionRaster),
+    {
+      path: listPath,
+      start: 0,
+      end: duration,
+      x: 0,
+      y: 0,
+      pixelExact: true,
+      fullFrame: true,
+      _quickCutCaptionRaster: true,
+      _quickCutCaptionConcat: true,
+      trackId: "caption",
+    },
+  ];
+  config.captionRasterized = true;
+  return listPath;
 }
 
 export function shouldWriteFilterComplexScript(args = [], options = {}) {
@@ -1916,17 +2110,45 @@ function buildExportGraph(config, info) {
     Number(config.outputDuration || legacyCursor || info.duration),
   );
   const oriented = sourceOrientationFilters(info, { width, height });
-  const linearCutMode = !!config.optimizeLinearCuts && !hasExplicitMainClips && mainVideoClips.length > 1;
+  const linearCutMode = mainClipsUseConcat(mainVideoClips);
   if (linearCutMode) {
     const labels = [];
-    mainVideoClips.forEach((clip, index) => {
-      const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
-      const sourceEnd = Math.max(sourceStart + 0.002, Number(clip.sourceEnd || sourceStart + 0.002));
-      graph.push(`[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},setpts=PTS-STARTPTS,${oriented.filters.join(",")}[vcut${index}]`);
-      labels.push(`[vcut${index}]`);
-    });
-    graph.push(`${labels.join("")}concat=n=${labels.length}:v=1:a=0[joinedv0]`);
-    graph.push(`[joinedv0]tpad=stop_mode=clone:stop_duration=0.50,trim=duration=${outputDuration.toFixed(5)},setpts=PTS-STARTPTS[joinedv]`);
+    const size = `${oriented.displayWidth}x${oriented.displayHeight}`;
+    let cursor = 0;
+    let gapIndex = 0;
+    const pushGap = (duration) => {
+      const label = `[vgap${gapIndex}]`;
+      graph.push(
+        `color=c=black:s=${size}:r=${fps}:d=${Math.max(0.02, duration).toFixed(5)},format=yuv420p${label}`,
+      );
+      labels.push(label);
+      gapIndex += 1;
+    };
+    [...mainVideoClips]
+      .sort((left, right) => Number(left.start || 0) - Number(right.start || 0))
+      .forEach((clip, index) => {
+        const start = Math.max(0, Number(clip.start || 0));
+        const end = Math.max(start + 0.002, Number(clip.end || start));
+        const sourceStart = Math.max(0, Number(clip.sourceStart || 0));
+        const sourceEnd = Math.max(
+          sourceStart + 0.002,
+          Number(clip.sourceEnd || sourceStart + (end - start) * speed),
+        );
+        if (start > cursor + 0.005) pushGap(start - cursor);
+        graph.push(
+          `[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},setpts=(PTS-STARTPTS)/${speed.toFixed(4)},${oriented.filters.join(",")},format=yuv420p[vcut${index}]`,
+        );
+        labels.push(`[vcut${index}]`);
+        cursor = Math.max(cursor, end);
+      });
+    if (outputDuration > cursor + 0.005) pushGap(outputDuration - cursor);
+    if (labels.length === 1) graph.push(`${labels[0]}null[joinedv]`);
+    else {
+      graph.push(`${labels.join("")}concat=n=${labels.length}:v=1:a=0[joinedv0]`);
+      graph.push(
+        `[joinedv0]tpad=stop_mode=clone:stop_duration=0.08,trim=duration=${outputDuration.toFixed(5)},setpts=PTS-STARTPTS[joinedv]`,
+      );
+    }
   } else {
     graph.push(
       `color=c=black:s=${oriented.displayWidth}x${oriented.displayHeight}:r=${fps}:d=${outputDuration.toFixed(5)}[maincanvas0]`,
@@ -1964,8 +2186,11 @@ function buildExportGraph(config, info) {
       transformFilters.push(
         `format=rgba,colorchannelmixer=aa=${opacity.toFixed(4)}`,
       );
+    const padded = start > 0.001
+      ? `setpts=(PTS-STARTPTS)/${speed.toFixed(4)},${transformFilters.join(",")},tpad=start_mode=add:start_duration=${start.toFixed(5)}:color=black@0,setpts=PTS-STARTPTS`
+      : `setpts=(PTS-STARTPTS)/${speed.toFixed(4)},${transformFilters.join(",")}`;
     graph.push(
-      `[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},setpts=(PTS-STARTPTS)/${speed.toFixed(4)}+${start.toFixed(5)}/TB,${transformFilters.join(",")}[mainraw${index}]`,
+      `[0:v]trim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},${padded}[mainraw${index}]`,
     );
     const clipX = `(W-w)/2+${Math.round(Number(settings.x || 0))}`,
       clipY = `(H-h)/2+${Math.round(Number(settings.y || 0))}`;
@@ -2161,8 +2386,12 @@ function buildExportGraph(config, info) {
       "format=rgba",
       `colorchannelmixer=aa=${Math.max(0, Math.min(1, Number(video.opacity ?? 1))).toFixed(3)}`,
     );
+    const overlayStart = Math.max(0, Number(video.start || 0));
+    const overlayPad = overlayStart > 0.001
+      ? `,tpad=start_mode=add:start_duration=${overlayStart.toFixed(5)}:color=black@0`
+      : "";
     graph.push(
-      `[${inputIndex}:v]trim=start=${Math.max(0, Number(video.sourceStart || 0)).toFixed(5)}:duration=${sourceDuration.toFixed(5)},setpts=(PTS-STARTPTS)/${speed.toFixed(4)}+${Math.max(0, Number(video.start || 0)).toFixed(5)}/TB,${videoFilters.join(",")}[overlayv${index}]`,
+      `[${inputIndex}:v]trim=start=${Math.max(0, Number(video.sourceStart || 0)).toFixed(5)}:duration=${sourceDuration.toFixed(5)},setpts=(PTS-STARTPTS)/${speed.toFixed(4)},${videoFilters.join(",")}${overlayPad},setpts=PTS-STARTPTS[overlayv${index}]`,
     );
     inputIndex += 1;
     return { video, label: `[overlayv${index}]` };
@@ -2332,7 +2561,7 @@ function buildExportGraph(config, info) {
           220,
         );
         graph.push(
-          `[layer${layer - 1}]${label}overlay=x='${imageX}':y='${imageY}':enable='between(t,${Number(image.start || 0).toFixed(3)},${Number(image.end || info.duration).toFixed(3)})':shortest=1[layer${layer}]`,
+          `[layer${layer - 1}]${label}overlay=x='${imageX}':y='${imageY}':enable='between(t,${Number(image.start || 0).toFixed(3)},${Number(image.end || info.duration).toFixed(3)})':eof_action=pass:shortest=0[layer${layer}]`,
         );
       }
     } else if (kind === "text")
@@ -2500,6 +2729,29 @@ function visualTransformIsDefault(value = {}) {
     (value.blendMode || "normal") === "normal";
 }
 
+export function clipHasCustomVisual(settings = {}) {
+  if (!visualTransformIsDefault(settings)) return true;
+  return ["cropTop", "cropBottom", "cropLeft", "cropRight"].some(
+    (key) => Math.abs(Number(settings[key] || 0)) > 0.01,
+  );
+}
+
+export function mainClipsUseConcat(clips = []) {
+  const list = [...(clips || [])].sort(
+    (left, right) => Number(left.start || 0) - Number(right.start || 0),
+  );
+  if (!list.length) return false;
+  const track = list[0].trackId || "video";
+  for (let index = 0; index < list.length; index += 1) {
+    const clip = list[index];
+    if ((clip.trackId || "video") !== track) return false;
+    if (clipHasCustomVisual(clip.settings || {})) return false;
+    if (index > 0 && Number(clip.start || 0) < Number(list[index - 1].end || 0) - 0.02)
+      return false;
+  }
+  return true;
+}
+
 function canSmartCopy(config, info, format) {
   const clips = config.mainVideoClips || [],
     clip = clips[0],
@@ -2606,8 +2858,21 @@ function beginExportJob(config, info, job) {
       const rasterized = process.platform === "darwin" && prepareSharedCaptionRaster(config);
       if (!rasterized) config.captionAssPath = createAssSubtitleFile(config);
     }
+    if (captionRasterItems(config).length >= 2) {
+      job.message = "正在合并字幕叠层…";
+      try {
+        composeCaptionRasterConcat(config, info);
+      } catch {
+        /* keep individual rasters; movie/script path still works */
+      }
+    }
   }
+  if (normalizeExportDevice(config.encoderDevice || config.device) !== "cpu")
+    resetExportHardwareProbe();
   const hardware = detectExportHardware();
+  const busyGpuApps = listBusyGpuApps();
+  job.gpuBusy = busyGpuApps.length > 0;
+  job.busyGpuApps = busyGpuApps;
   const extraInputs = [];
   if (format === "mp3") {
     for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
@@ -2662,14 +2927,19 @@ function beginExportJob(config, info, job) {
       (config.codec === "source" && /hevc|h265/.test(String(info.videoCodec || "").toLowerCase())) ||
       colorProfile.hdr;
   const encoderDevice = normalizeExportDevice(config.encoderDevice || config.device);
-  const preferredEncoder = preferredVideoEncoder(useHevc, { device: encoderDevice });
   const fallbackEncoder = useHevc ? "libx265" : "libx264";
+  let preferredEncoder = preferredVideoEncoder(useHevc, { device: encoderDevice });
+  if (encoderDevice !== "cpu" && shouldSkipHardwareForBusyGpu(preferredEncoder, busyGpuApps)) {
+    preferredEncoder = fallbackEncoder;
+    job.stage = "retry";
+    job.message = `检测到${busyGpuApps.join("、")}占用核显，改用 CPU 编码…`;
+  }
   const encodeQueue = [preferredEncoder];
   if (encoderDevice !== "cpu" && preferredEncoder !== fallbackEncoder) encodeQueue.push(fallbackEncoder);
   const launch = (encoder, rest, decodeKind) => {
     const logical = Math.max(2, Number(os.cpus?.().length || 4));
     const budget = config.resourceBudget && typeof config.resourceBudget === "object" ? config.resourceBudget : {};
-    const hardwareEncode = /videotoolbox|nvenc|amf|qsv|_mf$/.test(encoder);
+    const hardwareEncode = isHardwareEncoder(encoder);
     const workerThreads = Math.max(2, Math.min(6, Number(budget.workerThreads || Math.ceil(logical / 2))));
     const filterThreads = Math.max(
       1,
@@ -2703,6 +2973,7 @@ function beginExportJob(config, info, job) {
         qualityMode: config.qualityMode,
         quality: config.quality,
         hdr: colorProfile.hdr,
+        gpuBusy: !!job.gpuBusy,
       }),
     );
     args.push(
@@ -2756,6 +3027,7 @@ function beginExportJob(config, info, job) {
       job.progress = 0.015;
       job.error = "";
       job.stallRetried = false;
+      job.lastProgressAt = Date.now();
       if (String(reason).includes("ENAMETOOLONG") && !config.spawnLengthRetried) {
         config.spawnLengthRetried = true;
         config.captionRastersViaMovie = true;
@@ -2841,15 +3113,33 @@ function exportStageMessage(job) {
   if (job.state === "completed") return label ? `导出完成 · ${label}` : "导出完成";
   if (job.state === "failed") return job.error || "视频导出失败。";
   if (job.state === "cancelled") return "已取消导出";
-  if (job.stage === "retry") return `显卡编码器没响应，正在改用备用编码… · 已用 ${used}`;
+  if (job.stage === "retry") {
+    const busy = Array.isArray(job.busyGpuApps) && job.busyGpuApps.length
+      ? job.busyGpuApps.join("、")
+      : "";
+    return busy
+      ? `检测到${busy}占用显卡，正在改用 CPU 编码… · 已用 ${used}`
+      : `显卡编码器没响应，正在改用备用编码… · 已用 ${used}`;
+  }
   if (job.stage === "prepare" || job.stage === "captions" || job.state === "preparing")
     return `正在准备导出（字幕/滤镜/显卡）… · 已用 ${used}`;
   if (job.stage === "muxing" || (job.progress >= 0.98 && job.state === "exporting"))
     return `正在封装文件… ${percent}% · ${label} · 已用 ${used}`;
-  if (!job.frameProgress)
-    return elapsed >= 8
-      ? `正在启动编码器（显卡较慢，还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`
-      : `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
+  if (!job.frameProgress) {
+    const hardware = isHardwareEncoder(job.encoder);
+    const busy = Array.isArray(job.busyGpuApps) && job.busyGpuApps.length
+      ? job.busyGpuApps.join("、")
+      : "";
+    if (!hardware && busy && elapsed < 10) {
+      return `检测到${busy}占用核显，已改用 CPU 编码… ${percent}% · ${label} · 已用 ${used}`;
+    }
+    if (elapsed >= 8) {
+      return hardware
+        ? `正在启动编码器（显卡较慢，还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`
+        : `正在启动编码器（还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`;
+    }
+    return `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
+  }
   if (job.speed > 0)
     return `正在导出 ${percent}% · ${label} · ${job.speed.toFixed(1)}x · 已用 ${used}`;
   return `正在导出 ${percent}% · ${label} · 已用 ${used}`;
@@ -2857,15 +3147,29 @@ function exportStageMessage(job) {
 
 function monitorExport(child, job, config, info, retry = null) {
   let stderr = "", progressBuffer = "";
+  const token = {};
+  job.monitorToken = token;
   job.startedAt = job.startedAt || Date.now();
   job.lastProgressAt = Date.now();
   job.speed = 0;
+  job.retryLock = false;
   job.encoderLabel = encoderDisplayName(job.encoder || "");
   const duration = Math.max(0.1, Number(config.outputDuration || info.duration || 0));
   const fps = Math.max(1, Number(config.fps || info.frameRate || 30));
+  const abandoned = () => job.monitorToken !== token;
+  const requestRetry = (reason = "") => {
+    if (abandoned() || job.retryLock || !retry) return false;
+    job.retryLock = true;
+    job.state = "preparing";
+    job.stage = "retry";
+    job.frameProgress = false;
+    job.message = exportStageMessage(job);
+    retry(reason);
+    return true;
+  };
   refreshExportJob(job);
   const stallWatch = setInterval(() => {
-    if (["completed", "failed", "cancelled"].includes(job.state) || job.frameProgress) {
+    if (abandoned() || ["completed", "failed", "cancelled"].includes(job.state) || job.frameProgress) {
       clearInterval(stallWatch);
       return;
     }
@@ -2874,19 +3178,18 @@ function monitorExport(child, job, config, info, retry = null) {
     if (retry) {
       job.stage = "retry";
       job.message = exportStageMessage(job);
+      forceKillProcess(child);
+      setTimeout(() => requestRetry("stall"), 1200);
     } else {
       job.state = "failed";
-      job.error = "编码器长时间没有输出画面。请改勾 CPU，或先关掉达芬奇/其他占用显卡的软件。";
+      job.error = encoderStallMessage(job);
       job.message = job.error;
-    }
-    try {
-      child.kill();
-    } catch {
-      /* already stopped */
+      forceKillProcess(child);
     }
     clearInterval(stallWatch);
   }, 500);
   child.stderr?.on("data", (chunk) => {
+    if (abandoned()) return;
     const text = chunk.toString();
     stderr = (stderr + text).slice(-16000);
     progressBuffer = (progressBuffer + text).slice(-8000);
@@ -2907,11 +3210,12 @@ function monitorExport(child, job, config, info, retry = null) {
     if (lastNewline > 0) progressBuffer = progressBuffer.slice(lastNewline + 1);
   });
   child.on("error", (error) => {
+    if (abandoned()) return;
     if (isSpawnTooLongError(error) && retry && !config.spawnLengthRetried) {
       job.state = "preparing";
       job.stage = "retry";
       job.message = "导出命令太长，正在改用字幕脚本重试…";
-      retry("ENAMETOOLONG");
+      requestRetry("ENAMETOOLONG");
       return;
     }
     job.state = "failed";
@@ -2922,7 +3226,8 @@ function monitorExport(child, job, config, info, retry = null) {
   });
   child.on("close", (code) => {
     clearInterval(stallWatch);
-    job.child = null;
+    if (abandoned()) return;
+    if (job.child === child) job.child = null;
     if (job.state === "cancelled") {
       if (config.captionAssPath)
         try {
@@ -2940,11 +3245,7 @@ function monitorExport(child, job, config, info, retry = null) {
     } else if (job.state === "failed") {
       job.message = job.error || job.message;
     } else if (retry) {
-      job.state = "preparing";
-      job.stage = "retry";
-      job.frameProgress = false;
-      job.message = exportStageMessage(job);
-      retry(stderr);
+      requestRetry(stderr);
       return;
     } else {
       job.state = "failed";
@@ -2986,11 +3287,7 @@ export function cancelExport(jobId) {
   if (!job || ["completed", "failed", "cancelled"].includes(job.state))
     return false;
   job.state = "cancelled";
-  try {
-    job.child?.kill("SIGTERM");
-  } catch {
-    /* already stopped */
-  }
+  forceKillProcess(job.child);
   return true;
 }
 

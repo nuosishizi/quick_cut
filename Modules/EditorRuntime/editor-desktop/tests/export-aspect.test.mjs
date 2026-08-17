@@ -79,6 +79,49 @@ test("orientation helpers use display size, not the encoded landscape size", () 
   assert.match(filters, /1080:1920/);
 });
 
+test("CPU export of a cut-up timeline finishes instead of waiting on later trims", async () => {
+  const source = path.join(temporaryRoot, "cutup-src.mp4");
+  const output = path.join(temporaryRoot, "cutup-out.mp4");
+  run(ffmpeg, [
+    "-y", "-hide_banner", "-loglevel", "error",
+    "-f", "lavfi", "-i", "testsrc=s=320x180:r=24:d=4",
+    "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", source,
+  ]);
+  const started = media.startExport({
+    inputPath: source,
+    outputPath: output,
+    format: "mp4",
+    width: 320,
+    height: 180,
+    fps: 24,
+    codec: "h264",
+    bitrate: "1M",
+    encoderDevice: "cpu",
+    qualityMode: "fast",
+    outputDuration: 2.6,
+    removals: [{ start: 1.0, end: 2.4 }],
+    mainVideoClips: [
+      { start: 0, end: 1.0, sourceStart: 0, sourceEnd: 1.0, trackId: "video" },
+      { start: 1.0, end: 2.6, sourceStart: 2.4, sourceEnd: 4.0, trackId: "video" },
+    ],
+    mainAudioClips: [
+      { start: 0, end: 1.0, sourceStart: 0, sourceEnd: 1.0, trackId: "audio" },
+      { start: 1.0, end: 2.6, sourceStart: 2.4, sourceEnd: 4.0, trackId: "audio" },
+    ],
+    includeVideo: true,
+    includeAudio: true,
+    images: [],
+    titles: [],
+    captions: [],
+    videoLayers: [],
+    audioAssets: [],
+  });
+  const status = await waitExport(started, 20000);
+  assert.equal(status?.state, "completed", status?.error || "cut-up CPU export stalled");
+  assert.ok(fs.existsSync(output) && fs.statSync(output).size > 1000);
+});
+
 test("portrait 1080x1920 export keeps the full 9:16 picture", async () => {
   const source = path.join(temporaryRoot, "portrait.mp4");
   const output = path.join(temporaryRoot, "portrait-out.mp4");
