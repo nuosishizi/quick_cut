@@ -1311,8 +1311,26 @@ export function openAntigravityLogin() {
   const cli = findAntigravityCli(loadReviewSettings().antigravityPath);
   if (!cli) throw new Error("还没安装 Antigravity CLI。请先点「安装 agy」。");
   if (process.platform === "win32") {
-    const line = `chcp 65001>nul & echo. & echo Please sign in to Antigravity with your Gemini plan. & echo. & "${cli.replace(/"/g, "")}"`;
-    spawn("cmd.exe", ["/c", "start", "agy login", "cmd.exe", "/k", line], {
+    const cleanCli = cli.replace(/"/g, "");
+    const batPath = path.join(os.tmpdir(), `quickcut-agy-login-${Date.now()}.bat`);
+    const batContent = `@echo off
+chcp 65001 >nul
+title Antigravity 登录
+cls
+echo =======================================================
+echo   请在下方终端中登录 Antigravity (Gemini 套餐)
+echo =======================================================
+echo.
+"${cleanCli}"
+echo.
+echo =======================================================
+echo   登录完成或结束后，请关闭此窗口并回到快剪点击「检测」
+echo =======================================================
+echo.
+pause
+`;
+    fs.writeFileSync(batPath, batContent, { encoding: "utf8" });
+    spawn("cmd.exe", ["/c", "start", "Antigravity 登录", batPath], {
       detached: true,
       stdio: "ignore",
       windowsHide: false,
