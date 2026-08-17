@@ -2937,6 +2937,116 @@
         margin-bottom: 6px;
         word-break: break-word;
       }
+      .polish-diff-box {
+        background: #141618;
+        border: 1px solid #282b30;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin: 6px 0;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .polish-diff-line {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin-bottom: 4px;
+      }
+      .polish-diff-line:last-child {
+        margin-bottom: 0;
+      }
+      .polish-diff-label {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .polish-diff-label.spoken {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+      }
+      .polish-diff-label.expected {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+      }
+      .polish-diff-label.scripture {
+        background: rgba(234, 179, 8, 0.18);
+        color: #fde047;
+        border: 1px solid rgba(234, 179, 8, 0.35);
+      }
+      .polish-diff-content {
+        flex: 1 1 auto;
+        word-break: break-word;
+      }
+      .diff-del {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.25);
+        text-decoration: line-through;
+        padding: 0 3px;
+        border-radius: 2px;
+      }
+      .diff-add {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.25);
+        padding: 0 3px;
+        border-radius: 2px;
+        font-weight: 600;
+      }
+      .diff-scripture-mismatch {
+        color: #fef08a;
+        background: rgba(234, 179, 8, 0.3);
+        padding: 0 3px;
+        border-radius: 2px;
+        font-weight: 600;
+        text-decoration: underline;
+      }
+      .diff-muted {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .diff-diagnosis {
+        font-size: 11px;
+        color: #cbd5e1;
+        background: #1e2227;
+        border-left: 3px solid var(--blue);
+        padding: 4px 8px;
+        border-radius: 0 4px 4px 0;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        line-height: 1.4;
+      }
+      .diff-diagnosis.scripture {
+        border-left-color: #eab308;
+        background: rgba(234, 179, 8, 0.08);
+        color: #fef08a;
+        font-weight: 500;
+      }
+      .diff-diagnosis.repeat {
+        border-left-color: #f97316;
+        background: rgba(249, 115, 22, 0.08);
+        color: #fdba74;
+      }
+      .diff-diagnosis.missing {
+        border-left-color: #ec4899;
+        background: rgba(236, 72, 153, 0.08);
+        color: #f472b6;
+      }
+      .diff-diagnosis.spoken-diff {
+        border-left-color: #06b6d4;
+        background: rgba(6, 182, 212, 0.08);
+        color: #67e8f9;
+      }
+      .diff-diagnosis.pause {
+        border-left-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.08);
+        color: #93c5fd;
+      }
       .polish-card-actions {
         display: flex;
         align-items: center;
@@ -11122,6 +11232,124 @@
         document.querySelector('[data-side="polish"]')?.click();
       }
 
+      function computeTextDiffHtml(spoken = "", expected = "", isScripture = false, issueType = "") {
+        const s = String(spoken || "").replace(/^\s*[—-⌫]\s*$/, "").trim();
+        const e = String(expected || "").replace(/^\s*[—-]\s*$/, "").trim();
+
+        if (issueType === "repeat") {
+          return {
+            spokenHtml: `<span class="diff-del">${escapeHtml(s || "卡壳废读片段")}</span>`,
+            expectedHtml: e ? escapeHtml(e) : `<span class="diff-muted">（后面已重新录制）</span>`,
+            diagnosis: `🔁 卡壳重读：第 1 遍读错卡壳废话，建议立即波纹切除`,
+          };
+        }
+
+        if (issueType === "missing" || (!s && e)) {
+          return {
+            spokenHtml: `<span class="diff-muted">（未口播任何语音）</span>`,
+            expectedHtml: `<span class="diff-add">${escapeHtml(e)}</span>`,
+            diagnosis: isScripture ? `✝ 经文漏读：文案有此经文，但录音未口播` : `⚠️ 文案漏读：文案有此内容，但录音未口播`,
+          };
+        }
+
+        if (issueType === "extra" || issueType === "addition" || (s && !e)) {
+          return {
+            spokenHtml: `<span class="diff-add">${escapeHtml(s)}</span>`,
+            expectedHtml: e ? escapeHtml(e) : `<span class="diff-muted">（文案无此句）</span>`,
+            diagnosis: `➕ 口播多读/语气拓展：口播了文案之外的内容`,
+          };
+        }
+
+        if (!s && !e) {
+          return {
+            spokenHtml: `（无语音）`,
+            expectedHtml: `（无文案）`,
+            diagnosis: `（无文字）`,
+          };
+        }
+
+        const tokenize = (str) => {
+          return str.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]|\s+/gu) || [str];
+        };
+
+        const tokensS = tokenize(s);
+        const tokensE = tokenize(e);
+        const m = tokensS.length;
+        const n = tokensE.length;
+        const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
+        const norm = (t) => t.trim().toLowerCase();
+
+        for (let i = 0; i < m; i++) {
+          for (let j = 0; j < n; j++) {
+            if (norm(tokensS[i]) === norm(tokensE[j])) {
+              dp[i + 1][j + 1] = dp[i][j] + 1;
+            } else {
+              dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+            }
+          }
+        }
+
+        let i = m, j = n;
+        const diffS = [];
+        const diffE = [];
+
+        while (i > 0 || j > 0) {
+          if (i > 0 && j > 0 && norm(tokensS[i - 1]) === norm(tokensE[j - 1])) {
+            diffS.unshift({ text: tokensS[i - 1], type: "same" });
+            diffE.unshift({ text: tokensE[j - 1], type: "same" });
+            i--; j--;
+          } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+            diffE.unshift({ text: tokensE[j - 1], type: "added" });
+            j--;
+          } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+            diffS.unshift({ text: tokensS[i - 1], type: "removed" });
+            i--;
+          }
+        }
+
+        const removedWords = diffS.filter(d => d.type === "removed" && d.text.trim()).map(d => d.text.trim());
+        const addedWords = diffE.filter(d => d.type === "added" && d.text.trim()).map(d => d.text.trim());
+
+        const spokenHtml = diffS.map(d => {
+          if (d.type === "removed") {
+            return `<span class="${isScripture ? "diff-scripture-mismatch" : "diff-del"}">${escapeHtml(d.text)}</span>`;
+          }
+          return escapeHtml(d.text);
+        }).join("");
+
+        const expectedHtml = diffE.map(d => {
+          if (d.type === "added") {
+            return `<span class="${isScripture ? "diff-scripture-mismatch" : "diff-add"}">${escapeHtml(d.text)}</span>`;
+          }
+          return escapeHtml(d.text);
+        }).join("");
+
+        let diagnosis = "";
+        if (isScripture) {
+          if (removedWords.length && addedWords.length) {
+            diagnosis = `✝ 经文用词差异：把「${addedWords.slice(0, 3).join(" ")}」口播成了「${removedWords.slice(0, 3).join(" ")}」`;
+          } else if (removedWords.length) {
+            diagnosis = `✝ 经文多读词句：口播多出了「${removedWords.slice(0, 3).join(" ")}」`;
+          } else if (addedWords.length) {
+            diagnosis = `✝ 经文漏读词句：口播遗漏了「${addedWords.slice(0, 3).join(" ")}」`;
+          } else {
+            diagnosis = `✝ 经文保护复核：与标准经文对照`;
+          }
+        } else {
+          if (removedWords.length && addedWords.length) {
+            diagnosis = `🔀 字词读错/替换：文案「${addedWords.slice(0, 3).join(" ")}」口播为「${removedWords.slice(0, 3).join(" ")}」`;
+          } else if (removedWords.length) {
+            diagnosis = `➕ 口播多读：口播多出了「${removedWords.slice(0, 3).join(" ")}」`;
+          } else if (addedWords.length) {
+            diagnosis = `⚠️ 文案漏读：口播未读「${addedWords.slice(0, 3).join(" ")}」`;
+          } else {
+            diagnosis = `🔀 读法差异对照`;
+          }
+        }
+
+        return { spokenHtml, expectedHtml, diagnosis };
+      }
+
       function renderPolishSidebarList() {
         const plan = window.__lastPolishPlan;
         if (!plan) return;
@@ -11205,21 +11433,32 @@
         // --- 渲染经文项 ---
         if (currentPolishFilter === "all" || currentPolishFilter === "scripture") {
           for (const item of scriptures) {
+            const spoken = item.spoken || item.spokenText || item.text || "";
+            const expected = item.expected || item.expectedText || item.scripture || "";
+            const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, true, item.type);
+
             cardsHtml.push(`
-              <div class="polish-card scripture-card" data-polish-card-type="scripture-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
+              <div class="polish-card scripture-card" data-polish-card-type="scripture-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
                   <div class="polish-card-title"><span class="polish-badge scripture">✝ 经文保护</span></div>
                   <span class="small" style="font-family:monospace; color:#facc15;">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text">
-                  <div style="color:#fef08a; font-weight:600; margin-bottom:2px;">口播: ${escapeHtml(item.spoken || item.text || "（无语音）")}</div>
-                  <div style="color:var(--muted); font-size:11px;">经文: ${escapeHtml(item.expected || item.scripture || "（标准经文）")}</div>
+                <div class="diff-diagnosis scripture">${escapeHtml(diagnosis)}</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label scripture">🎙️ 口播</span>
+                    <span class="polish-diff-content">${spokenHtml}</span>
+                  </div>
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label scripture">📄 经文</span>
+                    <span class="polish-diff-content">${expectedHtml}</span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}" title="跳点试听此段">▶ 试听</button>
-                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}" title="定位并复核">定位</button>
-                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || "")}" title="确认保留">✓ 保留</button>
-                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || "")}" title="忽略此项（不做任何改动）">✕ 忽略</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="定位并复核">定位</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="确认保留">✓ 保留</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="忽略此项（不做任何改动）">✕ 忽略</button>
                 </div>
               </div>
             `);
@@ -11229,19 +11468,31 @@
         // --- 渲染读法差异项 ---
         if (currentPolishFilter === "all" || currentPolishFilter === "spokenDiff") {
           for (const item of uniqueSpokenDiffs) {
+            const spoken = item.spoken || item.spokenText || item.text || "";
+            const expected = item.expected || item.expectedText || "";
+            const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, false, item.type);
+
             cardsHtml.push(`
               <div class="polish-card spoken-diff" data-polish-card-type="spoken-diff" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
                   <div class="polish-card-title"><span class="polish-badge spoken-diff">读法差异</span></div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text">
-                  <div style="color:#e5e7eb; font-weight:500;">口播: <span style="color:#67e8f9;">${escapeHtml(item.spoken || item.text || "口播补充")}</span></div>
-                  ${item.expected ? `<div style="color:var(--muted); font-size:11px;">文案: ${escapeHtml(item.expected)}</div>` : ""}
+                <div class="diff-diagnosis spoken-diff">${escapeHtml(diagnosis)}</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label spoken">🎙️ 口播</span>
+                    <span class="polish-diff-content">${spokenHtml}</span>
+                  </div>
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label expected">📄 文案</span>
+                    <span class="polish-diff-content">${expectedHtml}</span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.8)}">▶ 试听</button>
-                  <button class="btn small primary" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入字幕">✓ 并入字幕</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入字幕">✓ 并入字幕</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此段">✂ 切除</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（音画与文稿保持原样）">✕ 忽略</button>
                 </div>
@@ -11253,17 +11504,30 @@
         // --- 渲染重读/卡壳项 ---
         if (currentPolishFilter === "all" || currentPolishFilter === "repeat") {
           for (const item of uniqueRepeats) {
+            const spoken = item.spoken || item.spokenText || item.text || "";
+            const expected = item.expected || item.expectedText || "";
+            const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, false, "repeat");
+
             cardsHtml.push(`
               <div class="polish-card repeat-suggest" data-polish-card-type="repeat-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
                   <div class="polish-card-title"><span class="polish-badge repeat">重读卡壳</span></div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text" style="color:#fb923c;">
-                  ${escapeHtml(item.spoken || item.text || "重读废话/卡壳读错")}
+                <div class="diff-diagnosis repeat">${escapeHtml(diagnosis)}</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label spoken">🎙️ 废读</span>
+                    <span class="polish-diff-content">${spokenHtml}</span>
+                  </div>
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label expected">📄 正读</span>
+                    <span class="polish-diff-content">${expectedHtml}</span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.5)}">▶ 试听</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此废话">✂ 立即切除</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（保持原样）">✕ 忽略</button>
                 </div>
@@ -11275,14 +11539,26 @@
         // --- 渲染缺读待补项 ---
         if (currentPolishFilter === "all" || currentPolishFilter === "missing") {
           for (const item of uniqueMissings) {
+            const spoken = item.spoken || item.spokenText || item.text || "";
+            const expected = item.expected || item.expectedText || "";
+            const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, item.isScripture || item.scripture, "missing");
+
             cardsHtml.push(`
               <div class="polish-card missing-suggest" data-polish-card-type="missing-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
-                  <span class="polish-badge missing">缺读待补</span>
+                  <div class="polish-card-title"><span class="polish-badge missing">缺读待补</span></div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text" style="color:#f472b6;">
-                  文案缺读: ${escapeHtml(item.expected || item.text || "缺读文本")}
+                <div class="diff-diagnosis missing">${escapeHtml(diagnosis)}</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label spoken">🎙️ 口播</span>
+                    <span class="polish-diff-content">${spokenHtml}</span>
+                  </div>
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label expected">📄 文案</span>
+                    <span class="polish-diff-content">${expectedHtml}</span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="2">▶ 试听</button>
@@ -11304,6 +11580,11 @@
             const cardClass = isScripture ? "polish-card scripture-card" : isCut ? "polish-card cut-suggest" : "polish-card keep-suggest";
             const badgeClass = isScripture ? "polish-badge scripture" : isCut ? "polish-badge cut" : "polish-badge keep";
             const badgeLabel = isScripture ? "✝ 经文附近" : isCut ? "过长建议切" : "合理建议留";
+            const diagnosis = isScripture
+              ? `✝ 经文停顿：经文附近停顿 ${Number(gap.duration || 0).toFixed(2)} 秒（默认受保护锁定）`
+              : isCut
+              ? `⏱️ 气口过长：句子间停顿 ${Number(gap.duration || 0).toFixed(2)} 秒（建议安全切除）`
+              : `⏱️ 自然停顿：停顿 ${Number(gap.duration || 0).toFixed(2)} 秒（节奏自然建议保留）`;
 
             cardsHtml.push(`
               <div class="${cardClass}" data-polish-card-type="gap" data-gap-id="${escapeHtml(gap.id || "")}" data-start="${Number(gap.start || 0)}">
@@ -11315,10 +11596,16 @@
                   </label>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(gap.start || 0))}</span>
                 </div>
-                <div class="polish-card-text">
-                  <span style="color:#d1d5db;">${escapeHtml(gap.leftText || "…")}</span>
-                  <span style="color:var(--blue); margin:0 4px;">→</span>
-                  <span style="color:#d1d5db;">${escapeHtml(gap.rightText || "…")}</span>
+                <div class="diff-diagnosis ${isScripture ? "scripture" : "pause"}">${escapeHtml(diagnosis)}</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label spoken">🎙️ 上下文</span>
+                    <span class="polish-diff-content">
+                      <span style="color:#d1d5db;">${escapeHtml(gap.leftText || "…")}</span>
+                      <span style="color:var(--blue); margin:0 4px; font-weight:700;">⏸️ ${Number(gap.duration || 0).toFixed(2)}s →</span>
+                      <span style="color:#d1d5db;">${escapeHtml(gap.rightText || "…")}</span>
+                    </span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview-gap" data-gap-id="${escapeHtml(gap.id)}">▶ 试听</button>
@@ -11341,8 +11628,12 @@
                   <span class="polish-badge notes">已清备注</span>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text" style="color:var(--muted);">
-                  已清理文案提示/备注: ${escapeHtml(item.text || item.spoken || "备注")}
+                <div class="diff-diagnosis">🧹 导演/动作提示词清理：已自动过滤无需做字幕</div>
+                <div class="polish-diff-box">
+                  <div class="polish-diff-line">
+                    <span class="polish-diff-label expected">📄 清除备注</span>
+                    <span class="polish-diff-content" style="color:var(--muted); text-decoration:line-through;">${escapeHtml(item.text || item.spoken || "备注文本")}</span>
+                  </div>
                 </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="1.5">▶ 试听</button>
