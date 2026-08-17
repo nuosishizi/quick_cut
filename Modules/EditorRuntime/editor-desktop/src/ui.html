@@ -2771,9 +2771,114 @@
         :root { --side: 245px; --inspector: 245px; --timeline: 230px; }
         .workspace { grid-template-columns: minmax(220px,var(--side)) 3px minmax(250px,1fr) 3px minmax(230px,var(--inspector)); }
         .sidebody,.inspectbody { padding:8px; }
-        .btn { padding:0 7px; }
+      /* 全局体检审校面板样式 */
+      .polish-controls-card {
+        background: #1e2023;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
       }
-</style>
+      .polish-filter-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      .polish-filter-tabs .btn {
+        flex: 1;
+        font-size: 11px;
+        padding: 4px 2px;
+        text-align: center;
+      }
+      .polish-filter-tabs .btn.active {
+        background: #2b3036;
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .polish-card {
+        background: #1a1c1e;
+        border: 1px solid #2d3135;
+        border-radius: 6px;
+        padding: 8px 10px;
+        transition: all .15s ease;
+        cursor: pointer;
+      }
+      .polish-card:hover {
+        border-color: var(--blue);
+        background: #212428;
+      }
+      .polish-card.active {
+        border-color: var(--blue);
+        background: rgba(43, 145, 255, 0.08);
+      }
+      .polish-card.scripture-card {
+        border: 1px solid rgba(234, 179, 8, 0.5);
+        background: rgba(234, 179, 8, 0.06);
+      }
+      .polish-card.scripture-card:hover {
+        border-color: #eab308;
+        background: rgba(234, 179, 8, 0.12);
+      }
+      .polish-card.cut-suggest {
+        border-left: 3px solid #ff4d4f;
+      }
+      .polish-card.keep-suggest {
+        border-left: 3px solid #52c41a;
+      }
+      .polish-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .polish-card-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .polish-badge {
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+      }
+      .polish-badge.scripture {
+        background: rgba(234, 179, 8, 0.2);
+        color: #facc15;
+        border: 1px solid rgba(234, 179, 8, 0.4);
+      }
+      .polish-badge.cut {
+        background: rgba(255, 77, 79, 0.2);
+        color: #ff7875;
+      }
+      .polish-badge.keep {
+        background: rgba(82, 196, 26, 0.2);
+        color: #73d13d;
+      }
+      .polish-card-text {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+        margin-bottom: 6px;
+        word-break: break-word;
+      }
+      .polish-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        justify-content: flex-end;
+      }
+      .polish-card-actions .btn {
+        padding: 2px 6px;
+        font-size: 11px;
+        height: 22px;
+        line-height: 1;
+      }
+    </style>
   </head>
   <body>
     <div class="fatal" id="fatal"></div>
@@ -2869,6 +2974,7 @@
           <nav class="tabs">
             <button class="tab active" data-side="media">素材</button
             ><button class="tab" data-side="subtitle">字幕</button
+            ><button class="tab" data-side="polish" id="tabGlobalPolish">体检审校</button
             ><button class="tab" data-side="style">样式</button>
           </nav>
           <div class="sidebody">
@@ -3009,6 +3115,48 @@
               </div>
               <div class="small" style="margin-bottom:8px">可直接修改任意一段；一键替换只改变文字，保留全部时间戳。</div>
               <div class="caption-inspector-list" id="captionInspectorList"></div>
+            </div>
+            <div class="sidepage" id="side-polish">
+              <div class="sectiontitle" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span>全局体检与审校</span>
+                <button class="btn primary small" id="runGlobalPolishSidebar" style="padding:2px 8px; font-size:12px;">⚡ 一键体检</button>
+              </div>
+              <p class="small" id="globalPolishSummarySidebar" style="color:var(--muted); line-height:1.4; margin-bottom:8px;">
+                点击「一键体检」扫描重读、口播偏差、经文保护与停顿气口。
+              </p>
+
+              <!-- 气口阈值与经文保护参数区 -->
+              <div class="polish-controls-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span class="small" style="font-weight:600;">气口筛选阈值</span>
+                  <span class="small" id="pauseThresholdValue" style="color:var(--blue); font-weight:700;">≥ 0.50 秒</span>
+                </div>
+                <input type="range" class="range" id="pauseGapThreshold" min="0.10" max="2.50" step="0.05" value="0.50" style="width:100%; accent-color:var(--blue);" />
+                <label class="row" style="margin-top:6px; gap:6px; cursor:pointer; align-items:center;">
+                  <input type="checkbox" id="unlockScriptureGaps" />
+                  <span class="small" style="color:#eab308; font-weight:500;">✝ 允许勾选经文附近气口（默认受保护锁定）</span>
+                </label>
+              </div>
+
+              <!-- 分类筛选标签 Tabs -->
+              <div class="polish-filter-tabs">
+                <button class="btn small active" data-polish-filter="all" id="filterPolishAll">全部 (0)</button>
+                <button class="btn small" data-polish-filter="cut" id="filterPolishCut">建议切 (0)</button>
+                <button class="btn small" data-polish-filter="scripture" id="filterPolishScripture" style="color:#eab308;">经文保护 (0)</button>
+                <button class="btn small" data-polish-filter="keep" id="filterPolishKeep">合理留 (0)</button>
+              </div>
+
+              <!-- 体检卡片列表 -->
+              <div class="polish-list" id="globalPolishListSidebar" style="overflow-y:auto; flex:1; max-height:calc(100vh - 360px); display:flex; flex-direction:column; gap:6px; padding-right:2px;">
+                <div class="small" style="text-align:center; padding:24px 0; color:var(--muted);">暂无体检结果，请先点击上方「⚡ 一键体检」</div>
+              </div>
+
+              <!-- 底部批量动作栏 -->
+              <div class="polish-bottom-actions" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line); display:flex; gap:6px; align-items:center;">
+                <button class="btn small" id="selectAllPolishBtn">全选建议</button>
+                <button class="btn small" id="invertSelectPolishBtn">反选</button>
+                <button class="btn primary small grow" id="applyPauseGapsSidebarBtn" style="font-weight:600;">✂ 切勾选气口 (<span id="checkedGapsCount">0</span>)</button>
+              </div>
             </div>
             <div class="sidepage" id="side-style">
               <button
@@ -3256,7 +3404,7 @@
                     <div class="fieldhead">
                       <span>行间距</span><output id="lineHeightOut">115%</output>
                     </div>
-                    <input class="range" id="lineHeight" type="range" min="80" max="250" step="5" value="115" />
+                    <input class="range" id="lineHeight" type="range" min="80" max="250" step="5" data-button-step="5" value="115" />
                   </div>
                   <div class="field">
                     <div class="fieldhead"><span>文字对齐</span></div>
@@ -3609,7 +3757,7 @@
               style="padding: 4px 6px; font-size: 13px;"
             >
               ⚙</button
-            ><button class="btn iconbtn" id="addTrack" title="添加文本/字幕轨道" style="font-weight: 700; font-size: 13px;">
+            ><button class="btn iconbtn" id="addTrack" title="添加文本" style="font-weight: 700; font-size: 13px;">
               T＋</button>
 
             <div class="trackmenu" id="trackMenu">
@@ -3651,7 +3799,7 @@
               <span class="tool-separator"></span>
 
               <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
-              <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
+              <button class="btn iconbtn active" id="snapToggle" title="时间线吸附（N）">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4v7a8 8 0 0016 0V4"/><line x1="4" y1="8" x2="9" y2="8"/><line x1="15" y1="8" x2="20" y2="8"/></svg>
               </button
               ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
@@ -10822,36 +10970,14 @@
           .join("");
         return `<div style="margin-top:10px"><div class="small" style="font-weight:600">${escapeHtml(title)}（${(rows || []).length}）</div>${items || `<div class="small">${escapeHtml(emptyText)}</div>`}</div>`;
       }
-      function pauseGapSectionHtml(plan) {
-        const gaps = plan.pauseGaps || [];
-        if (!gaps.length) return `<div style="margin-top:10px"><div class="small" style="font-weight:600">气口体检</div><div class="small">字幕太少，或句间没有空隙。</div></div>`;
-        const rows = gaps
-          .map((gap) => {
-            const locked = gap.verdict === "scripture-keep";
-            const label =
-              locked
-                ? "经文附近，默认不切"
-                : gap.verdict === "cut"
-                  ? "过长，建议切"
-                  : "合理，建议留";
-            return `<label class="row" style="align-items:flex-start; gap:8px; margin:6px 0">
-              <input type="checkbox" data-pause-gap="${escapeHtml(gap.id)}" ${gap.checked ? "checked" : ""} ${locked ? "disabled" : ""} />
-              <span class="small" data-polish-time="${Number(gap.start || 0)}">
-                ${Number(gap.duration || 0).toFixed(2)} 秒 · ${label}<br/>
-                ${escapeHtml(gap.leftText || "…")} → ${escapeHtml(gap.rightText || "…")}
-              </span>
-            </label>`;
-          })
-          .join("");
-        return `<div style="margin-top:10px"><div class="small" style="font-weight:600">气口体检（${gaps.length}，建议切 ${(plan.pauseSuggestCut || 0)}，经文附近 ${(plan.pauseLocked || 0)}）</div>${rows}</div>`;
-      }
+      let currentPolishFilter = "all";
       function persistPauseGapChecks() {
         const planned = window.__pauseGapPlan || [];
         const boxes = [...document.querySelectorAll("[data-pause-gap]")];
         if (!boxes.length) return planned;
         const chosen = new Set(boxes.filter((item) => item.checked).map((item) => item.dataset.pauseGap));
         for (const gap of planned) {
-          if (gap.verdict === "scripture-keep") {
+          if (gap.locked) {
             gap.checked = false;
             continue;
           }
@@ -10862,7 +10988,7 @@
       function rememberPolishPlan(plan, autoApplied = 0) {
         const next = { ...(plan || {}), autoApplied: Number(autoApplied) || 0 };
         window.__lastPolishPlan = next;
-        window.__pauseGapPlan = next.pauseGaps || [];
+        window.__pauseGapPlan = (next.pauseGaps || []).map(g => ({ ...g }));
         if ($("lastPolishReport")) $("lastPolishReport").disabled = false;
       }
       function showLastPolishReport() {
@@ -10874,8 +11000,10 @@
         showGlobalPolishReport(plan, plan.autoApplied || 0);
       }
       function showGlobalPolishReport(plan, autoApplied) {
+        rememberPolishPlan(plan, autoApplied);
         const summary =
-          `自动切 ${autoApplied} 处重录/废读，口语并进 ${(plan.mergedSpoken || []).length} 条，清掉 ${(plan.strippedNotes || []).length} 处备注，${(plan.scriptureLock || []).length} 处经文请你点，${(plan.missing || []).length} 处缺读待补${(plan.leftover || []).length ? `，${plan.leftover.length} 处仍待确认` : ""}。气口建议切 ${plan.pauseSuggestCut || 0} 处。`;
+          `自动切 ${autoApplied} 处重录/废读，口语并进 ${(plan.mergedSpoken || []).length} 条，清掉 ${(plan.strippedNotes || []).length} 处备注，${(plan.scriptureLock || []).length} 处经文锁定，${(plan.missing || []).length} 处缺读待补${(plan.leftover || []).length ? `，${plan.leftover.length} 处待确认` : ""}。气口建议切 ${plan.pauseSuggestCut || 0} 处。`;
+        if ($("globalPolishSummarySidebar")) $("globalPolishSummarySidebar").textContent = summary;
         if ($("globalPolishSummary")) $("globalPolishSummary").textContent = summary;
         if ($("globalPolishBody")) {
           $("globalPolishBody").innerHTML = [
@@ -10886,11 +11014,209 @@
             polishSectionHtml("已清字幕备注", plan.strippedNotes, "没有备注"),
             polishSectionHtml("已保留口语", plan.keepSpoken, "没有额外口语"),
             polishSectionHtml("仍待确认", plan.leftover, "没有其余项"),
-            pauseGapSectionHtml(plan),
           ].join("");
         }
-        rememberPolishPlan(plan, autoApplied);
-        if ($("globalPolishModal")) $("globalPolishModal").classList.add("on");
+
+        renderPolishSidebarList();
+
+        // 自动激活左侧全局体检 Tab
+        document.querySelector('[data-side="polish"]')?.click();
+      }
+
+      function renderPolishSidebarList() {
+        const plan = window.__lastPolishPlan;
+        if (!plan) return;
+        const threshold = Number($("pauseGapThreshold")?.value || 0.50);
+        const unlockScripture = Boolean($("unlockScriptureGaps")?.checked);
+        if ($("pauseThresholdValue")) $("pauseThresholdValue").textContent = `≥ ${threshold.toFixed(2)} 秒`;
+
+        const gaps = (window.__pauseGapPlan || plan.pauseGaps || []).map((gap) => {
+          const isScripture = gap.verdict === "scripture-keep" || gap.isScripture === true;
+          const locked = isScripture && !unlockScripture;
+          if (gap.userChecked === undefined) {
+            gap.checked = !locked && (Number(gap.duration || 0) >= threshold || gap.verdict === "cut");
+          } else if (locked) {
+            gap.checked = false;
+          }
+          return {
+            ...gap,
+            isScripture,
+            locked,
+          };
+        });
+        window.__pauseGapPlan = gaps;
+
+        const scriptureCount = gaps.filter(g => g.isScripture).length + (plan.scriptureLock || []).length;
+        const cutCount = gaps.filter(g => g.checked && !g.locked).length;
+        const keepCount = gaps.filter(g => !g.checked && !g.isScripture).length;
+        const allCount = gaps.length + (plan.scriptureLock || []).length + (plan.missing || []).length + (plan.leftover || []).length;
+
+        if ($("filterPolishAll")) $("filterPolishAll").textContent = `全部 (${allCount})`;
+        if ($("filterPolishCut")) $("filterPolishCut").textContent = `建议切 (${cutCount})`;
+        if ($("filterPolishScripture")) $("filterPolishScripture").textContent = `经文保护 (${scriptureCount})`;
+        if ($("filterPolishKeep")) $("filterPolishKeep").textContent = `合理留 (${keepCount})`;
+        if ($("checkedGapsCount")) $("checkedGapsCount").textContent = cutCount;
+
+        const listEl = $("globalPolishListSidebar");
+        if (!listEl) return;
+
+        let cardsHtml = [];
+
+        // 1. 经文/神的话语审校项
+        if (currentPolishFilter === "all" || currentPolishFilter === "scripture") {
+          for (const item of (plan.scriptureLock || [])) {
+            cardsHtml.push(`
+              <div class="polish-card scripture-card" data-polish-card-type="scripture-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
+                <div class="polish-card-header">
+                  <div class="polish-card-title"><span class="polish-badge scripture">✝ 经文保护</span></div>
+                  <span class="small" style="font-family:monospace; color:#facc15;">${formatTime(Number(item.start || 0))}</span>
+                </div>
+                <div class="polish-card-text" style="color:#fef08a; font-weight:500;">
+                  ${escapeHtml(item.spoken || item.text || item.expected || "（经文差异）")}
+                </div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}">▶ 试听</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}">定位复核</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        // 2. 气口体检项
+        for (const gap of gaps) {
+          if (currentPolishFilter === "cut" && (!gap.checked || gap.locked)) continue;
+          if (currentPolishFilter === "scripture" && !gap.isScripture) continue;
+          if (currentPolishFilter === "keep" && (gap.checked || gap.isScripture)) continue;
+
+          const isScripture = gap.isScripture;
+          const isCut = gap.checked && !gap.locked;
+          const cardClass = isScripture ? "polish-card scripture-card" : isCut ? "polish-card cut-suggest" : "polish-card keep-suggest";
+          const badgeClass = isScripture ? "polish-badge scripture" : isCut ? "polish-badge cut" : "polish-badge keep";
+          const badgeLabel = isScripture ? "✝ 经文附近" : isCut ? "过长建议切" : "合理建议留";
+
+          cardsHtml.push(`
+            <div class="${cardClass}" data-polish-card-type="gap" data-gap-id="${escapeHtml(gap.id || "")}" data-start="${Number(gap.start || 0)}">
+              <div class="polish-card-header">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+                  <input type="checkbox" data-pause-gap="${escapeHtml(gap.id)}" ${gap.checked ? "checked" : ""} ${gap.locked ? "disabled title='经文保护默认锁定，可勾选上方解锁开关'" : ""} />
+                  <span class="polish-card-title">${Number(gap.duration || 0).toFixed(2)}s</span>
+                  <span class="${badgeClass}">${badgeLabel}</span>
+                </label>
+                <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(gap.start || 0))}</span>
+              </div>
+              <div class="polish-card-text">
+                <span style="color:#d1d5db;">${escapeHtml(gap.leftText || "…")}</span>
+                <span style="color:var(--blue); margin:0 4px;">→</span>
+                <span style="color:#d1d5db;">${escapeHtml(gap.rightText || "…")}</span>
+              </div>
+              <div class="polish-card-actions">
+                <button class="btn small" data-polish-action="preview-gap" data-gap-id="${escapeHtml(gap.id)}">▶ 试听</button>
+                <button class="btn small danger" data-polish-action="cut-gap" data-gap-id="${escapeHtml(gap.id)}" ${gap.locked ? "disabled title='受经文保护锁定'" : ""}>✂ 切除</button>
+                <button class="btn small" data-polish-action="merge-gap" data-gap-id="${escapeHtml(gap.id)}">╎ 合并</button>
+                <button class="btn small" data-polish-action="toggle-gap-keep" data-gap-id="${escapeHtml(gap.id)}">${gap.checked ? "留" : "切"}</button>
+              </div>
+            </div>
+          `);
+        }
+
+        // 3. 缺读待补
+        if (currentPolishFilter === "all") {
+          for (const item of (plan.missing || [])) {
+            cardsHtml.push(`
+              <div class="polish-card" data-polish-card-type="missing-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
+                <div class="polish-card-header">
+                  <span class="polish-badge" style="background:#f97316; color:#fff;">缺读待补</span>
+                  <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
+                </div>
+                <div class="polish-card-text">${escapeHtml(item.expected || item.text || "缺读")}</div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="2">▶ 试听</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}">定位</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        if (!cardsHtml.length) {
+          listEl.innerHTML = `<div class="small" style="text-align:center; padding:24px 0; color:var(--muted);">当前筛选分类下无条目</div>`;
+        } else {
+          listEl.innerHTML = cardsHtml.join("");
+        }
+      }
+
+      function previewTimeRange(start, duration = 1.5) {
+        seekTimeline(Math.max(0, start));
+        if (!state.playing) {
+          togglePlay();
+          setTimeout(() => {
+            if (state.playing) togglePlay();
+          }, Math.max(800, (duration + 0.5) * 1000));
+        }
+      }
+
+      function cutSinglePauseGap(gapId) {
+        const gap = (window.__pauseGapPlan || []).find(g => g.id === gapId);
+        if (!gap) return;
+        if (gap.locked) {
+          toast("该气口处于经文保护中，如需切除请先勾选上方解锁开关");
+          return;
+        }
+        snapshot();
+        const start = Math.max(0, Number(gap.cutStart || gap.start || 0));
+        let end = Math.max(start + 0.04, Number(gap.cutEnd || gap.end || 0));
+        end = Math.min(end, Math.max(start + 0.04, Number(gap.end || end) - 0.05));
+        if (end <= start + 0.04) {
+          toast("该气口过短，无法安全切除");
+          return;
+        }
+        const sourceStart = timelineToSource(start);
+        let sourceEnd = timelineToSource(end);
+        if (sourceEnd <= sourceStart + 0.04) return;
+        const nextCaption = (state.captions || [])
+          .map((item) => Number(item.start || 0))
+          .filter((time) => time >= Number(gap.end || end) - 0.02)
+          .sort((left, right) => left - right)[0];
+        if (Number.isFinite(nextCaption)) {
+          const nextSource = timelineToSource(nextCaption);
+          sourceEnd = Math.min(sourceEnd, Math.max(sourceStart + 0.04, nextSource - 0.05));
+        }
+        if (sourceEnd <= sourceStart + 0.04) return;
+        state.removals.push({
+          start: sourceStart,
+          end: sourceEnd,
+          source: "pause-gap",
+        });
+        shiftTracks(start, end - start);
+        normalizeRemovals();
+        recomputeContentDuration();
+        clampTracksToDuration();
+        seekTimeline(start);
+        renderAll();
+
+        window.__pauseGapPlan = (window.__pauseGapPlan || []).filter(g => g.id !== gapId);
+        renderPolishSidebarList();
+        toast(`已切除 ${Number(gap.duration || 0).toFixed(2)} 秒气口`);
+      }
+
+      function mergeCaptionsAcrossGap(gapId) {
+        const gap = (window.__pauseGapPlan || []).find(g => g.id === gapId);
+        if (!gap) return;
+        const leftCap = (state.captions || []).find(c => Math.abs(Number(c.end || 0) - Number(gap.start || 0)) < 0.25 || (Number(c.start || 0) <= gap.start && Number(c.end || 0) <= gap.end));
+        const rightCap = (state.captions || []).find(c => Math.abs(Number(c.start || 0) - Number(gap.end || 0)) < 0.25 || (Number(c.start || 0) >= gap.start && Number(c.end || 0) >= gap.end));
+        if (leftCap && rightCap && leftCap.id !== rightCap.id) {
+          snapshot();
+          leftCap.text = `${(leftCap.text || "").trim()} ${(rightCap.text || "").trim()}`.trim();
+          leftCap.end = rightCap.end;
+          state.captions = state.captions.filter(c => c.id !== rightCap.id);
+          renderAll();
+          window.__pauseGapPlan = (window.__pauseGapPlan || []).filter(g => g.id !== gapId);
+          renderPolishSidebarList();
+          toast("已合并前后两句字幕");
+        } else {
+          toast("未找到紧邻该气口的前后字幕");
+        }
       }
       async function runGlobalPolish() {
         const button = $("globalPolish");
@@ -11933,9 +12259,9 @@
       function hardwareExportLabel() {
         if (selectedExportDevice() === "cpu") return "⚙️ CPU 软件编码导出";
         const vendor = cachedExportHardware?.vendor;
-        if (vendor === "nvidia") return "🚀 NVIDIA 显卡加速 (NVENC)";
-        if (vendor === "intel") return "🚀 Intel 显卡加速 (QSV)";
-        if (vendor === "amd") return "🚀 AMD 显卡加速 (AMF)";
+        if (vendor === "nvidia") return "🚀 NVIDIA 显卡加速导出 (NVENC)";
+        if (vendor === "intel") return "🚀 Intel 显卡加速导出 (QSV)";
+        if (vendor === "amd") return "🚀 AMD 显卡加速导出 (AMF)";
         if (vendor === "apple") return "🚀 Apple 硬件加速 (VideoToolbox)";
         if (vendor === "software") return "⚙️ 软件编码 (未检测到兼容显卡)";
         return cachedExportHardware?.label
@@ -12753,9 +13079,8 @@
           toast(state.loopPlayback ? "循环播放已开启" : "循环播放已关闭");
         };
       if ($("pauseCut")) $("pauseCut").onclick = runPauseCut;
-      if ($("addTrack"))
-        $("addTrack").onclick = () => {
-          addText();
+      $("addTrack").onclick = () => {
+        addText();
           document.querySelector('[data-inspect="basic"]')?.click();
           requestAnimationFrame(() => {
             $("objectText")?.focus();
@@ -14635,19 +14960,136 @@
       $("aiReviewStrict").onclick = () => reviewScriptWithAi("strict");
       $("aiReviewNatural").onclick = () => reviewScriptWithAi("natural");
       if ($("globalPolish")) $("globalPolish").onclick = runGlobalPolish;
+      if ($("runGlobalPolishSidebar")) $("runGlobalPolishSidebar").onclick = runGlobalPolish;
       if ($("lastPolishReport")) $("lastPolishReport").onclick = showLastPolishReport;
+
+      if ($("pauseGapThreshold")) {
+        $("pauseGapThreshold").oninput = () => {
+          // 清除每个 gap 的手动勾选缓存，按新阈值重新计算
+          (window.__pauseGapPlan || []).forEach(g => { delete g.userChecked; });
+          renderPolishSidebarList();
+        };
+      }
+      if ($("unlockScriptureGaps")) {
+        $("unlockScriptureGaps").onchange = () => {
+          if ($("unlockScriptureGaps").checked) {
+            toast("⚠️ 已开启经文气口勾选权限，请仔细复核经文完整性");
+          }
+          renderPolishSidebarList();
+        };
+      }
+
+      document.querySelectorAll(".polish-filter-tabs [data-polish-filter]").forEach((btn) => {
+        btn.onclick = () => {
+          document.querySelectorAll(".polish-filter-tabs [data-polish-filter]").forEach(b => b.classList.toggle("active", b === btn));
+          currentPolishFilter = btn.dataset.polishFilter || "all";
+          renderPolishSidebarList();
+        };
+      });
+
+      if ($("selectAllPolishBtn")) {
+        $("selectAllPolishBtn").onclick = () => {
+          (window.__pauseGapPlan || []).forEach(g => {
+            if (!g.locked) {
+              g.checked = true;
+              g.userChecked = true;
+            }
+          });
+          renderPolishSidebarList();
+          toast("已全选当前建议切除气口");
+        };
+      }
+
+      if ($("invertSelectPolishBtn")) {
+        $("invertSelectPolishBtn").onclick = () => {
+          (window.__pauseGapPlan || []).forEach(g => {
+            if (!g.locked) {
+              g.checked = !g.checked;
+              g.userChecked = g.checked;
+            }
+          });
+          renderPolishSidebarList();
+          toast("已反选气口");
+        };
+      }
+
+      if ($("applyPauseGapsSidebarBtn")) $("applyPauseGapsSidebarBtn").onclick = applySelectedPauseGaps;
+
+      if ($("globalPolishListSidebar")) {
+        $("globalPolishListSidebar").onclick = (event) => {
+          const actionBtn = event.target.closest("[data-polish-action]");
+          if (actionBtn) {
+            const action = actionBtn.dataset.polishAction;
+            if (action === "preview") {
+              const start = Number(actionBtn.dataset.start || 0);
+              const duration = Number(actionBtn.dataset.duration || 1.5);
+              previewTimeRange(start, duration);
+              return;
+            }
+            if (action === "preview-gap") {
+              const gapId = actionBtn.dataset.gapId;
+              const gap = (window.__pauseGapPlan || []).find(g => g.id === gapId);
+              if (gap) previewTimeRange(Math.max(0, Number(gap.start || 0) - 0.4), Number(gap.duration || 0.5) + 0.8);
+              return;
+            }
+            if (action === "cut-gap") {
+              const gapId = actionBtn.dataset.gapId;
+              cutSinglePauseGap(gapId);
+              return;
+            }
+            if (action === "merge-gap") {
+              const gapId = actionBtn.dataset.gapId;
+              mergeCaptionsAcrossGap(gapId);
+              return;
+            }
+            if (action === "toggle-gap-keep") {
+              const gapId = actionBtn.dataset.gapId;
+              const gap = (window.__pauseGapPlan || []).find(g => g.id === gapId);
+              if (gap && !gap.locked) {
+                gap.checked = !gap.checked;
+                gap.userChecked = gap.checked;
+                renderPolishSidebarList();
+              }
+              return;
+            }
+            if (action === "locate-issue") {
+              const issueId = actionBtn.dataset.issueId;
+              selectIssue(issueId);
+              return;
+            }
+          }
+
+          const checkbox = event.target.closest("[data-pause-gap]");
+          if (checkbox) {
+            const gapId = checkbox.dataset.pauseGap;
+            const gap = (window.__pauseGapPlan || []).find(g => g.id === gapId);
+            if (gap && !gap.locked) {
+              gap.checked = checkbox.checked;
+              gap.userChecked = gap.checked;
+              renderPolishSidebarList();
+            }
+            return;
+          }
+
+          // 点击整张卡片：跳转定位到时间线
+          const card = event.target.closest(".polish-card");
+          if (card && card.dataset.start !== undefined) {
+            const start = Number(card.dataset.start || 0);
+            seekTimeline(start);
+            document.querySelectorAll(".polish-card").forEach(c => c.classList.toggle("active", c === card));
+          }
+        };
+      }
+
       if ($("globalPolishClose"))
         $("globalPolishClose").onclick = () => {
-          persistPauseGapChecks();
           $("globalPolishModal").classList.remove("on");
         };
       if ($("applyPauseGapsBtn")) $("applyPauseGapsBtn").onclick = applySelectedPauseGaps;
       if ($("globalPolishBody"))
         $("globalPolishBody").onclick = (event) => {
-          persistPauseGapChecks();
           const button = event.target.closest("[data-polish-id]");
           if (button) {
-            persistPauseGapChecks();
             $("globalPolishModal").classList.remove("on");
             selectIssue(button.dataset.polishId);
             return;
@@ -14655,8 +15097,6 @@
           const timeEl = event.target.closest("[data-polish-time]");
           if (timeEl) seekTimeline(Number(timeEl.dataset.polishTime || 0));
         };
-      if ($("globalPolishBody"))
-        $("globalPolishBody").onchange = () => persistPauseGapChecks();
       if ($("openReviewSettings")) $("openReviewSettings").onclick = openReviewSettings;
       $("reviewProvider").onchange = async () => {
         toggleReviewProviderFields();
