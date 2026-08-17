@@ -940,9 +940,29 @@
       .timelinebar {
         display: flex;
         align-items: center;
-        gap: 7px;
+        gap: 4px;
         padding: 0 10px;
         border-bottom: 1px solid var(--line);
+      }
+      .tool-separator {
+        display: inline-block;
+        width: 1px;
+        height: 18px;
+        background: #34383c;
+        margin: 0 3px;
+        flex-shrink: 0;
+      }
+      #selectTool.active,
+      #bladeTool.active {
+        background: #e54b4b !important;
+        border-color: #e54b4b !important;
+        color: #fff !important;
+      }
+      #snapToggle.active,
+      #linkAV.active {
+        background: var(--blue, #2b91ff) !important;
+        border-color: var(--blue, #2b91ff) !important;
+        color: #fff !important;
       }
       .zoomlabel {
         color: var(--muted);
@@ -3505,51 +3525,72 @@
             title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
             style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
           >
-            ⚙</button
-          ><button class="btn iconbtn" id="addTrack" title="添加文本">
-            T＋</button
-          ><button class="btn iconbtn" id="linkAV" title="联动选择：成组音画一起移动和删除">
-            🔗</button
-          ><button class="btn iconbtn" id="snapToggle" title="时间线吸附（N）">
-            ⌁</button
-          ><button class="btn iconbtn" id="stepBack" title="后退一帧（←）">
-            ‹</button
-          ><button class="btn iconbtn" id="stepForward" title="前进一帧（→）">
-            ›</button
-          ><button
-            class="btn iconbtn"
-            id="trimLeft"
-            title="删除播放头左侧（Q）"
-          >
-            ◀|</button
-          ><button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
+            ⚙</button>
+
+          <span class="tool-separator"></span>
+
+          <!-- 达芬奇标准组 1: 核心编辑工具 -->
+          <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
             ↖</button
           ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
             ✂</button
-          ><button class="btn iconbtn" id="splitClip" title="在播放头切割经过的片段（⌘B）">
+          ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
             ╎</button
           ><button
             class="btn iconbtn"
-            id="trimRight"
-            title="删除播放头右侧（W）"
+            id="trimLeft"
+            title="波纹剪左：删除播放头左侧到入点（Q）"
           >
-            |▶</button
-          ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
-            ▣</button
+            ◀|</button
           ><button
+            class="btn iconbtn"
+            id="trimRight"
+            title="波纹剪右：删除播放头右侧到出点（W）"
+          >
+            |▶</button>
+
+          <span class="tool-separator"></span>
+
+          <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
+          <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
+            🧲</button
+          ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
+            🔗</button>
+
+          <span class="tool-separator"></span>
+
+          <!-- 达芬奇标准组 3: 逐帧微调与切点极速跳转 -->
+          <button class="btn iconbtn" id="stepBack" title="后退一帧（←）">
+            ‹</button
+          ><button class="btn iconbtn" id="stepForward" title="前进一帧（→）">
+            ›</button
+          ><button class="btn iconbtn" id="jumpPrevCut" title="跳转到上一个剪切点（↑）">
+            ⤒</button
+          ><button class="btn iconbtn" id="jumpNextCut" title="跳转到下一个剪切点（↓）">
+            ⤓</button>
+
+          <span class="tool-separator"></span>
+
+          <!-- 达芬奇标准组 4: 删除、撤销重做与辅助 -->
+          <button
             class="btn iconbtn danger"
             id="deleteClip"
-            title="删除（Delete）"
+            title="波纹删除：删除所选并前移靠拢（Delete）"
           >
-            ⌫</button
+            🗑</button
           ><button
             class="btn iconbtn danger"
             id="rippleDelete"
-            title="删除并前移（Shift+Delete）"
+            title="普通删除：原地留空（Backspace）"
           >
-            ⇤</button
-          ><button class="btn iconbtn" id="undo" title="撤销（⌘Z）">↶</button
-          ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z）">↷</button>
+            ⌫</button
+          ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">↶</button
+          ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">↷</button
+          ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
+            ▣</button
+          ><button class="btn iconbtn" id="addTrack" title="添加文本/轨道">
+            T＋</button>
+
           <div class="trackmenu" id="trackMenu">
             <button data-add-track-kind="video">新增视频轨道</button>
             <button data-add-track-kind="audio">新增音频轨道</button>
@@ -3557,8 +3598,12 @@
             <button data-add-track-kind="caption">新增字幕轨道</button>
             <button data-add-track-kind="text">新增文字轨道</button>
           </div>
+
           <div class="topspacer"></div>
-          <span class="zoomlabel">缩放</span
+
+          <!-- 达芬奇标准组 5: 右侧视图缩放区 -->
+          <button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-right: 4px;">⛶</button
+          ><button class="btn iconbtn" id="zoomOutBtn" title="缩小时间线（-）" style="width:24px;height:24px;font-size:14px;padding:0;">−</button
           ><input
             class="zoom"
             id="timelineZoom"
@@ -3567,7 +3612,10 @@
             max="300"
             data-button-step="5"
             value="60"
-          /><button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-left: 2px;">⛶</button><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button><span class="small" id="durationLabel">00:00</span>
+            style="width: 100px; margin: 0 3px;"
+          /><button class="btn iconbtn" id="zoomInBtn" title="放大时间线（+）" style="width:24px;height:24px;font-size:14px;padding:0;margin-right:4px;">+</button
+          ><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button
+          ><span class="small" id="durationLabel" style="font-family:monospace;font-weight:600;margin-left:4px;">00:00</span>
         </div>
         <div class="timelinebody">
           <div class="tracklabels-col" id="trackLabelCol">
@@ -5916,7 +5964,8 @@
       function toggleSnapping() {
         state.snapping = !state.snapping;
         if (!state.snapping) hideSnapGuide();
-        $("snapToggle").classList.toggle("primary", state.snapping);
+        $("snapToggle")?.classList.toggle("active", state.snapping);
+        $("snapToggle")?.classList.toggle("primary", state.snapping);
         $("snapToggle").title = state.snapping
           ? "时间线吸附（N）"
           : "吸附已关闭（N）";
@@ -12736,7 +12785,8 @@
           };
         }
         state.audio.offset = 0;
-        $("linkAV").classList.toggle("primary", state.avLinked);
+        $("linkAV")?.classList.toggle("active", state.avLinked);
+        $("linkAV")?.classList.toggle("primary", state.avLinked);
         $("linkAV").title = state.avLinked
           ? "联动选择：成组音画一起移动和删除"
           : "联动选择已关闭，音画可独立调整";
@@ -12747,6 +12797,13 @@
       $("snapToggle").onclick = toggleSnapping;
       $("stepBack").onclick = () => seekTimeline(state.currentTime - 1 / 30);
       $("stepForward").onclick = () => seekTimeline(state.currentTime + 1 / 30);
+      if ($("jumpPrevCut")) $("jumpPrevCut").onclick = () => jumpToCutPoint("prev");
+      if ($("jumpNextCut")) $("jumpNextCut").onclick = () => jumpToCutPoint("next");
+      if ($("trimLeft")) $("trimLeft").onclick = () => trimAtPlayhead("left");
+      if ($("trimRight")) $("trimRight").onclick = () => trimAtPlayhead("right");
+      if ($("freezeFrame")) $("freezeFrame").onclick = createFreezeFrame;
+      if ($("zoomOutBtn")) $("zoomOutBtn").onclick = () => setTimelineZoomAroundPlayhead(state.zoom * 0.85);
+      if ($("zoomInBtn")) $("zoomInBtn").onclick = () => setTimelineZoomAroundPlayhead(state.zoom * 1.18);
       $("splitClip").onclick = splitSelected;
       if ($("selectTool"))
         $("selectTool").onclick = () => {
