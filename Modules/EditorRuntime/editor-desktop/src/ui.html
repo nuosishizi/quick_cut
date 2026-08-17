@@ -958,11 +958,38 @@
       }
       .timeline-resizer:hover { background: rgba(31, 131, 255, .55); }
       .timelinebar {
+        display: grid;
+        grid-template-columns: var(--track-label-width) 5px minmax(0, 1fr);
+        border-bottom: 1px solid var(--line);
+        background: #181a1c;
+        height: 40px;
+        box-sizing: border-box;
+      }
+      .timelinebar-left {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 0 12px;
+        background: #16181a;
+        overflow: hidden;
+      }
+      .timelinebar-left-timecode {
+        font-family: monospace;
+        font-size: 13px;
+        font-weight: 700;
+        color: #e5e7eb;
+        letter-spacing: 0.5px;
+      }
+      .timelinebar-divider {
+        background: var(--line);
+      }
+      .timelinebar-tools {
         display: flex;
         align-items: center;
         gap: 4px;
-        padding: 0 10px;
-        border-bottom: 1px solid var(--line);
+        padding: 0 8px;
+        min-width: 0;
+        overflow: hidden;
       }
       .tool-separator {
         display: inline-block;
@@ -3538,98 +3565,103 @@
       <section class="timeline" id="timeline" data-drop-zone="timeline">
         <div class="timeline-resizer" id="timelineResizer"></div>
         <div class="timelinebar">
-          <!-- 达芬奇标准组 1: 核心剪辑工具 -->
-          <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
-            ↖</button
-          ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
-            ✂</button
-          ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
-            ╎</button
-          ><button
-            class="btn iconbtn"
-            id="trimLeft"
-            title="波纹剪左：删除播放头左侧到入点（Q）"
-          >
-            ◀|</button
-          ><button
-            class="btn iconbtn"
-            id="trimRight"
-            title="波纹剪右：删除播放头右侧到出点（W）"
-          >
-            |▶</button>
-
-          <span class="tool-separator"></span>
-
-          <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
-          <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
-            🧲</button
-          ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
-            🔗</button>
-
-          <span class="tool-separator"></span>
-
-          <!-- 达芬奇标准组 3: 删除、撤销与辅助 -->
-          <button
-            class="btn iconbtn danger"
-            id="deleteClip"
-            title="波纹删除：删除所选并前移靠拢（Delete）"
-          >
-            🗑</button
-          ><button
-            class="btn iconbtn danger"
-            id="rippleDelete"
-            title="普通删除：原地留空（Backspace）"
-          >
-            ⌫</button
-          ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">↶</button
-          ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">↷</button
-          ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
-            ▣</button>
-
-          <span class="tool-separator"></span>
-
-          <!-- 达芬奇标准组 4: 智能工具与轨道 -->
-          <button
-            class="btn"
-            id="pauseCut"
-            title="自动剪停顿：根据气口设置快速剪除多余停顿与底噪"
-          >
-            自动剪停顿</button
-          ><button
-            class="btn iconbtn"
-            id="openPauseCutSettings"
-            title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
-            style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
-          >
-            ⚙</button
-          ><button class="btn iconbtn" id="addTrack" title="添加文本/轨道">
-            T＋</button>
-
-          <div class="trackmenu" id="trackMenu">
-            <button data-add-track-kind="video">新增视频轨道</button>
-            <button data-add-track-kind="audio">新增音频轨道</button>
-            <button data-add-track-kind="image">新增图片轨道</button>
-            <button data-add-track-kind="caption">新增字幕轨道</button>
-            <button data-add-track-kind="text">新增文字轨道</button>
+          <div class="timelinebar-left">
+            <span class="timelinebar-left-timecode" id="timelineBarTimecode">00:00:00:00</span>
           </div>
+          <div class="timelinebar-divider"></div>
+          <div class="timelinebar-tools">
+            <!-- 达芬奇标准组 1: 核心剪辑工具 -->
+            <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
+              ↖</button
+            ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
+              ✂</button
+            ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
+              ╎</button
+            ><button
+              class="btn iconbtn"
+              id="trimLeft"
+              title="波纹剪左：删除播放头左侧到入点（Q）"
+            >
+              ◀|</button
+            ><button
+              class="btn iconbtn"
+              id="trimRight"
+              title="波纹剪右：删除播放头右侧到出点（W）"
+            >
+              |▶</button>
 
-          <div class="topspacer"></div>
+            <span class="tool-separator"></span>
 
-          <!-- 达芬奇标准组 5: 右侧视图缩放区 -->
-          <button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-right: 4px;">⛶</button
-          ><button class="btn iconbtn" id="zoomOutBtn" title="缩小时间线（-）" style="width:24px;height:24px;font-size:14px;padding:0;">−</button
-          ><input
-            class="zoom"
-            id="timelineZoom"
-            type="range"
-            min="1"
-            max="300"
-            data-button-step="5"
-            value="60"
-            style="width: 100px; margin: 0 3px;"
-          /><button class="btn iconbtn" id="zoomInBtn" title="放大时间线（+）" style="width:24px;height:24px;font-size:14px;padding:0;margin-right:4px;">+</button
-          ><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button
-          ><span class="small" id="durationLabel" style="font-family:monospace;font-weight:600;margin-left:4px;">00:00</span>
+            <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
+            <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
+              🧲</button
+            ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
+              🔗</button>
+
+            <span class="tool-separator"></span>
+
+            <!-- 达芬奇标准组 3: 删除、撤销与辅助 -->
+            <button
+              class="btn iconbtn danger"
+              id="deleteClip"
+              title="波纹删除：删除所选并前移靠拢（Delete）"
+            >
+              🗑</button
+            ><button
+              class="btn iconbtn danger"
+              id="rippleDelete"
+              title="普通删除：原地留空（Backspace）"
+            >
+              ⌫</button
+            ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">↶</button
+            ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">↷</button
+            ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
+              ▣</button>
+
+            <span class="tool-separator"></span>
+
+            <!-- 达芬奇标准组 4: 智能工具与轨道 -->
+            <button
+              class="btn"
+              id="pauseCut"
+              title="自动剪停顿：根据气口设置快速剪除多余停顿与底噪"
+            >
+              自动剪停顿</button
+            ><button
+              class="btn iconbtn"
+              id="openPauseCutSettings"
+              title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
+              style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
+            >
+              ⚙</button
+            ><button class="btn iconbtn" id="addTrack" title="添加文本/轨道">
+              T＋</button>
+
+            <div class="trackmenu" id="trackMenu">
+              <button data-add-track-kind="video">新增视频轨道</button>
+              <button data-add-track-kind="audio">新增音频轨道</button>
+              <button data-add-track-kind="image">新增图片轨道</button>
+              <button data-add-track-kind="caption">新增字幕轨道</button>
+              <button data-add-track-kind="text">新增文字轨道</button>
+            </div>
+
+            <div class="topspacer"></div>
+
+            <!-- 达芬奇标准组 5: 右侧视图缩放区 -->
+            <button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-right: 4px;">⛶</button
+            ><button class="btn iconbtn" id="zoomOutBtn" title="缩小时间线（-）" style="width:24px;height:24px;font-size:14px;padding:0;">−</button
+            ><input
+              class="zoom"
+              id="timelineZoom"
+              type="range"
+              min="1"
+              max="300"
+              value="60"
+              style="width: 100px; margin: 0 4px;"
+            /><button class="btn iconbtn" id="zoomInBtn" title="放大时间线（+）" style="width:24px;height:24px;font-size:14px;padding:0;margin-right:4px;">+</button
+            ><button class="btn" id="followPlayhead" title="播放时时间线滚动，播放头停在画面里">跟随滚动</button
+            ><span class="small" id="durationLabel" style="font-family:monospace;font-weight:600;margin-left:4px;">00:00</span>
+          </div>
         </div>
         <div class="timelinebody">
           <div class="tracklabels-col" id="trackLabelCol">
@@ -5908,6 +5940,8 @@
         if (el) el.style.left = `${overlayX(state.currentTime)}px`;
         if ($("rulerTimecode"))
           $("rulerTimecode").textContent = formatTime(state.currentTime, false);
+        if ($("timelineBarTimecode"))
+          $("timelineBarTimecode").textContent = formatTime(state.currentTime, true);
       }
       function syncTimelineChrome() {
         syncRulerScroll();
