@@ -532,6 +532,61 @@ export function collectMainMoveIds({
   return [...ids].filter(Boolean);
 }
 
+// ── Ripple-safe outward recovery ──────────────────────────────────
+// In ripple mode, extending a clip must only shrink the single removal
+// that directly borders the clip's source boundary.  applyMainTrimEdge
+// would remove ALL removals and manual cuts in the recovery range,
+// which merges separate clips and creates phantom fragments.
+export function rippleRecoverAdjacentRemoval(removals = [], manualCuts = [], clip = {}, edge = "end", targetSource = 0, sourceDuration = 0) {
+  const cleanRemovals = (removals || []).map((r) => ({ ...r }));
+  const cleanCuts = [...(manualCuts || [])];
+  const srcStart = Number(clip.sourceStart || 0);
+  const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
+  const maxDur = Math.max(srcEnd, Number(sourceDuration || 0));
+  const target = Math.max(0, Math.min(maxDur, Number(targetSource || 0)));
+  let deltaSource = 0;
+
+  if (edge === "end" && target > srcEnd + 0.002) {
+    // Find the removal whose range covers srcEnd (the clip's tail boundary)
+    const idx = cleanRemovals.findIndex((r) =>
+      r.start <= srcEnd + 0.05 && r.end > srcEnd + 0.002,
+    );
+    if (idx >= 0) {
+      const adj = cleanRemovals[idx];
+      // Only extend into THIS removal — never past its end
+      const actualTarget = Math.min(target, adj.end);
+      deltaSource = actualTarget - srcEnd;
+      if (actualTarget >= adj.end - 0.002) {
+        cleanRemovals.splice(idx, 1); // fully consumed
+      } else {
+        adj.start = actualTarget; // partially consumed
+      }
+    }
+    // If no adjacent removal → source is already visible, no delta
+  } else if (edge === "start" && target < srcStart - 0.002) {
+    // Find the removal whose range covers srcStart (the clip's head boundary)
+    const idx = cleanRemovals.findIndex((r) =>
+      r.end >= srcStart - 0.05 && r.start < srcStart - 0.002,
+    );
+    if (idx >= 0) {
+      const adj = cleanRemovals[idx];
+      const actualTarget = Math.max(target, adj.start);
+      deltaSource = srcStart - actualTarget;
+      if (actualTarget <= adj.start + 0.002) {
+        cleanRemovals.splice(idx, 1);
+      } else {
+        adj.end = actualTarget;
+      }
+    }
+  }
+
+  return {
+    removals: normalizeRemovalsList(cleanRemovals),
+    manualCuts: cleanCuts.sort((a, b) => a - b),
+    deltaSource,
+  };
+}
+
 export function commitMainEdgeTrim({
   removals = [],
   manualCuts = [],
@@ -544,25 +599,55 @@ export function commitMainEdgeTrim({
   globalOffset = 0,
   speed = 1,
 } = {}) {
-  const trim = applyMainTrimEdge(
-    removals,
-    manualCuts,
-    clip,
-    edge,
-    targetSource,
-    sourceDuration,
-  );
-  const absorbed = absorbTrimSourceRange(clip, edge, targetSource, snapshot);
+  // Detect whether this is an outward extend (recovering removed material)
+  const srcStart = Number(clip.sourceStart || 0);
+  const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
+  const isOutwardExtend =
+    (edge === "end" && Number(targetSource) > srcEnd + 0.002) ||
+    (edge === "start" && Number(targetSource) < srcStart - 0.002);
+
+  // In ripple mode, outward extends must use the targeted recovery that
+  // only shrinks the single adjacent removal.  applyMainTrimEdge would
+  // remove ALL removals and manual cuts in the range, merging clips and
+  // creating phantom fragments.
+  const trim = (mode === "ripple" && isOutwardExtend)
+    ? rippleRecoverAdjacentRemoval(
+        removals,
+        manualCuts,
+        clip,
+        edge,
+        targetSource,
+        sourceDuration,
+      )
+    : applyMainTrimEdge(
+        removals,
+        manualCuts,
+        clip,
+        edge,
+        targetSource,
+        sourceDuration,
+      );
+  // In ripple mode the inter-clip gaps must be preserved so downstream
+  // tracks shift by exactly delta.  absorbTrimSourceRange is only needed
+  // in select ("trim") mode where the gap itself should vanish.
+  const absorbed = mode !== "ripple"
+    ? absorbTrimSourceRange(clip, edge, targetSource, snapshot)
+    : null;
   let nextRemovals = trim.removals;
   let nextCuts = trim.manualCuts;
   if (absorbed && absorbed.end > absorbed.start + 0.002) {
-    nextRemovals = normalizeRemovalsList([
-      ...nextRemovals,
-      { ...absorbed, source: "edge-trim" },
-    ]);
-    nextCuts = (nextCuts || []).filter(
-      (cut) => Number(cut) <= absorbed.start + 0.002 || Number(cut) >= absorbed.end - 0.002,
-    );
+    // Clamp to clip's own source boundaries – never delete a neighbor's gap
+    const safeStart = Math.max(absorbed.start, Number(clip.sourceStart || 0));
+    const safeEnd = Math.min(absorbed.end, Number(clip.sourceEnd || absorbed.end));
+    if (safeEnd > safeStart + 0.002) {
+      nextRemovals = normalizeRemovalsList([
+        ...nextRemovals,
+        { start: safeStart, end: safeEnd, source: "edge-trim" },
+      ]);
+      nextCuts = (nextCuts || []).filter(
+        (cut) => Number(cut) <= safeStart + 0.002 || Number(cut) >= safeEnd - 0.002,
+      );
+    }
   }
   let packed = buildPackedMainClips(
     nextRemovals,

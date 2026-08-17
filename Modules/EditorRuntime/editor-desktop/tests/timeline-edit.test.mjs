@@ -34,6 +34,7 @@ import {
   matchClipBySource,
   collectMainMoveIds,
   absorbTrimSourceRange,
+  rippleRecoverAdjacentRemoval,
 } from "../src/timeline-edit.mjs";
 
 test("linked selection only follows the same-source A/V group", () => {
@@ -413,6 +414,67 @@ test("ripple tail trim does not leave a sliver clip between neighbors", () => {
   const laterStart = later.start + Number(result.videoOffsets[later.id] || 0);
   const trimmedEnd = trimmed.end + Number(result.videoOffsets[trimmed.id] || 0);
   assert.ok(Math.abs(laterStart - trimmedEnd) < 0.05);
+});
+
+test("ripple extend tail only shrinks the adjacent removal and never creates phantom fragments", () => {
+  // Scenario: 3 clips with gaps (removals) between them.
+  // Extending clip A's tail should only eat into removal [10, 15],
+  // NOT touch removal [25, 30] or manual cuts, and NOT create new clips.
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-15.0000-25.0000", sourceStart: 15, sourceEnd: 25, start: 10, end: 20 },
+    { id: "v-30.0000-40.0000", sourceStart: 30, sourceEnd: 40, start: 20, end: 30 },
+  ];
+  const removals = [
+    { start: 10, end: 15, source: "pause" },
+    { start: 25, end: 30, source: "pause" },
+  ];
+  const manualCuts = [15, 30];
+
+  // Extend clip A from source 10 to source 18 (into the [10,15] gap)
+  const result = commitMainEdgeTrim({
+    removals,
+    manualCuts,
+    clip: snapshot[0],
+    edge: "end",
+    targetSource: 18,
+    sourceDuration: 40,
+    mode: "ripple",
+    snapshot,
+  });
+
+  // The adjacent removal [10,15] should be fully consumed (target=18 > 15)
+  // but rippleRecoverAdjacentRemoval caps at the removal's end, so delta=5
+  assert.equal(result.deltaSource, 5, "delta should be capped at removal boundary");
+
+  // The second removal [25,30] must survive untouched
+  const secondRemoval = result.removals.find((r) => r.start >= 24 && r.end <= 31);
+  assert.ok(secondRemoval, "second removal [25,30] must survive");
+
+  // Manual cuts must be preserved
+  assert.ok(result.manualCuts.includes(15) || result.manualCuts.includes(30),
+    "manual cuts must not be deleted by ripple extend");
+
+  // No phantom fragments — clip count should stay at 3
+  assert.equal(result.packed.length, 3, "must not create phantom fragments");
+
+  // The downstream clips must shift forward by delta/speed
+  const overlayDelta = result.overlayDelta;
+  assert.ok(overlayDelta > 4.9 && overlayDelta < 5.1,
+    "overlay delta should be ~5s (the recovered amount)");
+
+  // Also verify rippleRecoverAdjacentRemoval directly:
+  const directResult = rippleRecoverAdjacentRemoval(
+    removals,
+    manualCuts,
+    snapshot[0],
+    "end",
+    18,
+    40,
+  );
+  assert.equal(directResult.deltaSource, 5, "direct call: delta capped at adj removal end");
+  assert.ok(directResult.removals.some((r) => r.start >= 24),
+    "direct call: second removal [25,30] must survive");
 });
 
 test("shift-drag selection moves every selected main clip id", () => {
