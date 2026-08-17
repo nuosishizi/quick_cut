@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { mergeRanges } from "./pausecut.mjs";
-import { captionLayoutMetrics } from "./text-layout.mjs";
+import { wrapCaptionWordList } from "./text-layout.mjs";
 import { writeAssSubtitleFile } from "./media.mjs";
 
 function xmlEscape(value) {
@@ -218,13 +218,14 @@ export function normalizeCaptionStyle(style = {}, transform = {}, canvas = {}) {
 }
 
 export function wrapCaptionText(text, style = {}, canvasWidth = 1080, boxWidth = 860) {
-  const layout = captionLayoutMetrics(
-    { text, width: boxWidth, scale: 1 },
+  const width = Math.max(160, Math.min(canvasWidth, Number(boxWidth || canvasWidth * 0.8)));
+  return wrapCaptionWordList(
+    String(text || "").split(/\s+/).filter(Boolean),
     style,
-    canvasWidth,
-    { maxLines: style.captionLines ?? 2 },
-  );
-  return (layout.lines || []).map((line) => String(line || "").trim()).filter(Boolean);
+    width,
+    style.captionLines ?? 2,
+    1,
+  ).map((line) => line.join(" ").trim()).filter(Boolean);
 }
 
 function hexToRgba(hex, alpha = 1) {

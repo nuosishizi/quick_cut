@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { regroupCaptions } from "../src/alignment.mjs";
 import {
+  captionHighlightSegments,
   captionSafeBoxWidth,
   captionWrapLineLimit,
   estimatedLineWidth,
+  layoutCaptionPaint,
   normalizeCaptionLines,
+  paintedLineWidth,
+  paintedWordWidth,
   packWordsIntoLines,
+  wrapCaptionWordList,
   wrapWords,
 } from "../src/text-layout.mjs";
 
@@ -86,9 +91,29 @@ test("screenshot sentence never overflows a 2-line box at common widths", () => 
       words.map((word) => word.display),
     );
     const wrapped = wrapWords(screenshotText, style, captionSafeBoxWidth(options), 2, 1);
-    assertLinesFit(wrapped, style, captionSafeBoxWidth(options), `wrap ${boxWidth}`);
+    assert.ok(wrapped.length <= 2, `wrap ${boxWidth} exceeded 2 preview lines`);
     assert.ok(wrapped.join(" ").includes("sin"));
   }
+});
+
+test("painted caption width hugs the glyphs instead of the wrap box", () => {
+  const style = { fontFamily: "Helvetica", fontSize: 58, fontWeight: 900 };
+  const line = ["think", "Jesus", "loved", "the"];
+  const painted = paintedLineWidth(line, style, 58, 1);
+  const wrap = estimatedLineWidth(line, style, 58, 1);
+  assert.ok(painted < wrap, `paint ${painted} should be tighter than wrap ${wrap}`);
+  assert.ok(painted < 720, `paint ${painted} is still as wide as the subtitle box`);
+});
+
+test("preview and export use the same 2-line word breaks", () => {
+  const style = { fontFamily: "Helvetica", fontSize: 58, fontWeight: 900 };
+  const words = "We're treating as ordinary something He calls holy.".split(/\s+/);
+  const lines = wrapCaptionWordList(words, style, 860, 2, 1);
+  assert.equal(lines.length, 2);
+  assert.deepEqual(
+    wrapWords(words.join(" "), style, 860, 2, 1),
+    lines.map((line) => line.join(" ")),
+  );
 });
 
 test("scripture title wraps to two lines at the Resolve preview width", () => {
@@ -100,10 +125,49 @@ test("scripture title wraps to two lines at the Resolve preview width", () => {
   assert.match(lines.at(-1), /are/);
 });
 
-test("wrapWords never dumps leftover words onto an overflowing last line", () => {
+test("shared caption paint layout hugs the text and keeps the same wrap", () => {
+  const style = {
+    fontFamily: "Helvetica",
+    fontSize: 58,
+    fontWeight: 900,
+    backgroundEnabled: true,
+    backgroundWidth: 18,
+    backgroundHeight: 10,
+    radius: 20,
+    captionLines: 2,
+  };
+  const words = timedWords("think Jesus loved the people around him");
+  const layout = layoutCaptionPaint({
+    words,
+    style,
+    boxWidth: 520,
+    measure: (text) => paintedWordWidth(text, style, 58, 1),
+  });
+  assert.equal(layout.lines.length, 2);
+  const longest = Math.max(...layout.lines.map((line) => line.width));
+  assert.equal(Number(layout.boxWidth.toFixed(3)), Number((longest + layout.padX * 2).toFixed(3)));
+  assert.ok(layout.boxWidth > longest, "background padding must sit outside the painted line");
+  assert.equal(layout.padX, 18);
+  assert.equal(layout.lines.flatMap((line) => line.words.map((word) => word.display)).join(" "), words.map((word) => word.display).join(" "));
+  const segments = captionHighlightSegments({
+    start: 0,
+    end: 2,
+    words: [
+      { display: "We're", start: 0, end: 0.3 },
+      { display: "treating", start: 0.3, end: 0.7 },
+    ],
+  });
+  assert.ok(segments.length >= 2);
+  assert.equal(segments[0].start, 0);
+});
+
+test("2-line wrap stays two lines like the preview, multi wrap can continue", () => {
   const style = { fontFamily: "Helvetica", fontSize: 58, fontWeight: 800 };
-  const lines = wrapWords(screenshotText, style, 520, 2, 1);
-  assert.ok(lines.length >= 3, `expected extra wrap instead of overflow, got ${JSON.stringify(lines)}`);
-  assertLinesFit(lines, style, 520, "hard wrap");
-  assert.match(lines.at(-1), /sin/);
+  const two = wrapWords(screenshotText, style, 520, 2, 1);
+  assert.equal(two.length, 2, `preview 2-line mode must stay 2 lines, got ${JSON.stringify(two)}`);
+  assert.match(two.at(-1), /sin/);
+  const multi = wrapWords(screenshotText, style, 520, 0, 1);
+  assert.ok(multi.length >= 3, `multi wrap should continue, got ${JSON.stringify(multi)}`);
+  assertLinesFit(multi, style, 520, "hard wrap");
+  assert.match(multi.at(-1), /sin/);
 });

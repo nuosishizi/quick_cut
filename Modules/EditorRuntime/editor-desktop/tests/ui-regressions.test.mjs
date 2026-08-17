@@ -161,6 +161,17 @@ test("subtitle side handles change wrapping width without changing font scale", 
   assert.match(ui, /data-width-handle="w"/);
   assert.match(ui, /data-width-handle="e"/);
   assert.match(ui, /function applyTextBoxWidth\(/);
+  assert.match(ui, /async function rasterizeCaptionsForExport/);
+  assert.match(ui, /function paintCaptionToContext/);
+  assert.match(ui, /function paintCaptionPreview/);
+  assert.match(ui, /function paintCaptionSnapshot/);
+  assert.match(ui, /canvas\.caption-paint/);
+  assert.match(ui, /paintCaptionFrame\(/);
+  assert.match(ui, /captionRasterized: captionRasters\.length > 0/);
+  assert.match(main, /QuickCutTextLayout/);
+  assert.match(main, /text-layout\.mjs must stay import-free/);
+  assert.match(main, /writeCaptionRaster: safe/);
+  assert.match(media, /_quickCutCaptionRaster/);
   assert.match(ui, /objectDrag\.widthResize/);
   assert.match(ui, /objectDrag\.obj\.width = nextWidth/);
   assert.match(ui, /function captionTwoLineBreak\(/);
@@ -168,10 +179,13 @@ test("subtitle side handles change wrapping width without changing font scale", 
   assert.match(ui, /function estimatedCaptionLineWidth\(/);
   assert.match(ui, /fontSize \* 0\.52/);
   assert.match(ui, /breaks\.length < maxBreaks/);
-  assert.match(ui, /Same width as wrapCaptionText/);
+  assert.match(ui, /identical to wrapCaptionWordList/);
   assert.match(ui, /\.captionobject \.caption-line \{[\s\S]*white-space:\s*nowrap;/);
   assert.match(ui, /contain:\s*layout style/);
-  assert.match(ui, /captionLineBreaks\(words, state\.captionTransform\.width, state\.captionLines\)/);
+  assert.match(ui, /layoutCaptionForCanvas\(caption, style, boxWidth/);
+  assert.match(ui, /state\.captionTransform\.width \|\| state\.width \* 0\.8/);
+  assert.match(media, /WrapStyle: 2/);
+  assert.match(media, /wrapCaptionWordList/);
   assert.match(ui, /function keepCaptionSelection\(/);
   assert.match(ui, /function scheduleCaptionReflow\(/);
   assert.match(ui, /boxWidth: state\.captionTransform\?\.width/);
@@ -216,6 +230,11 @@ test("DaVinci Resolve live send is wired", () => {
   assert.doesNotMatch(ui, /id="resolveTrackSelect"/);
   assert.doesNotMatch(ui, /id="startSendResolve"/);
   assert.doesNotMatch(main, /resolveTimelineInfo/);
+  const sendBody = ui.match(/async function sendCaptionsToResolve\(\) \{([\s\S]*?)\n      async function exportResolveTimeline/)?.[1] || "";
+  assert.match(sendBody, /nativeCall\("sendToResolve", resolveCaptionPayload\(\)\)/);
+  assert.doesNotMatch(sendBody, /rasterizeCaptionsForExport|writeCaptionRaster|_quickCutCaptionRaster/);
+  assert.match(ui, /function resolveCaptionPayload\(\) \{[\s\S]*captions: \(state\.captions \|\| \[\]\)\.map/);
+  assert.match(ui, /words: Array\.isArray\(caption\.words\) \? caption\.words : \[\]/);
 });
 
 test("export ends at visible production material instead of the timeline ruler", () => {
@@ -432,6 +451,9 @@ test("export defaults balance Apple hardware speed and Rec. 709 quality", () => 
   assert.match(media, /preferredVideoEncoder/);
   assert.match(media, /detectExportHardware/);
   assert.match(media, /-hwaccel", "cuda/);
+  assert.match(media, /preferredExportDecodeKind/);
+  assert.match(media, /exportIsStalled/);
+  assert.match(media, /EXPORT_ENCODE_STALL_MS/);
   assert.match(ui, /NVIDIA 显卡加速导出/);
   assert.match(ui, /function hardwareExportLabel/);
   assert.match(ui, /id="exportUseGpu"/);

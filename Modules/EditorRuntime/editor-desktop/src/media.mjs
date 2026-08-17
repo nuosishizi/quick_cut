@@ -10,7 +10,7 @@ import {
   samplesToFrames,
   waveformPeaks,
 } from "./pausecut.mjs";
-import { captionLayoutMetrics, captionWrapLineLimit, estimatedWordWidth, normalizedFontWeight, wordGap, wrapWords } from "./text-layout.mjs";
+import { CAPTION_WORD_MARGIN_EM, estimatedWordWidth, normalizedFontWeight, paintedLineWidth, wordGap, wrapCaptionWordList } from "./text-layout.mjs";
 import {
   defaultSupportRoot,
   fallbackFontFiles,
@@ -264,10 +264,29 @@ export function encoderDisplayName(encoder = "") {
   return encoder || "编码器";
 }
 
+export const EXPORT_ENCODE_STALL_MS = 15_000;
+
+export function preferredExportDecodeKind(encoder, hardwareDecode = "") {
+  const hardwareEncode = /videotoolbox|nvenc|amf|qsv|_mf$/.test(String(encoder || ""));
+  if (!hardwareEncode) return "";
+  // CUDA/QSV/D3D11 decode + CPU filter_complex (captions, color, scale)
+  // often sits on frame 0. GPU encode still runs; only skip GPU decode.
+  if (/videotoolbox/.test(String(encoder || "")) && hardwareDecode === "videotoolbox")
+    return "videotoolbox";
+  return "";
+}
+
+export function exportIsStalled(job, now = Date.now(), limit = EXPORT_ENCODE_STALL_MS) {
+  if (!job || job.frameProgress) return false;
+  if (!["exporting", "preparing"].includes(String(job.state || ""))) return false;
+  const last = Number(job.lastProgressAt || job.startedAt || now);
+  return now - last >= limit;
+}
+
 function decodeAccelArgs(kind) {
   if (kind === "videotoolbox") return ["-hwaccel", "videotoolbox"];
-  if (kind === "cuda") return ["-hwaccel", "cuda"];
-  if (kind === "qsv") return ["-hwaccel", "qsv"];
+  if (kind === "cuda") return ["-hwaccel", "cuda", "-hwaccel_output_format", "nv12"];
+  if (kind === "qsv") return ["-hwaccel", "qsv", "-hwaccel_output_format", "nv12"];
   if (kind === "d3d11va") return ["-hwaccel", "d3d11va"];
   return [];
 }
@@ -304,7 +323,8 @@ export function videoEncodeArgs(encoder, options = {}) {
     args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1", "-realtime", "true");
   if (encoder === "h264_nvenc" || encoder === "hevc_nvenc") {
     const preset = qualityMode === "fast" ? "p7" : qualityMode === "maximum" ? "p3" : "p5";
-    args.push("-preset", preset, "-rc", "vbr", "-gpu", "0");
+    const lookahead = qualityMode === "fast" ? 0 : qualityMode === "maximum" ? 20 : 8;
+    args.push("-preset", preset, "-rc", "vbr", "-gpu", "0", "-rc-lookahead", String(lookahead));
     if (encoder === "hevc_nvenc")
       args.push("-profile:v", hdr ? "main10" : "main", "-tag:v", "hvc1");
     else args.push("-profile:v", "high");
@@ -1003,6 +1023,13 @@ function escapeAssText(value) {
     .replace(/\r?\n/g, " ");
 }
 
+export function captionRasterOverlayOffset(frameW, frameH, x, y, w, h) {
+  return {
+    x: Number(x || 0) - (Number(frameW || 0) - Number(w || 0)) / 2,
+    y: Number(y || 0) - (Number(frameH || 0) - Number(h || 0)) / 2,
+  };
+}
+
 function captionLayoutOrigin(caption = {}, canvas = {}) {
   const width = Math.max(320, Number(canvas.width || 1080));
   const height = Math.max(320, Number(canvas.height || 1920));
@@ -1094,18 +1121,25 @@ function assAnimationTags(animation, x, y, durationMs, style = {}) {
   return tags[animation] || pin;
 }
 
+function captionWordDisplays(caption, style = {}) {
+  if (Array.isArray(caption?.words) && caption.words.length) {
+    return caption.words
+      .map((word) => casedText(String(word.display || "").trim(), style.textCase))
+      .filter(Boolean);
+  }
+  return casedText(String(caption?.text || ""), style.textCase).split(/\s+/).filter(Boolean);
+}
+
 function captionAssLines(caption, style, boxWidth, canvasWidth = 1080) {
-  const text = spacedText(casedText(String(caption.text || ""), style.textCase), style.wordSpacing);
-  const lines = wrapWords(
-    text,
+  const width = Math.max(80, Number(boxWidth || canvasWidth * 0.8));
+  const lines = wrapCaptionWordList(
+    captionWordDisplays(caption, style),
     style,
-    Math.max(80, Number(boxWidth || canvasWidth * 0.8)),
-    captionWrapLineLimit(style.captionLines),
-    1,
-  )
-    .map((line) => String(line || "").trim())
-    .filter(Boolean);
-  return lines.length ? lines : [text].filter(Boolean);
+    width,
+    style.captionLines,
+    Math.max(0.2, Number(caption.scale || 1)),
+  ).map((line) => line.join(" ").trim()).filter(Boolean);
+  return lines.length ? lines : captionWordDisplays(caption, style);
 }
 
 function markWrappedCaptionWords(caption, style, boxWidth) {
@@ -1120,13 +1154,13 @@ function markWrappedCaptionWords(caption, style, boxWidth) {
         start: Number(caption.start) + ((Number(caption.end) - Number(caption.start)) * index) / Math.max(1, list.length),
         end: Number(caption.start) + ((Number(caption.end) - Number(caption.start)) * (index + 1)) / Math.max(1, list.length),
       }));
-  const lines = wrapWords(
-    words.map((word) => word.display).join(" "),
+  const lines = wrapCaptionWordList(
+    words.map((word) => word.display),
     style,
     Math.max(80, Number(boxWidth || 860)),
-    captionWrapLineLimit(style.captionLines),
-    1,
-  ).map((line) => line.split(/\s+/).filter(Boolean));
+    style.captionLines,
+    Math.max(0.2, Number(caption.scale || 1)),
+  );
   const marked = [];
   let cursor = 0;
   lines.forEach((line, lineIndex) => {
@@ -1135,12 +1169,19 @@ function markWrappedCaptionWords(caption, style, boxWidth) {
       cursor += 1;
       marked.push({
         ...word,
-        display: word.display || token,
+        display: casedText(word.display || token, style.textCase),
         breakAfter: tokenIndex === line.length - 1 && lineIndex < lines.length - 1,
       });
     });
   });
   return marked.length ? marked : words;
+}
+
+function assWordSeparator(style = {}, fontSize = 54) {
+  const size = Math.max(10, Number(fontSize || 54));
+  const extra = Number(style.wordSpacing || 0);
+  const hard = Math.max(0, Math.min(6, Math.round((size * CAPTION_WORD_MARGIN_EM + extra) / Math.max(8, size * 0.3))));
+  return ` ${"\\h".repeat(hard)}`;
 }
 
 function stableWordAssEvents(caption, style, x, y, animation, boxWidth = 860) {
@@ -1159,8 +1200,7 @@ function stableWordAssEvents(caption, style, x, y, animation, boxWidth = 860) {
   const wordWidths = words.map((word) => estimatedWordWidth(word.display || "", style, fontSize, 1));
   const totalWidth = wordWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, words.length - 1);
   const left = x - totalWidth / 2;
-  const separatorCount = Math.max(1, Math.min(8, 1 + Math.round(Number(style.wordSpacing || 0) / 6)));
-  const separator = " ".repeat(separatorCount);
+  const separator = assWordSeparator(style, fontSize);
   const wordTimes = words.map((word, index) => {
     const start = Math.max(Number(caption.start), Number(word.start ?? (Number(caption.start) + (Number(caption.end)-Number(caption.start))*index/words.length)));
     const next = words[index + 1];
@@ -1279,23 +1319,79 @@ function lineRiseAssEvents(caption, style, x, y, fontSize) {
   ];
 }
 
-function estimatedCaptionBox(caption, style, fontSize, scale, x, y) {
-  const words = String(casedText(caption.text || "", style.textCase)).split(/\s+/).filter(Boolean);
+function captionBackgroundLines(caption, style, fontSize, scale, boxWidth = 860) {
+  return wrapCaptionWordList(
+    captionWordDisplays(caption, style),
+    style,
+    Math.max(80, Number(boxWidth || caption.width || 860)),
+    style.captionLines,
+    scale,
+  );
+}
+
+export function estimatedCaptionBox(caption, style, fontSize, scale, x, y, boxWidth = 860) {
+  const lines = captionBackgroundLines(caption, style, fontSize, scale, boxWidth);
   const widthPad = Math.max(0, Number(style.backgroundWidth ?? style.padding ?? 14)) * scale;
   const heightPad = Math.max(0, Number(style.backgroundHeight ?? style.padding ?? 14)) * scale;
-  const gap = wordGap(style, fontSize);
-  const textWidth = words.reduce((sum, word) => sum + estimatedWordWidth(word, style, fontSize, scale), 0) + gap * Math.max(0, words.length - 1);
-  const isFit = style.backgroundFitText !== false;
-  const width = isFit
-    ? Math.max(80, textWidth + widthPad * 2) * Math.max(0.2, Number(style.backgroundScaleX || 1))
-    : Math.max(80, Number(style.boxWidth || 864) * scale);
-  const height = Math.max(28, fontSize * Math.max(1.2, Number(style.lineHeight || 1.15)) * 1.35 + heightPad * 2) * Math.max(0.2, Number(style.backgroundScaleY || 1));
+  const textWidth = Math.max(
+    0,
+    ...lines.map((line) => paintedLineWidth(line, style, fontSize, scale)),
+  );
+  const fitText = style.backgroundFitText !== false;
+  const lineMode = String(style.backgroundMode || "block") === "line";
+  const width = !fitText && !lineMode
+    ? Math.max(80, Number(style.boxWidth || boxWidth || 864) * scale)
+    : Math.max(80, textWidth + widthPad * 2) * Math.max(0.2, Number(style.backgroundScaleX || 1));
+  const lineCount = Math.max(1, lines.length);
+  const lineStep = fontSize * Math.max(1.05, Number(style.lineHeight || 1.15));
+  const height = Math.max(
+    28,
+    lineStep * lineCount + heightPad * 2,
+  ) * Math.max(0.2, Number(style.backgroundScaleY || 1));
   return {
     width,
     height,
-    x: x + Number(style.backgroundOffsetX || 0),
-    y: y + Number(style.backgroundOffsetY || 0),
+    x: x + Number(style.backgroundX ?? style.backgroundOffsetX ?? 0) * scale,
+    y: y + Number(style.backgroundY ?? style.backgroundOffsetY ?? 0) * scale,
+    lines,
+    lineStep,
+    widthPad,
+    heightPad,
+    fitText,
+    lineMode,
   };
+}
+
+function captionBackgroundEvents(caption, style, fontSize, scale, x, y, boxWidth = 860) {
+  if (!style.backgroundEnabled) return [];
+  const box = estimatedCaptionBox(caption, style, fontSize, scale, x, y, boxWidth);
+  const rawRadius = Number(style.backgroundRadius ?? style.radius ?? 14);
+  const color = style.background || "#000000";
+  const opacity = Number(style.backgroundOpacity ?? 0.7);
+  if (box.lineMode && box.lines.length) {
+    const mid = (box.lines.length - 1) / 2;
+    return box.lines.map((line, index) => {
+      const lineWidth = Math.max(
+        80,
+        paintedLineWidth(line, style, fontSize, scale) + box.widthPad * 2,
+      );
+      const lineBox = {
+        width: lineWidth,
+        height: Math.max(28, box.lineStep + box.heightPad * 2),
+        x: box.x,
+        y: box.y + (index - mid) * box.lineStep,
+      };
+      const radius = String(style.backgroundMode || "") === "pill" || rawRadius >= 35
+        ? Math.min(lineBox.width / 2, lineBox.height / 2)
+        : Math.min(lineBox.width / 2, lineBox.height / 2, rawRadius * scale);
+      return vectorRectEvent(caption.start, caption.end, lineBox, color, opacity, 0, radius);
+    });
+  }
+  const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 35;
+  const radius = isCapsule
+    ? Math.min(box.width / 2, box.height / 2)
+    : Math.min(box.width / 2, box.height / 2, rawRadius * scale);
+  return [vectorRectEvent(caption.start, caption.end, box, color, opacity, 0, radius)];
 }
 
 function vectorRectEvent(start, end, box, color, opacity = 1, layer = 0, radius = 0) {
@@ -1444,25 +1540,8 @@ function createAssSubtitleFile(config, destination = "") {
     const result = [];
     const durationMs = Math.round((Number(caption.end) - Number(caption.start)) * 1000);
     const baseTags = assAnimationTags(animation, x, y, durationMs, style);
-    const box = estimatedCaptionBox(caption, style, fontSize, origin.scale, x, y);
-    if (style.backgroundEnabled) {
-      const rawRadius = Number(style.backgroundRadius ?? style.radius ?? 14);
-      const isCapsule = String(style.backgroundMode || "") === "pill" || rawRadius >= 35;
-      const radius = isCapsule
-        ? Math.min(box.width / 2, box.height / 2)
-        : Math.min(box.width / 2, box.height / 2, rawRadius * origin.scale);
-      result.push(
-        vectorRectEvent(
-          caption.start,
-          caption.end,
-          box,
-          style.background || "#000000",
-          Number(style.backgroundOpacity ?? 0.7),
-          0,
-          radius,
-        ),
-      );
-    }
+    if (style.backgroundEnabled)
+      result.push(...captionBackgroundEvents(caption, style, fontSize, origin.scale, x, y, origin.boxWidth));
     const wrappedLines = captionAssLines(caption, style, origin.boxWidth, width);
     const wrappedAss = wrappedLines.map((line) => escapeAssText(line)).join("\\N");
     const drop = assDropShadow(style, origin.scale);
@@ -1517,7 +1596,7 @@ function createAssSubtitleFile(config, destination = "") {
       Number(style.backgroundWidth ?? style.padding ?? 14),
       Number(style.backgroundHeight ?? style.padding ?? 14),
     );
-  const content = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,${style.fontFamily || "Helvetica"},${fontSize},${assColor(style.color || "#ffffff")},${assColor(style.color || "#ffffff")},${assColor(style.strokeColor || "#000000")},${backColor},${normalizedFontWeight(style.fontWeight || 700)},${style.fontItalic ? -1 : 0},${style.fontUnderline && String(style.underlineMode || "line") === "word" ? -1 : 0},0,100,100,${letterSpacing.toFixed(2)},0,1,${outline},${shadow},${alignment},${horizontalMargin},${horizontalMargin},0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${events.join("\n")}\n`;
+  const content = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,${style.fontFamily || "Helvetica"},${fontSize},${assColor(style.color || "#ffffff")},${assColor(style.color || "#ffffff")},${assColor(style.strokeColor || "#000000")},${backColor},${normalizedFontWeight(style.fontWeight || 700)},${style.fontItalic ? -1 : 0},${style.fontUnderline && String(style.underlineMode || "line") === "word" ? -1 : 0},0,100,100,${letterSpacing.toFixed(2)},0,1,${outline},${shadow},${alignment},${horizontalMargin},${horizontalMargin},0,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${events.join("\n")}\n`;
   fs.writeFileSync(filePath, content, { mode: 0o600 });
   return filePath;
 }
@@ -2162,7 +2241,8 @@ function buildExportGraph(config, info) {
     } else if (kind === "image") {
       for (const { image, label } of preparedImages.filter(
         (item) =>
-          item.image.trackId === key || (!item.image.trackId && key === "image"),
+          !item.image?._quickCutCaptionRaster &&
+          (item.image.trackId === key || (!item.image.trackId && key === "image")),
       )) {
         layer += 1;
         const imageX = animatedPosition(
@@ -2187,22 +2267,30 @@ function buildExportGraph(config, info) {
           (item) => item.trackId === key || (!item.trackId && key === "text"),
         ),
       );
-    else if (kind === "caption" && config.captionRasterized && !captionRendered) {
-      // Caption pixels were rasterized by the same AppKit/CoreText renderer used by preview.
-      captionRendered = true;
-    } else if (kind === "caption" && config.captionAssPath && !captionRendered) {
-      layer += 1;
-      const fontFile = resolveFontFile(config.captions?.[0]?.style || {});
-      const fontsDir = fontFile
-        ? path.dirname(fontFile)
-        : path.join(supportRoot(), "fonts");
-      graph.push(
-        `[layer${layer - 1}]ass=filename='${escapeFilterPath(config.captionAssPath)}':original_size=${Math.round(width)}x${Math.round(height)}:fontsdir='${escapeFilterPath(fontsDir)}'[layer${layer}]`,
-      );
-      captionRendered = true;
-    } else if (kind === "caption" && !captionRendered) {
-      addTextItems(config.captions || []);
-      captionRendered = true;
+    else if (kind === "caption" && !captionRendered) {
+      const rasters = preparedImages.filter((item) => item.image?._quickCutCaptionRaster);
+      for (const { image, label } of rasters) {
+        layer += 1;
+        graph.push(
+          `[layer${layer - 1}]${label}overlay=x='(W-w)/2+${Number(image.x || 0)}':y='(H-h)/2+${Number(image.y || 0)}':enable='between(t,${Number(image.start || 0).toFixed(3)},${Number(image.end || info.duration).toFixed(3)})':eof_action=pass:shortest=0[layer${layer}]`,
+        );
+      }
+      if (rasters.length || config.captionRasterized) {
+        captionRendered = true;
+      } else if (config.captionAssPath) {
+        layer += 1;
+        const fontFile = resolveFontFile(config.captions?.[0]?.style || {});
+        const fontsDir = fontFile
+          ? path.dirname(fontFile)
+          : path.join(supportRoot(), "fonts");
+        graph.push(
+          `[layer${layer - 1}]ass=filename='${escapeFilterPath(config.captionAssPath)}':original_size=${Math.round(width)}x${Math.round(height)}:fontsdir='${escapeFilterPath(fontsDir)}'[layer${layer}]`,
+        );
+        captionRendered = true;
+      } else {
+        addTextItems(config.captions || []);
+        captionRendered = true;
+      }
     }
   }
   for (const [trackId, label] of mainTrackLabels)
@@ -2437,8 +2525,13 @@ function beginExportJob(config, info, job) {
   job.stage = "captions";
   job.message = exportStageMessage(job);
   if (format !== "mp3" && (config.captions || []).length) {
-    const rasterized = process.platform === "darwin" && prepareSharedCaptionRaster(config);
-    if (!rasterized) config.captionAssPath = createAssSubtitleFile(config);
+    const alreadyRastered = !!(config.captionRasterized ||
+      (config.images || []).some((image) => image?._quickCutCaptionRaster));
+    if (alreadyRastered) config.captionRasterized = true;
+    else {
+      const rasterized = process.platform === "darwin" && prepareSharedCaptionRaster(config);
+      if (!rasterized) config.captionAssPath = createAssSubtitleFile(config);
+    }
   }
   const hardware = detectExportHardware();
   const extraInputs = [];
@@ -2509,7 +2602,11 @@ function beginExportJob(config, info, job) {
       Math.min(6, Number(budget.filterThreads || (hardwareEncode ? 4 : isDarwin ? 4 : 2))),
     );
     const decodeKindNow =
-      decodeKind === undefined ? (hardwareEncode ? hardware.decode : hardware.decode || "") : decodeKind;
+      decodeKind === undefined
+        ? preferredExportDecodeKind(encoder, hardware.decode)
+        : decodeKind === "none"
+          ? ""
+          : decodeKind;
     const inputs = [...decodeAccelArgs(decodeKindNow), "-i", config.inputPath, ...extraInputs];
     const args = [
       "-y",
@@ -2573,9 +2670,11 @@ function beginExportJob(config, info, job) {
     job.mode = hardwareEncode ? "hardware-quality" : "software-fallback";
     job.stage = "encoding";
     job.encoderLabel = encoderDisplayName(encoder);
+    job.decodeKind = decodeKindNow || "none";
     const retry = () => {
       job.progress = 0.015;
       job.error = "";
+      job.stallRetried = false;
       if (decodeKindNow && decodeKindNow !== "none") {
         launch(encoder, rest, decodeKindNow === "cuda" ? "d3d11va" : "none");
         return;
@@ -2651,13 +2750,15 @@ function exportStageMessage(job) {
   if (job.state === "completed") return label ? `导出完成 · ${label}` : "导出完成";
   if (job.state === "failed") return job.error || "视频导出失败。";
   if (job.state === "cancelled") return "已取消导出";
-  if (job.stage === "retry") return `编码器不可用，正在改用备用编码… · 已用 ${used}`;
+  if (job.stage === "retry") return `显卡编码器没响应，正在改用备用编码… · 已用 ${used}`;
   if (job.stage === "prepare" || job.stage === "captions" || job.state === "preparing")
     return `正在准备导出（字幕/滤镜/显卡）… · 已用 ${used}`;
   if (job.stage === "muxing" || (job.progress >= 0.98 && job.state === "exporting"))
     return `正在封装文件… ${percent}% · ${label} · 已用 ${used}`;
   if (!job.frameProgress)
-    return `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
+    return elapsed >= 8
+      ? `正在启动编码器（显卡较慢，还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`
+      : `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
   if (job.speed > 0)
     return `正在导出 ${percent}% · ${label} · ${job.speed.toFixed(1)}x · 已用 ${used}`;
   return `正在导出 ${percent}% · ${label} · 已用 ${used}`;
@@ -2672,6 +2773,28 @@ function monitorExport(child, job, config, info, retry = null) {
   const duration = Math.max(0.1, Number(config.outputDuration || info.duration || 0));
   const fps = Math.max(1, Number(config.fps || info.frameRate || 30));
   refreshExportJob(job);
+  const stallWatch = setInterval(() => {
+    if (["completed", "failed", "cancelled"].includes(job.state) || job.frameProgress) {
+      clearInterval(stallWatch);
+      return;
+    }
+    if (!exportIsStalled(job) || job.stallRetried) return;
+    job.stallRetried = true;
+    if (retry) {
+      job.stage = "retry";
+      job.message = exportStageMessage(job);
+    } else {
+      job.state = "failed";
+      job.error = "编码器长时间没有输出画面。请改勾 CPU，或先关掉达芬奇/其他占用显卡的软件。";
+      job.message = job.error;
+    }
+    try {
+      child.kill();
+    } catch {
+      /* already stopped */
+    }
+    clearInterval(stallWatch);
+  }, 500);
   child.stderr.on("data", (chunk) => {
     const text = chunk.toString();
     stderr = (stderr + text).slice(-16000);
@@ -2698,6 +2821,7 @@ function monitorExport(child, job, config, info, retry = null) {
     job.message = error.message;
   });
   child.on("close", (code) => {
+    clearInterval(stallWatch);
     job.child = null;
     if (job.state === "cancelled") {
       if (config.captionAssPath)
@@ -2713,6 +2837,8 @@ function monitorExport(child, job, config, info, retry = null) {
       job.progress = 1;
       job.stage = "done";
       job.message = exportStageMessage(job);
+    } else if (job.state === "failed") {
+      job.message = job.error || job.message;
     } else if (retry) {
       job.state = "preparing";
       job.stage = "retry";

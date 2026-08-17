@@ -7,6 +7,8 @@ import {
   parseFfmpegProgress,
   normalizeExportDevice,
   preferredVideoEncoder,
+  preferredExportDecodeKind,
+  exportIsStalled,
   refreshExportJob,
   videoEncodeArgs,
 } from "../src/media.mjs";
@@ -35,6 +37,7 @@ test("NVIDIA encode args use NVENC presets and stay off compiled-in-only selecti
   assert.ok(args.includes("-preset"));
   assert.ok(args.includes("p5"));
   assert.ok(args.includes("-gpu"));
+  assert.ok(args.includes("-rc-lookahead"));
   assert.equal(encoderDisplayName("h264_nvenc"), "NVIDIA NVENC");
   assert.equal(encoderDisplayName("libx264"), "软件编码");
 });
@@ -69,6 +72,31 @@ test("export status keeps the clock moving before ffmpeg reports frames", () => 
   assert.match(job.message, /已用 0:25/);
   assert.ok(job.progress > 0.02, "soft progress should creep during silence");
   assert.match(job.message, /正在启动编码器|正在准备导出/);
+});
+
+test("filtered GPU export skips CUDA decode and treats a silent encoder as stalled", () => {
+  assert.equal(preferredExportDecodeKind("h264_nvenc", "cuda"), "");
+  assert.equal(preferredExportDecodeKind("h264_amf", "d3d11va"), "");
+  assert.equal(preferredExportDecodeKind("h264_qsv", "qsv"), "");
+  assert.equal(preferredExportDecodeKind("h264_videotoolbox", "videotoolbox"), "videotoolbox");
+  assert.equal(preferredExportDecodeKind("libx264", "cuda"), "");
+  assert.equal(
+    exportIsStalled({
+      state: "exporting",
+      frameProgress: false,
+      startedAt: Date.now() - 16_000,
+      lastProgressAt: Date.now() - 16_000,
+    }),
+    true,
+  );
+  assert.equal(
+    exportIsStalled({
+      state: "exporting",
+      frameProgress: true,
+      startedAt: Date.now() - 30_000,
+    }),
+    false,
+  );
 });
 
 test("export device checkbox can force CPU software encoding", () => {

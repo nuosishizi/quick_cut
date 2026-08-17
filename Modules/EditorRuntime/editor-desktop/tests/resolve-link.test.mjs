@@ -152,6 +152,13 @@ test("send job preserves explicit words timestamps and builds dynamic animation 
   assert.equal(job.items[0].words[0].word, "doesn't");
   assert.equal(job.items[0].words[0].start, 0);
   assert.equal(job.items[0].words[0].end, 0.4);
+  assert.doesNotMatch(JSON.stringify(job), /_quickCutCaptionRaster|\.png/i);
+  assert.equal(job.items[0].raster, undefined);
+  assert.ok(job.presetSettings.AnimationLevel === 0);
+  assert.match(lua, /set_clip_span/);
+  assert.match(lua, /autosubsTool:SetData\("WordTiming"/);
+  assert.match(lua, /fnSetInputValues\(comp, autosubsTool, presetSettings\)/);
+  assert.match(lua, /fnApplyWordTiming\(comp, autosubsTool, wordTiming\)/);
   assert.equal(job.style.highlightEnabled, true);
   assert.equal(job.presetSettings.FadeEnabled, 1);
   assert.equal(job.presetSettings.PopInEnabled, 0);

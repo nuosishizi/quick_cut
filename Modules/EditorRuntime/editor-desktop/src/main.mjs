@@ -386,7 +386,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.33" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.34" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -490,10 +490,28 @@ const bridgeScript = `<script>
   }
 })();
 </script>`;
+function browserTextLayoutScript() {
+  const source = fs.readFileSync(path.join(currentDir, "text-layout.mjs"), "utf8");
+  if (/^import /m.test(source)) {
+    throw new Error("text-layout.mjs must stay import-free so preview and export share one layout");
+  }
+  const exported = [
+    ...source.matchAll(/^export const (\w+)/gm),
+    ...source.matchAll(/^export function (\w+)/gm),
+  ].map((match) => match[1]);
+  const body = source.replace(/^export /gm, "");
+  return `<script>
+window.QuickCutTextLayout = (() => {
+${body}
+return { ${exported.join(", ")} };
+})();
+</script>`;
+}
+
 embeddedHtml = rawHtml
   .replaceAll("__QUICKCUT_ICON__", iconUrl)
   .replaceAll("__QUICKCUT_FILTER_PREVIEW__", filterPreviewUrl)
-  .replace("</head>", bridgeScript + "</head>");
+  .replace("</head>", browserTextLayoutScript() + bridgeScript + "</head>");
 
 async function importedAsset(projectId, selected, kind) {
   if (!selected) return null;
@@ -1284,7 +1302,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.33",
+    version: "2.7.34",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1561,6 +1579,24 @@ nativeMethods = {
   ),
   customCaptionPresets: safe(() => customCaptionPresets()),
   saveCaptionPreset: safe((input) => saveCaptionPreset(input || {})),
+  createCaptionRasterDir: safe(() => {
+    const directory = path.join(supportRoot(), "temp", `caption-raster-${crypto.randomUUID()}`);
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    return directory;
+  }),
+  writeCaptionRaster: safe((input = {}) => {
+    const directory = String(input.directory || "").trim();
+    if (!directory || !directory.includes("caption-raster-"))
+      throw new Error("字幕渲染目录无效。");
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const name = String(input.name || `caption-${crypto.randomUUID().slice(0, 8)}.png`)
+      .replace(/[^\w.-]+/g, "_");
+    const destination = path.join(directory, name);
+    const raw = String(input.dataUrl || "").replace(/^data:image\/png;base64,/i, "");
+    if (!raw) throw new Error("字幕画面为空。");
+    fs.writeFileSync(destination, Buffer.from(raw, "base64"));
+    return destination;
+  }),
   fontCatalog: safe((query) => fontCatalog(query)),
   installFont: safe(async (id) => {
     const font = await installFont(id);
