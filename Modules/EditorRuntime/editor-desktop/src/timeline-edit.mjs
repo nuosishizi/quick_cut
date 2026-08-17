@@ -184,6 +184,51 @@ export function resolveBareMainSelection(items, clipUnderPlayhead) {
   return result;
 }
 
+export function clipOverlapsRange(clip, start, end) {
+  return Number(clip?.start || 0) < Number(end) - 0.001 && Number(clip?.end || 0) > Number(start) + 0.001;
+}
+
+export function clipInsideRange(clip, start, end, slop = 0.03) {
+  const clipStart = Number(clip?.start || 0);
+  const clipEnd = Number(clip?.end || clipStart);
+  return clipStart >= Number(start) - slop && clipEnd <= Number(end) + slop && clipEnd - clipStart > 0.02;
+}
+
+export function marqueeTimeRange(left, right, originLeft, zoom) {
+  const scale = Math.max(1e-6, Number(zoom) || 1);
+  const start = (Number(left) - Number(originLeft)) / scale;
+  const end = (Number(right) - Number(originLeft)) / scale;
+  return { start: Math.min(start, end), end: Math.max(start, end) };
+}
+
+export function selectionMainCutRange(selected = [], resolveSpan) {
+  const overlays = [];
+  const mains = [];
+  for (const item of selected || []) {
+    const span = typeof resolveSpan === "function" ? resolveSpan(item) : item;
+    if (!span) continue;
+    const start = Number(span.start || 0);
+    const end = Number(span.end || start);
+    if (end <= start + 0.001) continue;
+    if (item.type === "video" || item.type === "audio") mains.push({ start, end });
+    else overlays.push({ start, end });
+  }
+  if (!mains.length || !overlays.length) return null;
+  const start = Math.max(
+    Math.min(...mains.map((item) => item.start)),
+    Math.min(...overlays.map((item) => item.start)),
+  );
+  const end = Math.min(
+    Math.max(...mains.map((item) => item.end)),
+    Math.max(...overlays.map((item) => item.end)),
+  );
+  if (end <= start + 0.04) return null;
+  const mainLength =
+    Math.max(...mains.map((item) => item.end)) - Math.min(...mains.map((item) => item.start));
+  if (end - start >= mainLength - 0.08) return null;
+  return { start, end };
+}
+
 export function collectOverlayRippleHoles(items) {
   return [...(items || [])]
     .filter((item) => item && !["video", "audio"].includes(item.type))

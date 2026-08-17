@@ -22,6 +22,11 @@ const {
   clearDeepgramApiKey,
   modelStatus,
   canTranscribe,
+  normalizeLocalWhisperModel,
+  LOCAL_WHISPER_MODELS,
+  normalizeSpeechLanguage,
+  filterSpeechLanguages,
+  SPEECH_LANGUAGES,
 } = await import("../src/whisper.mjs");
 
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -177,6 +182,49 @@ test("Deepgram key can be selected as the speech engine", () => {
   assert.equal(status.engine, "deepgram");
   clearDeepgramApiKey();
   assert.equal(canTranscribe(), false);
+});
+
+test("speech language defaults to English and can be changed", () => {
+  assert.equal(normalizeSpeechLanguage(""), "en");
+  assert.equal(normalizeSpeechLanguage("zh"), "zh");
+  assert.equal(normalizeSpeechLanguage("nope"), "en");
+  assert.equal(normalizeSpeechLanguage("cantonese"), "yue");
+  assert.ok(SPEECH_LANGUAGES.some((item) => item.id === "auto"));
+  assert.ok(SPEECH_LANGUAGES.length >= 90);
+  assert.ok(filterSpeechLanguages("中文").some((item) => item.id === "zh"));
+  assert.ok(filterSpeechLanguages("fr").some((item) => item.id === "fr"));
+  assert.ok(filterSpeechLanguages("粤语").some((item) => item.id === "yue"));
+  const saved = saveSpeechSettings({ speechLanguage: "zh" });
+  assert.equal(saved.speechLanguage, "zh");
+  assert.equal(modelStatus().speechLanguage, "zh");
+  saveSpeechSettings({ speechLanguage: "en" });
+});
+
+test("local whisper models can be chosen and default to turbo q5", () => {
+  assert.equal(normalizeLocalWhisperModel(""), "turbo-q5");
+  assert.equal(normalizeLocalWhisperModel("large-v3-q5"), "large-v3-q5");
+  assert.ok(LOCAL_WHISPER_MODELS.some((item) => item.id === "medium-en"));
+  assert.ok(LOCAL_WHISPER_MODELS.some((item) => item.recommended));
+  const saved = saveSpeechSettings({ engine: "local", localModel: "large-v3-q5" });
+  assert.equal(saved.engine, "local");
+  assert.equal(saved.localModel, "large-v3-q5");
+  assert.equal(saved.localInstalled, false);
+  const status = modelStatus();
+  assert.equal(status.localModel, "large-v3-q5");
+  assert.ok(Array.isArray(status.localModels));
+  assert.equal(status.localModels.length, LOCAL_WHISPER_MODELS.length);
+  saveSpeechSettings({ engine: "local", localModel: "turbo-q5" });
+});
+
+test("local whisper can be selected without a Groq key", () => {
+  const saved = saveSpeechSettings({ engine: "local" });
+  assert.equal(saved.engine, "local");
+  assert.equal(saved.localInstalled, false);
+  assert.equal(canTranscribe(), false);
+  const status = modelStatus();
+  assert.equal(status.preferredEngine, "local");
+  assert.equal(status.engine, "none");
+  saveSpeechSettings({ engine: "groq" });
 });
 
 test("speech engine can switch to Gemini without a Groq key", () => {

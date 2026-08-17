@@ -7,15 +7,18 @@ import {
   decodeAudioAsync,
 } from "@napi-rs/whisper";
 
-const [modelPath, audioPath] = process.argv.slice(2);
+const [modelPath, audioPath, dtwPreset, language] = process.argv.slice(2);
 if (!modelPath || !audioPath) throw new Error("缺少本地语音模型或音频文件。");
 const bytes = fs.readFileSync(audioPath);
 const samples = await decodeAudioAsync(bytes, audioPath);
+const heads =
+  WhisperAlignmentHeadsPreset[dtwPreset] ?? WhisperAlignmentHeadsPreset.LargeV3;
+const whisperLanguage = language && language !== "auto" ? language : "auto";
 const whisper = new Whisper(modelPath, {
   useGpu: true,
   flashAttn: true,
   dtwTokenTimestamps: true,
-  dtwAheadsPreset: WhisperAlignmentHeadsPreset.LargeV3,
+  dtwAheadsPreset: heads,
 });
 const sampleRate = 16000;
 const chunkSeconds = 45;
@@ -62,7 +65,7 @@ for (let chunkIndex = 0; chunkIndex < starts.length; chunkIndex += 1) {
   const sampleEnd = Math.min(samples.length, sampleStart + chunkSamples);
   const offsetSeconds = sampleStart / sampleRate;
   const params = new WhisperFullParams(WhisperSamplingStrategy.BeamSearch);
-  params.language = "en";
+  params.language = whisperLanguage;
   params.translate = false;
   // Each window is grounded in its own audio. A hallucination or reading
   // error in one window can never become the text prompt for all later audio.

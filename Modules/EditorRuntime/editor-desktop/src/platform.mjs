@@ -16,6 +16,7 @@ const FILTERS = {
   lut: "LUT 滤镜|*.cube;*.3dl;*.dat;*.m3d;*.csp|所有文件|*.*",
   backup: "快剪备份|*.quickcutbackup;*.zip|所有文件|*.*",
   project: "快剪工程|*.zpe;*.json|所有文件|*.*",
+  binary: "Antigravity CLI|agy.exe;agy;agy.cmd;*.exe;*.cmd|所有文件|*.*",
 };
 
 const PROMPTS = {
@@ -27,6 +28,7 @@ const PROMPTS = {
   lut: "选择 LUT 滤镜文件",
   backup: "选择快剪工程备份",
   project: "选择工程文件",
+  binary: "选择 agy / Antigravity CLI",
 };
 
 function darwinTypes(kind) {

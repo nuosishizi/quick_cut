@@ -10,24 +10,41 @@ delete process.env.GEMINI_API_KEY;
 delete process.env.VERTEX_API_KEY;
 
 const {
+  ANTIGRAVITY_MODELS,
   GEMINI_MODELS,
+  antigravityInstallHint,
+  antigravitySearchPaths,
+  buildAntigravityTask,
   buildGeminiGenerateContentBody,
   buildGeminiInteractionBody,
   buildVertexExpressGenerateContentUrl,
+  checkAntigravityStatus,
+  completeGeminiMedia,
   completeGeminiReview,
+  extractAntigravityResponse,
   extractApiErrorMessage,
   extractGeminiOutputText,
+  formatAntigravityError,
+  geminiMediaReady,
   isTextReviewModel,
   listReviewModels,
   loadReviewSettings,
+  antigravityModelArgs,
+  fromAntigravityModel,
+  isUnavailableAgyModel,
+  mapToAntigravityModel,
   mergeModelCatalog,
+  parseAgyModels,
   parseListedModels,
+  removeAgyWorkDir,
   reviewReady,
   saveReviewSettings,
+  setAntigravityTestHooks,
   shouldFallbackToGenerateContent,
   vertexAuthMode,
 } = await import("../src/ai-settings.mjs");
 
+test.afterEach(() => setAntigravityTestHooks(null));
 test.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
 
 test("review settings default to Gemini 3.7 Flash and are not ready without a key", () => {
@@ -266,4 +283,267 @@ test("review falls back to generateContent if Interactions is unavailable", asyn
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("Antigravity CLI slugs are mapped from Gemini API model ids", () => {
+  assert.deepEqual(antigravityModelArgs("gemini-3.7-flash-high"), ["--model", "gemini-3.7-flash-high"]);
+  assert.ok(!antigravityModelArgs("gemini-3.7-flash-high").includes("--effort"));
+  assert.equal(mapToAntigravityModel("gemini-3.7-flash"), "gemini-3.7-flash-high");
+  assert.equal(
+    mapToAntigravityModel("gemini-3.7-flash", [{ id: "gemini-3.7-flash-medium" }]),
+    "gemini-3.7-flash-medium",
+  );
+  assert.ok(ANTIGRAVITY_MODELS.some((item) => item.id === "gemini-3.7-flash-high"));
+  const parsed = parseAgyModels(`
+gemini-3.7-flash-high     Gemini 3.7 Flash (High)
+gemini-3.1-pro-high       Gemini 3.1 Pro (High)
+claude-sonnet-4-6         Claude Sonnet 4.6
+`);
+  assert.deepEqual(
+    parsed.map((item) => item.id),
+    ["gemini-3.7-flash-high", "gemini-3.1-pro-high"],
+  );
+});
+
+test("Antigravity JSON envelope becomes review text and login errors are readable", () => {
+  assert.equal(
+    extractAntigravityResponse(
+      JSON.stringify({
+        status: "SUCCESS",
+        response: '{"decisions":[{"id":"1","decision":"cut"}]}',
+      }),
+    ),
+    '{"decisions":[{"id":"1","decision":"cut"}]}',
+  );
+  assert.equal(
+    extractAntigravityResponse(
+      JSON.stringify({
+        status: "SUCCESS",
+        response: "",
+        structured_output: { decisions: [{ id: "2", decision: "keep" }] },
+      }),
+    ),
+    '{"decisions":[{"id":"2","decision":"keep"}]}',
+  );
+  assert.match(formatAntigravityError("authentication required"), /还没有登录/);
+  assert.throws(
+    () =>
+      extractAntigravityResponse(
+        JSON.stringify({ status: "SUCCESS", response: "", json_schema: { type: "object" } }),
+      ),
+    /没有返回判定 JSON/,
+  );
+  assert.match(formatAntigravityError("Antigravity CLI 超时。"), /登录/);
+  assert.throws(
+    () =>
+      extractAntigravityResponse(
+        JSON.stringify({ status: "ERROR", response: "", error: "authentication required" }),
+      ),
+    /还没有登录/,
+  );
+});
+
+test("Antigravity provider is ready without an API key once agy is found", () => {
+  setAntigravityTestHooks({ resolveCli: () => path.join(scratch, "agy.exe") });
+  const saved = saveReviewSettings({ provider: "antigravity", model: "gemini-3.7-flash" });
+  assert.equal(saved.provider, "antigravity");
+  assert.equal(saved.model, "gemini-3.7-flash-high");
+  assert.equal(reviewReady(), true);
+  assert.equal(geminiMediaReady(), false);
+});
+
+test("Antigravity review calls agy -p and never hits Gemini HTTP APIs", async () => {
+  const calls = [];
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async (args) => {
+      calls.push(args);
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          status: "SUCCESS",
+          response: '{"decisions":[{"id":"9","decision":"cut","reason":"reread"}]}',
+        }),
+        stderr: "",
+      };
+    },
+  });
+  saveReviewSettings({ provider: "antigravity", model: "gemini-3.7-flash-high" });
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("Antigravity review must not call Gemini HTTP APIs");
+  };
+  try {
+    const text = await completeGeminiReview({
+      system: "Be strict.",
+      user: '{"ids":[1]}',
+    });
+    assert.equal(text, '{"decisions":[{"id":"9","decision":"cut","reason":"reread"}]}');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], "-p");
+    assert.ok(calls[0].includes("--output-format"));
+    assert.ok(calls[0].includes("json"));
+    assert.ok(calls[0].includes("--print-timeout"));
+    assert.ok(calls[0].includes("8m"));
+    assert.ok(calls[0].includes("--disable-slash-commands"));
+    assert.ok(calls[0].includes("--add-dir"));
+    assert.match(calls[0][1], /review-task\.md/);
+    assert.ok(!calls[0].includes("--effort"));
+    assert.ok(calls[0].includes("--model"));
+    assert.ok(calls[0].includes("gemini-3.7-flash-high"));
+    assert.ok(!calls[0].includes("--dangerously-skip-permissions"));
+    assert.match(buildAntigravityTask({ system: "Be strict.", user: "x" }), /Be strict\.\n\nx/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("Antigravity lists Gemini slugs from agy models", async () => {
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async (args) => {
+      assert.deepEqual(args, ["models"]);
+      return {
+        status: 0,
+        stdout: "gemini-3.8-flash-high     Gemini 3.8 Flash (High)\nclaude-sonnet-4-6         Claude\n",
+        stderr: "",
+      };
+    },
+  });
+  saveReviewSettings({ provider: "antigravity" });
+  const listed = await listReviewModels({ refresh: true });
+  assert.equal(listed.modelSource, "live");
+  assert.ok(listed.models.some((item) => item.id === "gemini-3.8-flash-high"));
+  assert.ok(!listed.models.some((item) => item.id === "claude-sonnet-4-6"));
+});
+
+test("Vertex and Gemini API drop Antigravity effort suffixes from model ids", () => {
+  saveReviewSettings({ provider: "antigravity", model: "gemini-3.7-flash-high" });
+  const switched = saveReviewSettings({ provider: "vertex" });
+  assert.equal(switched.provider, "vertex");
+  assert.equal(switched.model, "gemini-3.7-flash");
+  assert.equal(fromAntigravityModel("gemini-3.6-flash-high"), "gemini-3.6-flash");
+  assert.equal(isUnavailableAgyModel("Publisher model was not found or your project does not have access to it"), true);
+});
+
+test("Antigravity retries without --model when the pinned slug is unavailable", async () => {
+  const calls = [];
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async (args) => {
+      calls.push(args);
+      if (args.includes("gemini-3.7-flash-high")) {
+        return {
+          status: 1,
+          stdout: JSON.stringify({
+            status: "ERROR",
+            response: "",
+            error:
+              "Publisher model `projects/1/locations/asia-southeast1/publishers/google/models/gemini-3.7-flash-high` was not found or your project does not have access to it.",
+          }),
+          stderr: "",
+        };
+      }
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          status: "SUCCESS",
+          response: '{"decisions":[{"id":"4","decision":"keep"}]}',
+        }),
+        stderr: "",
+      };
+    },
+  });
+  saveReviewSettings({ provider: "antigravity", model: "gemini-3.7-flash-high" });
+  const text = await completeGeminiReview({ system: "Be strict.", user: "u" });
+  assert.equal(text, '{"decisions":[{"id":"4","decision":"keep"}]}');
+  assert.ok(calls.length >= 2);
+  assert.ok(calls[0].includes("gemini-3.7-flash-high"));
+  assert.ok(calls[1].includes("gemini-3.6-flash-high"));
+});
+
+test("Antigravity cannot be used as Gemini speech-to-text", async () => {
+  setAntigravityTestHooks({ resolveCli: () => path.join(scratch, "agy.exe") });
+  saveReviewSettings({ provider: "antigravity" });
+  await assert.rejects(
+    () => completeGeminiMedia({ system: "stt", input: [{ type: "text", text: "x" }] }),
+    /只用于文稿纠正/,
+  );
+});
+
+test("official Windows agy location is searched and leftover work dirs can be ignored", () => {
+  const paths = antigravitySearchPaths().join("|").replaceAll("\\", "/");
+  assert.match(paths, /\/agy\/bin\/agy/);
+  assert.match(antigravityInstallHint().command, /install\.ps1|install\.sh/);
+  const gone = path.join(scratch, "quickcut-agy-missing");
+  assert.equal(removeAgyWorkDir(gone), true);
+  const locked = path.join(scratch, "quickcut-agy-locked");
+  fs.mkdirSync(locked, { recursive: true });
+  assert.equal(removeAgyWorkDir(locked), true);
+});
+
+test("Antigravity status distinguishes missing, login required and ready", async () => {
+  setAntigravityTestHooks({ resolveCli: () => "" });
+  saveReviewSettings({ provider: "antigravity" });
+  const missing = await checkAntigravityStatus();
+  assert.equal(missing.antigravityState, "missing");
+  assert.match(missing.antigravityHint, /安装/);
+
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async () => ({ status: 1, stdout: "", stderr: "authentication required" }),
+  });
+  const needLogin = await checkAntigravityStatus();
+  assert.equal(needLogin.antigravityState, "need-login");
+  assert.equal(needLogin.antigravityLoggedIn, false);
+
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async () => ({
+      status: 0,
+      stdout: "gemini-3.7-flash-high     Gemini 3.7 Flash (High)\n",
+      stderr: "",
+    }),
+  });
+  const ready = await checkAntigravityStatus();
+  assert.equal(ready.antigravityState, "ready");
+  assert.equal(ready.antigravityLoggedIn, true);
+});
+
+test("opening review settings does not spawn agy", async () => {
+  let called = 0;
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async () => {
+      called += 1;
+      return { status: 0, stdout: "gemini-3.7-flash-high     Gemini 3.7 Flash (High)\n", stderr: "" };
+    },
+  });
+  saveReviewSettings({ provider: "antigravity" });
+  const listed = await listReviewModels({ refresh: false });
+  assert.equal(called, 0);
+  assert.ok(listed.models.some((item) => item.id === "gemini-3.7-flash-high"));
+  const refreshed = await listReviewModels({ refresh: true });
+  assert.equal(called, 1);
+  assert.equal(refreshed.modelSource, "live");
+});
+
+test("successful Antigravity review is not lost if leftover files cannot be deleted", async () => {
+  setAntigravityTestHooks({
+    resolveCli: () => path.join(scratch, "agy.exe"),
+    exec: async () => ({
+      status: 0,
+      stdout: JSON.stringify({
+        status: "SUCCESS",
+        response: '{"decisions":[{"id":"1","decision":"keep"}]}',
+      }),
+      stderr: "",
+    }),
+  });
+  saveReviewSettings({ provider: "antigravity" });
+  const work = path.join(scratch, "agy-review");
+  fs.mkdirSync(work, { recursive: true });
+  fs.writeFileSync(path.join(work, "review-task.md"), "keep", "utf8");
+  const text = await completeGeminiReview({ system: "Be strict.", user: "u" });
+  assert.equal(text, '{"decisions":[{"id":"1","decision":"keep"}]}');
 });

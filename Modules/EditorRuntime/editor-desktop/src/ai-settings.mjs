@@ -1,6 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { supportRoot } from "./media.mjs";
 
 const GEMINI_API_ROOT = "https://generativelanguage.googleapis.com";
@@ -22,6 +24,33 @@ export const GEMINI_MODELS = [
   { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
 ];
 
+export const ANTIGRAVITY_MODELS = [
+  { id: "gemini-3.6-flash-high", label: "Gemini 3.6 Flash High（推荐，套餐更稳）" },
+  { id: "gemini-3.7-flash-high", label: "Gemini 3.7 Flash High（部分地区不可用）" },
+  { id: "gemini-3.7-flash-medium", label: "Gemini 3.7 Flash Medium" },
+  { id: "gemini-3.5-flash-high", label: "Gemini 3.5 Flash High" },
+  { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro High（严审经文）" },
+];
+
+export const ANTIGRAVITY_REVIEW_SCHEMA = {
+  type: "object",
+  properties: {
+    decisions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          decision: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["id", "decision"],
+      },
+    },
+  },
+  required: ["decisions"],
+};
+
 const DEFAULTS = {
   provider: "gemini",
   model: "gemini-3.7-flash",
@@ -29,7 +58,41 @@ const DEFAULTS = {
   vertexLocation: "us-central1",
   promptStrict: "",
   promptNatural: "",
+  antigravityPath: "",
 };
+
+let antigravityTestHooks = {
+  resolveCli: null,
+  exec: null,
+  install: null,
+  login: null,
+};
+
+let lastReviewTransport = {
+  provider: "",
+  requestedModel: "",
+  usedModel: "",
+  fallback: false,
+  ms: 0,
+};
+
+export function getLastReviewTransport() {
+  return { ...lastReviewTransport };
+}
+
+export function noteReviewTransport(patch = {}) {
+  lastReviewTransport = { ...lastReviewTransport, ...patch };
+  return getLastReviewTransport();
+}
+
+export function setAntigravityTestHooks(hooks = null) {
+  antigravityTestHooks = {
+    resolveCli: hooks?.resolveCli || null,
+    exec: hooks?.exec || null,
+    install: hooks?.install || null,
+    login: hooks?.login || null,
+  };
+}
 
 function secretsDir() {
   const directory = path.join(supportRoot(), "secrets");
@@ -102,7 +165,228 @@ export function isSelectableModel(value) {
   const id = normalizeModelId(value);
   if (!id) return false;
   if (GEMINI_MODELS.some((item) => item.id === id)) return true;
+  if (ANTIGRAVITY_MODELS.some((item) => item.id === id)) return true;
   return isTextReviewModel(id);
+}
+
+export function normalizeReviewProvider(value, fallback = "gemini") {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "vertex" || raw === "antigravity" || raw === "gemini") return raw;
+  const next = String(fallback || "").trim().toLowerCase();
+  if (next === "vertex" || next === "antigravity" || next === "gemini") return next;
+  return "gemini";
+}
+
+export function resolveCliFile(value = "") {
+  const raw = String(value || "").trim().replace(/^["']|["']$/g, "");
+  if (!raw) return "";
+  try {
+    if (fs.existsSync(raw) && fs.statSync(raw).isFile()) return raw;
+    if (fs.existsSync(raw) && fs.statSync(raw).isDirectory()) {
+      for (const name of ["agy.exe", "agy", "agy.cmd"]) {
+        const nested = path.join(raw, name);
+        if (fs.existsSync(nested) && fs.statSync(nested).isFile()) return nested;
+      }
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function lookOnPath(name) {
+  const wanted = String(name || "").trim();
+  if (!wanted) return "";
+  const pathEnv = String(process.env.PATH || "");
+  const exts =
+    process.platform === "win32" && !path.extname(wanted)
+      ? [".exe", ".cmd", ".bat", ""]
+      : [""];
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const full = path.join(dir, `${wanted}${ext}`);
+      const resolved = resolveCliFile(full);
+      if (resolved) return resolved;
+    }
+  }
+  return "";
+}
+
+export function antigravityInstallHint() {
+  const win = process.platform === "win32";
+  const localAppData =
+    process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+  return {
+    command: win
+      ? "irm https://antigravity.google/cli/install.ps1 | iex"
+      : "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+    shell: win ? "PowerShell" : "终端",
+    docs: "https://antigravity.google/docs/cli/install",
+    binDir: win ? path.join(localAppData, "agy", "bin") : path.join(os.homedir(), ".local", "bin"),
+  };
+}
+
+export function antigravitySearchPaths(explicit = "") {
+  const localAppData =
+    process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+  return [
+    explicit,
+    process.env.ANTIGRAVITY_CLI,
+    process.env.AGY_PATH,
+    path.join(localAppData, "agy", "bin", "agy.exe"),
+    path.join(localAppData, "agy", "bin", "agy"),
+    path.join(localAppData, "antigravity", "bin", "agy.exe"),
+    path.join(localAppData, "Programs", "Antigravity", "agy.exe"),
+    path.join(os.homedir(), "AppData", "Local", "agy", "bin", "agy.exe"),
+    path.join(os.homedir(), "AppData", "Local", "antigravity", "bin", "agy.exe"),
+    path.join(os.homedir(), ".local", "bin", "agy.exe"),
+    path.join(os.homedir(), ".local", "bin", "agy"),
+    "/opt/homebrew/bin/agy",
+    "/usr/local/bin/agy",
+  ].filter(Boolean);
+}
+
+export function findAntigravityCli(explicit = "") {
+  if (typeof antigravityTestHooks.resolveCli === "function") {
+    return String(antigravityTestHooks.resolveCli() || "");
+  }
+  const chosen = resolveCliFile(explicit);
+  if (chosen) return chosen;
+  const fromPath = lookOnPath("agy");
+  if (fromPath) return fromPath;
+  for (const candidate of antigravitySearchPaths()) {
+    const resolved = resolveCliFile(candidate);
+    if (resolved) return resolved;
+  }
+  return "";
+}
+
+export function agyReviewWorkspace() {
+  const directory = path.join(supportRoot(), "agy-review");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return directory;
+}
+
+export function removeAgyWorkDir(directory) {
+  const target = String(directory || "").trim();
+  if (!target) return true;
+  try {
+    if (!fs.existsSync(target)) return true;
+    fs.rmSync(target, { recursive: true, force: true, maxRetries: 4, retryDelay: 80 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function sweepStaleAgyWorkDirs() {
+  let names = [];
+  try {
+    names = fs.readdirSync(os.tmpdir());
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!String(name).startsWith("quickcut-agy-")) continue;
+    removeAgyWorkDir(path.join(os.tmpdir(), name));
+  }
+}
+
+export function parseAgyModels(output = "") {
+  const text = String(output || "").trim();
+  const rows = [];
+  const seen = new Set();
+  const push = (id, label = "") => {
+    const name = normalizeModelId(id);
+    if (!isTextReviewModel(name) || seen.has(name)) return;
+    seen.add(name);
+    rows.push({ id: name, label: labelForModel(name, label) });
+  };
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const data = JSON.parse(text);
+      const list = Array.isArray(data)
+        ? data
+        : [...(data.models || []), ...(data.items || [])];
+      for (const item of list) {
+        if (typeof item === "string") push(item);
+        else push(item?.id || item?.name || item?.slug, item?.label || item?.displayName || item?.display_name);
+      }
+      if (rows.length) return rows;
+    } catch {
+      /* fall through to line parse */
+    }
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.trim().match(/^(gemini-[a-z0-9][a-z0-9._-]*)(?:\s+(.+))?$/i);
+    if (!match) continue;
+    push(match[1], match[2] || "");
+  }
+  return rows;
+}
+
+export function mapToAntigravityModel(value, available = []) {
+  const name = normalizeModelId(value);
+  const ids = (Array.isArray(available) ? available : [])
+    .map((item) => normalizeModelId(item?.id || item))
+    .filter(Boolean);
+  if (name && ids.includes(name)) return name;
+  const suffixes = ["-high", "-medium", "-low"];
+  if (name) {
+    for (const suffix of suffixes) {
+      if (ids.includes(name + suffix)) return name + suffix;
+    }
+    const stripped = name.replace(/-(high|medium|low)$/i, "");
+    if (ids.includes(stripped)) return stripped;
+    for (const suffix of suffixes) {
+      if (ids.includes(stripped + suffix)) return stripped + suffix;
+    }
+    if (!ids.length) {
+      if (/-(high|medium|low)$/i.test(name)) return name;
+      if (/^gemini-/i.test(name)) return `${name}-high`;
+    }
+  }
+  return ids[0] || ANTIGRAVITY_MODELS[0].id;
+}
+
+export function antigravityModelArgs(value, available = []) {
+  const slug = mapToAntigravityModel(value, available);
+  const flags = [];
+  if (slug) flags.push("--model", slug);
+  if (slug && !/-(high|medium|low)$/i.test(slug)) flags.push("--effort", "low");
+  return flags;
+}
+
+export function fromAntigravityModel(value) {
+  const name = normalizeModelId(value);
+  return name.replace(/-(high|medium|low)$/i, "") || name;
+}
+
+export function isUnavailableAgyModel(message = "") {
+  return /was not found|does not have access|invalid model|conflicts with --effort|not recognized as a known model|specified region|套餐或地区不可用|模型不可用/i.test(
+    String(message || ""),
+  );
+}
+
+export function antigravityRetryPlans(value, available = []) {
+  const plans = [];
+  const seen = new Set();
+  const push = (flags) => {
+    const key = flags.join("\0");
+    if (seen.has(key)) return;
+    seen.add(key);
+    plans.push(flags);
+  };
+  push(antigravityModelArgs(value, available));
+  push(["--model", "gemini-3.6-flash-high"]);
+  push(["--model", "gemini-3.5-flash-high"]);
+  push([]);
+  return plans;
+}
+
+export function catalogForProvider(provider) {
+  return normalizeReviewProvider(provider) === "antigravity" ? ANTIGRAVITY_MODELS : GEMINI_MODELS;
 }
 
 function hintForModel(id) {
@@ -141,9 +425,9 @@ function compareModels(left, right) {
   return bb.major - aa.major || bb.minor - aa.minor || aa.family - bb.family || aa.preview - bb.preview || aa.id.localeCompare(bb.id);
 }
 
-export function mergeModelCatalog(live = [], selected = "") {
+export function mergeModelCatalog(live = [], selected = "", catalog = GEMINI_MODELS) {
   const byId = new Map();
-  for (const item of [...GEMINI_MODELS, ...live]) {
+  for (const item of [...(catalog || GEMINI_MODELS), ...live]) {
     const id = normalizeModelId(item?.id);
     if (!isSelectableModel(id)) continue;
     if (!byId.has(id)) {
@@ -197,8 +481,14 @@ export function loadReviewSettings() {
   } catch {
     stored = {};
   }
-  const provider = stored.provider === "vertex" ? "vertex" : "gemini";
-  const model = isSelectableModel(stored.model) ? normalizeModelId(stored.model) : DEFAULTS.model;
+  const provider = normalizeReviewProvider(stored.provider);
+  const storedModel = isSelectableModel(stored.model) ? normalizeModelId(stored.model) : "";
+  const model =
+    provider === "antigravity"
+      ? mapToAntigravityModel(storedModel || DEFAULTS.model)
+      : fromAntigravityModel(storedModel || DEFAULTS.model) || DEFAULTS.model;
+  const antigravityPath = String(stored.antigravityPath || "").trim();
+  const antigravityCli = findAntigravityCli(antigravityPath);
   return {
     provider,
     model,
@@ -206,12 +496,22 @@ export function loadReviewSettings() {
     vertexLocation: String(stored.vertexLocation || DEFAULTS.vertexLocation).trim() || "us-central1",
     promptStrict: String(stored.promptStrict || ""),
     promptNatural: String(stored.promptNatural || ""),
+    antigravityPath,
+    antigravityCli,
+    antigravityReady: Boolean(antigravityCli),
+    antigravityLoggedIn: null,
+    antigravityState: antigravityCli ? "installed" : "missing",
+    antigravityInstallCommand: antigravityInstallHint().command,
+    antigravityDocs: antigravityInstallHint().docs,
+    antigravityHint: antigravityCli
+      ? `已找到 ${antigravityCli}。点「检测」确认登录，或点「登录」用浏览器完成 Gemini 套餐授权。`
+      : `还没安装 agy。点「安装 agy」会运行官方脚本：${antigravityInstallHint().command}`,
     geminiKey: Boolean(process.env.GEMINI_API_KEY || readSecret("gemini-api-key.txt")),
     geminiHint: maskSecret(process.env.GEMINI_API_KEY || readSecret("gemini-api-key.txt")),
     vertexKey: Boolean(process.env.VERTEX_API_KEY || readSecret("vertex-api-key.txt")),
     vertexHint: maskSecret(process.env.VERTEX_API_KEY || readSecret("vertex-api-key.txt")),
     vertexServiceAccount: Boolean(readSecret("vertex-sa.json")),
-    models: mergeModelCatalog([], model),
+    models: mergeModelCatalog([], model, catalogForProvider(provider)),
     modelSource: "fallback",
   };
 }
@@ -219,7 +519,10 @@ export function loadReviewSettings() {
 export function saveReviewSettings(input = {}) {
   const current = loadReviewSettings();
   const next = {
-    provider: input.provider === "vertex" ? "vertex" : input.provider === "gemini" ? "gemini" : current.provider,
+    provider:
+      input.provider !== undefined
+        ? normalizeReviewProvider(input.provider, current.provider)
+        : current.provider,
     model: isSelectableModel(input.model) ? normalizeModelId(input.model) : current.model,
     vertexProject:
       input.vertexProject !== undefined ? String(input.vertexProject || "").trim() : current.vertexProject,
@@ -229,7 +532,13 @@ export function saveReviewSettings(input = {}) {
         : current.vertexLocation,
     promptStrict: input.promptStrict !== undefined ? String(input.promptStrict || "") : current.promptStrict,
     promptNatural: input.promptNatural !== undefined ? String(input.promptNatural || "") : current.promptNatural,
+    antigravityPath:
+      input.antigravityPath !== undefined
+        ? String(input.antigravityPath || "").trim()
+        : current.antigravityPath || "",
   };
+  if (next.provider === "antigravity") next.model = mapToAntigravityModel(next.model);
+  else next.model = fromAntigravityModel(next.model) || next.model;
   fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), { mode: 0o600, encoding: "utf8" });
   if (input.geminiKey !== undefined) {
     const key = String(input.geminiKey || "").replace(/\s+/g, "").trim();
@@ -327,11 +636,18 @@ export function vertexAuthMode() {
 
 export function reviewReady() {
   const settings = loadReviewSettings();
+  if (settings.provider === "antigravity") return Boolean(findAntigravityCli(settings.antigravityPath));
   if (settings.provider === "vertex") {
     if (vertexAuthMode() === "express-key") return true;
     return Boolean(settings.vertexProject && vertexServiceAccount());
   }
   return Boolean(geminiApiKey());
+}
+
+export function geminiMediaReady() {
+  const settings = loadReviewSettings();
+  if (settings.provider === "antigravity") return false;
+  return reviewReady();
 }
 
 export function buildGeminiInteractionBody({ model, system, user } = {}) {
@@ -497,14 +813,32 @@ export async function listReviewModels({ refresh = false } = {}) {
   if (cacheFresh) {
     return {
       ...settings,
-      models: mergeModelCatalog(cache.models, settings.model),
+      models: mergeModelCatalog(cache.models, settings.model, catalogForProvider(settings.provider)),
       modelSource: "live",
       modelFetchedAt: cache.fetchedAt,
     };
   }
+  if (settings.provider === "antigravity" && !refresh) {
+    const stale = cache?.models?.length ? cache.models : [];
+    return {
+      ...settings,
+      models: mergeModelCatalog(stale, settings.model, ANTIGRAVITY_MODELS),
+      modelSource: stale.length ? "cache" : "fallback",
+      modelFetchedAt: cache?.fetchedAt || 0,
+    };
+  }
   try {
     let live = [];
-    if (settings.provider === "vertex") {
+    if (settings.provider === "antigravity") {
+      if (!findAntigravityCli(settings.antigravityPath)) throw new Error("no-agy");
+      const listed = await runAntigravityCli(["models"], {
+        timeoutMs: 45_000,
+        timeoutMessage:
+          "拉取模型超时。请点「登录」在可见终端完成 Gemini 套餐授权，然后再点「拉取最新」。",
+      });
+      if (listed.status !== 0) throw new Error(listed.stderr || "agy models failed");
+      live = parseAgyModels(listed.stdout);
+    } else if (settings.provider === "vertex") {
       if (vertexAuthMode() !== "service-account") throw new Error("vertex-express-has-no-model-list");
       if (!reviewReady()) throw new Error("no-vertex-auth");
       live = await fetchVertexModels(settings, await vertexOAuthHeaders());
@@ -513,7 +847,7 @@ export async function listReviewModels({ refresh = false } = {}) {
       if (!key) throw new Error("no-gemini-key");
       live = await fetchGeminiApiModels(key);
     }
-    const models = mergeModelCatalog(live, settings.model);
+    const models = mergeModelCatalog(live, settings.model, catalogForProvider(settings.provider));
     const fetchedAt = Date.now();
     writeModelCache({ provider: settings.provider, fetchedAt, models: live });
     return {
@@ -526,7 +860,7 @@ export async function listReviewModels({ refresh = false } = {}) {
     const stale = cache?.models?.length ? cache.models : [];
     return {
       ...settings,
-      models: mergeModelCatalog(stale, settings.model),
+      models: mergeModelCatalog(stale, settings.model, catalogForProvider(settings.provider)),
       modelSource: stale.length ? "cache" : "fallback",
       modelFetchedAt: cache?.fetchedAt || 0,
     };
@@ -628,9 +962,12 @@ export async function completeGeminiMedia({
   signal = null,
   responseSchema = null,
 } = {}) {
-  if (!reviewReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
   const settings = loadReviewSettings();
-  const model = settings.model || DEFAULTS.model;
+  if (settings.provider === "antigravity") {
+    throw new Error("Antigravity CLI 只用于文稿纠正，听写请改用 Groq、Deepgram 或本地 Whisper。");
+  }
+  if (!geminiMediaReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
+  const model = fromAntigravityModel(settings.model || DEFAULTS.model) || DEFAULTS.model;
   const responseFormat = responseSchema
     ? [{ type: "text", mime_type: "application/json", schema: responseSchema }]
     : [{ type: "text", mime_type: "application/json" }];
@@ -710,13 +1047,403 @@ export async function completeGeminiMedia({
   return text;
 }
 
+export function formatAntigravityError(message, status = "") {
+  const text = String(message || "").trim();
+  if (/authentication required|not authenticated|login required|please (sign|log) in|auth required/i.test(text)) {
+    return "Antigravity CLI 还没有登录。请先在终端运行 agy，用 Gemini 套餐完成登录后再纠正。";
+  }
+  if (/timed? ?out|超时/i.test(text)) {
+    return "agy 没有在限定时间内返回。请点「登录」在可见终端完成 Gemini 套餐授权，然后再试。";
+  }
+  if (/not recognized|unknown model|invalid model|conflicts with --effort/i.test(text)) {
+    return text.slice(0, 280) || "Antigravity 模型不可用，请点「拉取最新」后重选。";
+  }
+  if (/was not found|does not have access|specified region/i.test(text)) {
+    return "这个模型在你当前套餐或地区不可用。请在纠正设置里点「拉取最新」另选一个，或改用 agy 默认模型。";
+  }
+  return text.slice(0, 280) || `Antigravity CLI 纠正失败${status ? `（${status}）` : ""}。`;
+}
+
+export function extractAntigravityResponse(stdout = "", stderr = "") {
+  const raw = String(stdout || "").trim();
+  let envelope = null;
+  if (raw.startsWith("{")) {
+    try {
+      envelope = JSON.parse(raw);
+    } catch {
+      envelope = null;
+    }
+  }
+  if (!envelope) {
+    const match = raw.match(/\{[\s\S]*\}\s*$/);
+    if (match) {
+      try {
+        envelope = JSON.parse(match[0]);
+      } catch {
+        envelope = null;
+      }
+    }
+  }
+  if (envelope && typeof envelope === "object") {
+    const status = String(envelope.status || "").toUpperCase();
+    if (status && status !== "SUCCESS") {
+      throw new Error(formatAntigravityError(envelope.error || stderr, status));
+    }
+    if (envelope.structured_output && typeof envelope.structured_output === "object") {
+      const dumped = JSON.stringify(envelope.structured_output);
+      if (/"decisions"\s*:/.test(dumped) || Object.keys(envelope.structured_output).length) {
+        return dumped;
+      }
+    }
+    if (typeof envelope.response === "string" && envelope.response.trim()) {
+      return envelope.response.trim();
+    }
+    if (status === "SUCCESS") {
+      throw new Error("agy 没有返回判定 JSON。任务文件可能没被读到，请再纠正一次。");
+    }
+  }
+  if (raw && /"decisions"\s*:/.test(raw)) return raw;
+  throw new Error(formatAntigravityError(stderr, "ERROR"));
+}
+
+export function buildAntigravityTask({ system, user } = {}) {
+  return [
+    String(system || "").trim(),
+    "",
+    String(user || "").trim(),
+    "",
+    'Return JSON only: {"decisions":[{"id":"...","decision":"keep|cut|missing|unsure","reason":"..."}]}',
+    "Do not explain. Do not ask questions. Do not search the workspace. Do not run tools.",
+  ].join("\n");
+}
+
+export function buildAntigravityJudgePrompt(taskPath = "") {
+  const file = path.resolve(String(taskPath || "review-task.md"));
+  return [
+    "You are the same manuscript-cut judge used by Vertex.",
+    `Read ONLY this file and follow it exactly: ${file}`,
+    "Output only the decisions JSON.",
+    "Do not act as a coding agent. Do not search the home directory. Do not list other folders. Do not run commands.",
+  ].join(" ");
+}
+
+function killAgyProcess(child) {
+  const pid = Number(child?.pid);
+  if (!pid) return;
+  if (process.platform === "win32") {
+    spawn("taskkill.exe", ["/pid", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    return;
+  }
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    /* already gone */
+  }
+}
+
+function spawnAntigravity(cli, args, { cwd, timeoutMs, signal, timeoutMessage } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cli, args, {
+      cwd: cwd || process.cwd(),
+      windowsHide: true,
+      shell: /\.(cmd|bat)$/i.test(cli),
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      if (error) reject(error);
+      else resolve(result);
+    };
+    const onAbort = () => {
+      killAgyProcess(child);
+      finish(new Error("Antigravity CLI 纠正已取消。"));
+    };
+    const timer = setTimeout(() => {
+      killAgyProcess(child);
+      finish(
+        new Error(
+          timeoutMessage ||
+            "agy 没有在限定时间内返回。请点「登录」在可见终端完成 Gemini 套餐授权，然后再试。",
+        ),
+      );
+    }, Math.max(1000, Number(timeoutMs) || 30_000));
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      finish(new Error(error?.message || "无法启动 Antigravity CLI。"));
+    });
+    child.on("close", (code) => {
+      finish(null, { status: Number(code) || 0, stdout, stderr });
+    });
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort);
+    }
+  });
+}
+
+export async function runAntigravityCli(args, options = {}) {
+  if (typeof antigravityTestHooks.exec === "function") {
+    return antigravityTestHooks.exec(args, options);
+  }
+  const settings = loadReviewSettings();
+  const cli = findAntigravityCli(settings.antigravityPath);
+  if (!cli) throw new Error("未找到 Antigravity CLI（agy）。请先在纠正设置里点「安装 agy」，或指定路径。");
+  return spawnAntigravity(cli, args, options);
+}
+
+function antigravityAuthFailed(text = "", status = 0) {
+  return (
+    /authentication required|not authenticated|not signed in|please (sign|log) in|auth required/i.test(
+      String(text || ""),
+    ) || (Number(status) !== 0 && /auth/i.test(String(text || "")))
+  );
+}
+
+export async function checkAntigravityStatus() {
+  sweepStaleAgyWorkDirs();
+  const settings = loadReviewSettings();
+  const cli = findAntigravityCli(settings.antigravityPath);
+  if (!cli) {
+    return {
+      ...settings,
+      antigravityCli: "",
+      antigravityReady: false,
+      antigravityLoggedIn: false,
+      antigravityState: "missing",
+      antigravityHint: `还没安装 agy。点「安装 agy」会运行官方脚本：${settings.antigravityInstallCommand}`,
+    };
+  }
+  try {
+    const listed = await runAntigravityCli(["models"], {
+      timeoutMs: 45_000,
+      timeoutMessage:
+        "检测超时：agy 没有响应。请点「登录」在可见终端完成 Gemini 套餐授权，然后再点「检测」。",
+    });
+    const combined = `${listed.stdout || ""}\n${listed.stderr || ""}`;
+    if (antigravityAuthFailed(combined, listed.status)) {
+      return {
+        ...settings,
+        antigravityCli: cli,
+        antigravityReady: true,
+        antigravityLoggedIn: false,
+        antigravityState: "need-login",
+        antigravityHint: "agy 已安装，但还没登录。点「登录」打开终端，用浏览器完成 Gemini 套餐授权，回来再点「检测」。",
+      };
+    }
+    if (listed.status !== 0) {
+      return {
+        ...settings,
+        antigravityCli: cli,
+        antigravityReady: true,
+        antigravityLoggedIn: false,
+        antigravityState: "error",
+        antigravityHint: formatAntigravityError(listed.stderr || listed.stdout, listed.status),
+      };
+    }
+    const live = parseAgyModels(listed.stdout);
+    return {
+      ...settings,
+      antigravityCli: cli,
+      antigravityReady: true,
+      antigravityLoggedIn: true,
+      antigravityState: "ready",
+      antigravityHint: `已就绪，可用 Gemini 套餐。${cli}`,
+      models: mergeModelCatalog(live, settings.model, ANTIGRAVITY_MODELS),
+      modelSource: live.length ? "live" : settings.modelSource,
+    };
+  } catch (error) {
+    const message = error?.message || String(error);
+    return {
+      ...settings,
+      antigravityCli: cli,
+      antigravityReady: true,
+      antigravityLoggedIn: false,
+      antigravityState: antigravityAuthFailed(message) ? "need-login" : "error",
+      antigravityHint: antigravityAuthFailed(message)
+        ? "agy 已安装，但还没登录。点「登录」用浏览器完成 Gemini 套餐授权。"
+        : message,
+    };
+  }
+}
+
+export async function installAntigravityCli() {
+  if (typeof antigravityTestHooks.install === "function") {
+    return antigravityTestHooks.install();
+  }
+  const existing = findAntigravityCli(loadReviewSettings().antigravityPath);
+  if (existing) return checkAntigravityStatus();
+  const command =
+    process.platform === "win32"
+      ? ["powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://antigravity.google/cli/install.ps1 | iex"]]
+      : ["/bin/bash", ["-lc", "curl -fsSL https://antigravity.google/cli/install.sh | bash"]];
+  const result = await spawnAntigravity(command[0], command[1], { timeoutMs: 5 * 60 * 1000 });
+  const found = findAntigravityCli();
+  if (found) return checkAntigravityStatus();
+  const detail = String(result.stderr || result.stdout || "").trim();
+  throw new Error(
+    detail
+      ? `安装失败：${detail.slice(0, 240)}`
+      : `安装失败。请打开 ${antigravityInstallHint().shell} 运行：${antigravityInstallHint().command}`,
+  );
+}
+
+export function openAntigravityLogin() {
+  if (typeof antigravityTestHooks.login === "function") {
+    return antigravityTestHooks.login();
+  }
+  const cli = findAntigravityCli(loadReviewSettings().antigravityPath);
+  if (!cli) throw new Error("还没安装 Antigravity CLI。请先点「安装 agy」。");
+  if (process.platform === "win32") {
+    const line = `chcp 65001>nul & echo. & echo Please sign in to Antigravity with your Gemini plan. & echo. & "${cli.replace(/"/g, "")}"`;
+    spawn("cmd.exe", ["/c", "start", "agy login", "cmd.exe", "/k", line], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false,
+    }).unref();
+  } else if (process.platform === "darwin") {
+    spawn(
+      "/usr/bin/osascript",
+      ["-e", `tell application "Terminal" to do script ${JSON.stringify(cli)}`],
+      { detached: true, stdio: "ignore" },
+    ).unref();
+  } else {
+    spawn(cli, [], { detached: true, stdio: "ignore" }).unref();
+  }
+  return { opened: true, path: cli };
+}
+
+export function openAntigravityDocs() {
+  const url = antigravityInstallHint().docs;
+  if (process.platform === "win32") {
+    spawn("cmd.exe", ["/c", "start", "", url], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  } else {
+    spawn("/usr/bin/open", [url], { detached: true, stdio: "ignore" }).unref();
+  }
+  return { opened: true, url };
+}
+
+async function completeViaAntigravity({ system, user, model, signal } = {}) {
+  const settings = loadReviewSettings();
+  const cli = findAntigravityCli(settings.antigravityPath);
+  if (!cli) throw new Error("未找到 Antigravity CLI（agy）。请先在纠正设置里点「安装 agy」，或指定路径。");
+  sweepStaleAgyWorkDirs();
+  const work = agyReviewWorkspace();
+  const taskPath = path.join(work, "review-task.md");
+  const schemaPath = path.join(work, "review-schema.json");
+  fs.writeFileSync(taskPath, buildAntigravityTask({ system, user }), "utf8");
+  fs.writeFileSync(schemaPath, JSON.stringify(ANTIGRAVITY_REVIEW_SCHEMA), "utf8");
+  const baseArgs = [
+    "-p",
+    buildAntigravityJudgePrompt(taskPath),
+    "--add-dir",
+    work,
+    "--output-format",
+    "json",
+    "--print-timeout",
+    "8m",
+    "--disable-slash-commands",
+    "--json-schema",
+    schemaPath,
+  ];
+  const runOnce = async (modelFlags) => {
+    const result = await runAntigravityCli([...baseArgs, ...modelFlags], {
+      cwd: work,
+      timeoutMs: 9 * 60 * 1000,
+      signal,
+      timeoutMessage:
+        "纠正超时。agy 可能卡在授权。请点「登录」在可见终端跑一次 agy，完成 Gemini 套餐授权后再纠正。",
+    });
+    if (result.status !== 0 && !String(result.stdout || "").trim()) {
+      throw new Error(formatAntigravityError(result.stderr, result.status));
+    }
+    return extractAntigravityResponse(result.stdout, result.stderr);
+  };
+  const plans = antigravityRetryPlans(model || settings.model);
+  try {
+    let lastError;
+    for (let index = 0; index < plans.length; index += 1) {
+      try {
+        const text = await runOnce(plans[index]);
+        const flags = plans[index];
+        const usedIndex = flags.indexOf("--model");
+        noteReviewTransport({
+          provider: "antigravity",
+          requestedModel: mapToAntigravityModel(model || settings.model),
+          usedModel: usedIndex >= 0 ? flags[usedIndex + 1] : "(agy-default)",
+          fallback: index > 0,
+        });
+        return text;
+      } catch (error) {
+        lastError = error;
+        const canRetry =
+          index < plans.length - 1 && isUnavailableAgyModel(error?.message);
+        if (!canRetry) throw error;
+      }
+    }
+    throw lastError;
+  } finally {
+    try {
+      fs.unlinkSync(taskPath);
+    } catch {
+      /* agy may still hold the file; leftover is overwritten next run */
+    }
+    try {
+      fs.unlinkSync(schemaPath);
+    } catch {
+      /* same */
+    }
+  }
+}
+
 export async function completeGeminiReview({
   system,
   user,
   signal = null,
 } = {}) {
   const settings = loadReviewSettings();
-  const model = settings.model || DEFAULTS.model;
+  const model =
+    settings.provider === "antigravity"
+      ? mapToAntigravityModel(settings.model || DEFAULTS.model)
+      : fromAntigravityModel(settings.model || DEFAULTS.model) || DEFAULTS.model;
+  const started = Date.now();
+  noteReviewTransport({
+    provider: settings.provider,
+    requestedModel: model,
+    usedModel: model,
+    fallback: false,
+    ms: 0,
+  });
+  try {
+    const text =
+      settings.provider === "antigravity"
+        ? await completeViaAntigravity({ system, user, model, signal })
+        : await completeGeminiReviewHttp({ settings, model, system, user, signal });
+    noteReviewTransport({ ms: Date.now() - started });
+    return text;
+  } catch (error) {
+    noteReviewTransport({ ms: Date.now() - started });
+    throw error;
+  }
+}
+
+async function completeGeminiReviewHttp({ settings, model, system, user, signal }) {
   if (settings.provider === "vertex" && vertexAuthMode() === "express-key") {
     const express = await completeViaGenerateContent({ settings, model, system, user, signal });
     const text = textFromResult(express);

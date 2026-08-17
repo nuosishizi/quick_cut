@@ -1,4 +1,7 @@
-import { completeGeminiReview, loadReviewSettings } from "./ai-settings.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { getLastReviewTransport, completeGeminiReview, loadReviewSettings } from "./ai-settings.mjs";
+import { supportRoot } from "./media.mjs";
 
 const MAX_BATCH = 24;
 
@@ -286,13 +289,115 @@ Wrong, missing, or paraphrased scripture must be missing or cut and must block e
   return `${custom.trim() || base}\n${scriptureRule}`;
 }
 
+export function reviewCompareLogPath() {
+  const directory = path.join(supportRoot(), "logs");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return path.join(directory, "review-compare.jsonl");
+}
+
+export function reviewCompareLatestPath() {
+  return path.join(path.dirname(reviewCompareLogPath()), "review-compare-latest.txt");
+}
+
+function clipLogText(value, max = 80) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+export function buildReviewCompareRecord({
+  mode = "natural",
+  issues = [],
+  decisions = [],
+  summary = {},
+  batches = [],
+} = {}) {
+  const transport = getLastReviewTransport();
+  const byId = new Map((decisions || []).map((item) => [item.id, item]));
+  const items = (issues || []).map((issue) => {
+    const judged = byId.get(issue.id);
+    return {
+      id: issue.id,
+      type: issue.type || "",
+      scripture: !!(issue.scripture || issue.strict),
+      spoken: clipLogText(issue.spokenText || issue.text, 120),
+      expected: clipLogText(issue.expectedText, 120),
+      ai: judged?.decision || issue.aiDecision || "",
+      reason: clipLogText(judged?.reason || issue.aiReason, 160),
+      applied: issue.action || "",
+      cut: issue.confirmedCut === true,
+      hidden: issue.suppressReview === true,
+    };
+  });
+  const parsed = items.filter((item) => item.ai).length;
+  return {
+    at: new Date().toISOString(),
+    provider: transport.provider || loadReviewSettings().provider,
+    requestedModel: transport.requestedModel || "",
+    usedModel: transport.usedModel || "",
+    fallback: Boolean(transport.fallback),
+    mode: normalizeReviewMode(mode),
+    durationMs: Number(transport.ms) || batches.reduce((sum, batch) => sum + Number(batch.ms || 0), 0),
+    issueCount: items.length,
+    parsedCount: parsed,
+    unmatched: Math.max(0, items.length - parsed),
+    summary: {
+      keep: Number(summary.keep) || 0,
+      cut: Number(summary.cut) || 0,
+      missing: Number(summary.missing) || 0,
+      unsure: Number(summary.unsure) || 0,
+    },
+    batches,
+    items,
+  };
+}
+
+export function formatReviewCompareText(record = {}, logPath = "") {
+  const lines = [
+    "======== 快剪纠正对比 ========",
+    `接口: ${record.provider || "?"}    实际模型: ${record.usedModel || record.requestedModel || "?"}${record.fallback ? "    (已回退)" : ""}`,
+    `模式: ${record.mode || "?"}    耗时: ${((Number(record.durationMs) || 0) / 1000).toFixed(1)}s    条目: ${record.issueCount || 0}    模型返回: ${record.parsedCount || 0}    未返回: ${record.unmatched || 0}`,
+    `判定: keep=${record.summary?.keep || 0}  cut=${record.summary?.cut || 0}  missing=${record.summary?.missing || 0}  unsure=${record.summary?.unsure || 0}`,
+    "id\ttype\tai\tapplied\tspoken\texpected\treason",
+  ];
+  for (const item of record.items || []) {
+    lines.push(
+      [
+        item.id,
+        item.type,
+        item.ai || "-",
+        item.applied || "-",
+        item.spoken || "-",
+        item.expected || "-",
+        item.reason || "",
+      ].join("\t"),
+    );
+  }
+  lines.push(`日志: ${logPath || "logs/review-compare.jsonl"}`);
+  lines.push("================================");
+  return lines.join("\n");
+}
+
+export function writeReviewCompareLog(record) {
+  const jsonl = reviewCompareLogPath();
+  const latest = reviewCompareLatestPath();
+  const text = formatReviewCompareText(record, jsonl);
+  fs.appendFileSync(jsonl, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+  fs.writeFileSync(latest, text, { encoding: "utf8", mode: 0o600 });
+  console.log(`\n${text}\n`);
+  return { jsonl, latest, text };
+}
+
 async function completeJudge(userPrompt, signal, mode = "natural") {
+  const started = Date.now();
   const text = await completeGeminiReview({
     system: systemPromptFor(mode),
     user: userPrompt,
     signal,
   });
-  return parseJudgeResponse(text);
+  return {
+    decisions: parseJudgeResponse(text),
+    raw: String(text || "").slice(0, 1200),
+    ms: Date.now() - started,
+  };
 }
 
 export async function judgeAlignmentIssues({
@@ -305,6 +410,7 @@ export async function judgeAlignmentIssues({
   if (!issues.length) return [];
   const reviewMode = normalizeReviewMode(mode);
   const decisions = [];
+  const batches = [];
   for (let offset = 0; offset < issues.length; offset += MAX_BATCH) {
     if (signal?.aborted) throw new Error("cancelled");
     const batch = issues.slice(offset, offset + MAX_BATCH);
@@ -317,9 +423,17 @@ export async function judgeAlignmentIssues({
       "Differences:",
       JSON.stringify(payload, null, 2),
     ].join("\n");
-    decisions.push(...(await completeJudge(userPrompt, signal, reviewMode)));
+    const judged = await completeJudge(userPrompt, signal, reviewMode);
+    decisions.push(...judged.decisions);
+    batches.push({
+      index: batches.length,
+      count: batch.length,
+      parsed: judged.decisions.length,
+      ms: judged.ms,
+      raw: judged.raw,
+    });
   }
-  return decisions;
+  return { decisions, batches };
 }
 
 export function blockingScriptureIssues(issues = []) {

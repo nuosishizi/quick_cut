@@ -12,6 +12,10 @@ import {
   resolveBareMainSelection,
   resolveImageExportScale,
   rippleItemsOnTrack,
+  clipInsideRange,
+  clipOverlapsRange,
+  marqueeTimeRange,
+  selectionMainCutRange,
   shiftTimedOverlay,
   snapClipEdges,
   snapGroupDelta,
@@ -113,6 +117,54 @@ test("caption ripple keeps later words and does not swallow them", () => {
   assert.equal(captions[0].end, 5);
   assert.equal(captions[0].words[0].start, 3);
   assert.equal(captions[0].words[1].display, "family");
+});
+
+test("marquee range only keeps the inside A/V piece, later audio stays unselected", () => {
+  const range = marqueeTimeRange(120, 180, 0, 10);
+  assert.equal(range.start, 12);
+  assert.equal(range.end, 18);
+  const before = { id: "keep-before", start: 0, end: 12 };
+  const inside = { id: "selected", start: 12, end: 18 };
+  const later = { id: "later-audio", start: 18, end: 180 };
+  assert.equal(clipOverlapsRange({ start: 0, end: 180 }, 12, 18), true);
+  assert.equal(clipInsideRange(before, 12, 18), false);
+  assert.equal(clipInsideRange(inside, 12, 18), true);
+  assert.equal(clipInsideRange(later, 12, 18), false);
+});
+
+test("selecting a long A/V clip with a short caption only cuts that shared range", () => {
+  const range = selectionMainCutRange(
+    [
+      { type: "video", id: "v-all" },
+      { type: "audio", id: "a-all" },
+      { type: "caption", id: "c1" },
+    ],
+    (item) => {
+      if (item.type === "video" || item.type === "audio") return { start: 0, end: 180 };
+      return { start: 12, end: 15 };
+    },
+  );
+  assert.equal(range.start, 12);
+  assert.equal(range.end, 15);
+  const kept = [];
+  let source = 0;
+  if (range.start > source) kept.push([source, range.start]);
+  source = range.end;
+  if (source < 180) kept.push([source, 180]);
+  assert.deepEqual(kept, [
+    [0, 12],
+    [15, 180],
+  ]);
+  assert.equal(
+    selectionMainCutRange(
+      [
+        { type: "video", id: "v-mid" },
+        { type: "caption", id: "c1" },
+      ],
+      (item) => ({ start: 12, end: 15 }),
+    ),
+    null,
+  );
 });
 
 test("overlay ripple holes ignore main A/V and close from the right", () => {

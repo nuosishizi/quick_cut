@@ -92,6 +92,14 @@ export function analyzePauseFrames(frames, options = {}) {
     0.5,
   );
   const sensitivity = clamp(Number(options.sensitivity ?? 0.42), 0, 1);
+  const preRollSeconds = Number(options.preRollSeconds);
+  const postRollSeconds = Number(options.postRollSeconds);
+  const startPad = Number.isFinite(preRollSeconds)
+    ? clamp(preRollSeconds, 0, 1)
+    : keepSeconds / 2;
+  const endPad = Number.isFinite(postRollSeconds)
+    ? clamp(postRollSeconds, 0, 1)
+    : keepSeconds / 2;
   if (!frames.length) return { removals: [], pauses: [], diagnostics: {} };
   const rmsValues = frames.map((frame) => frame.rms);
   const peakValues = frames.map((frame) => frame.peak);
@@ -99,11 +107,15 @@ export function analyzePauseFrames(frames, options = {}) {
   const quiet = percentile(rmsValues, 0.25);
   const voice = Math.max(percentile(rmsValues, 0.78), quiet * 2.4, 0.002);
   // Higher sensitivity raises the silence threshold to overcome steady room/mic noise
-  const rmsThreshold = clamp(
+  let rmsThreshold = clamp(
     floor * (1.5 + sensitivity * 1.5) + voice * (0.015 + sensitivity * 0.025),
     0.0007,
     voice * 0.20,
   );
+  if (Number.isFinite(Number(options.thresholdDb))) {
+    const fromDb = 10 ** (Number(options.thresholdDb) / 20);
+    rmsThreshold = clamp(Math.max(rmsThreshold, fromDb * 0.35), 0.0007, voice * 0.35);
+  }
   const peakThreshold = Math.max(
     percentile(peakValues, 0.2) * 2.1,
     rmsThreshold * 3.2,
@@ -141,9 +153,8 @@ export function analyzePauseFrames(frames, options = {}) {
   }
   const removals = pauses
     .map((pause) => {
-      const edge = keepSeconds / 2;
-      const start = pause.start + edge;
-      const end = pause.end - edge;
+      const start = pause.start + startPad;
+      const end = pause.end - endPad;
       return {
         start,
         end,

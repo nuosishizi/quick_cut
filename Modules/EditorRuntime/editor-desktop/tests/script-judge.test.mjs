@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   applyJudgeDecisions,
   blockingScriptureIssues,
+  buildReviewCompareRecord,
+  formatReviewCompareText,
   inferKeepable,
   looksLikeSamePoint,
   parseJudgeResponse,
@@ -248,4 +250,25 @@ test("missing model ids leave the original alignment untouched", () => {
   assert.equal(aligned.issues[0].suppressReview, undefined);
   assert.equal(aligned.issues[0].confirmedCut, false);
   assert.equal(aligned.operations[0].type, "mismatch");
+});
+
+test("review compare log lists each issue decision for Vertex vs Antigravity", () => {
+  const record = buildReviewCompareRecord({
+    mode: "natural",
+    issues: [
+      { id: "a", type: "repeat", spokenText: "to you to you", expectedText: "to you", action: "cut" },
+      { id: "b", type: "extra", spokenText: "you know", expectedText: "", action: "keep", suppressReview: true },
+    ],
+    decisions: [
+      { id: "a", decision: "cut", reason: "reread" },
+      { id: "b", decision: "keep", reason: "filler" },
+    ],
+    summary: { keep: 1, cut: 1, missing: 0, unsure: 0 },
+  });
+  const text = formatReviewCompareText(record, "logs/review-compare.jsonl");
+  assert.equal(record.parsedCount, 2);
+  assert.match(text, /keep=1/);
+  assert.match(text, /cut=1/);
+  assert.match(text, /to you to you/);
+  assert.match(text, /\treread/);
 });

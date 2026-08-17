@@ -54,10 +54,14 @@ import {
   startScriptAnalysis,
 } from "./whisper.mjs";
 import {
+  checkAntigravityStatus,
   clearGeminiKey,
   clearVertexSecrets,
+  installAntigravityCli,
   listReviewModels,
   loadReviewSettings,
+  openAntigravityDocs,
+  openAntigravityLogin,
   saveReviewSettings,
 } from "./ai-settings.mjs";
 import { blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
@@ -370,7 +374,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.27" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.32" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1268,7 +1272,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.27",
+    version: "2.7.32",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1456,7 +1460,7 @@ nativeMethods = {
   clearGroqApiKey: safe(() => clearGroqApiKey()),
   saveDeepgramApiKey: safe((key) => saveDeepgramApiKey(key)),
   clearDeepgramApiKey: safe(() => clearDeepgramApiKey()),
-  startModelDownload: safe(() => startModelDownload()),
+  startModelDownload: safe((input) => startModelDownload(input || {})),
   modelDownloadStatus: safe((jobId) => modelDownloadStatus(jobId)),
   cancelModelDownload: safe((jobId) => cancelModelDownload(jobId)),
   startScriptAnalysis: safe((input) => startScriptAnalysis(input)),
@@ -1484,6 +1488,18 @@ nativeMethods = {
       vertexServiceAccountJson: fs.readFileSync(selected, "utf8"),
     });
   }),
+  browseAntigravityCli: safe(() => {
+    const selected = chooseFile("binary");
+    if (!selected) return loadReviewSettings();
+    return saveReviewSettings({
+      provider: "antigravity",
+      antigravityPath: selected,
+    });
+  }),
+  checkAntigravityStatus: safe(() => checkAntigravityStatus()),
+  installAntigravityCli: safe(() => installAntigravityCli()),
+  openAntigravityLogin: safe(() => openAntigravityLogin()),
+  openAntigravityDocs: safe(() => openAntigravityDocs()),
   clearGeminiKey: safe(() => clearGeminiKey()),
   clearVertexSecrets: safe(() => clearVertexSecrets()),
   defaultReviewPrompts: safe(() => DEFAULT_REVIEW_PROMPTS),

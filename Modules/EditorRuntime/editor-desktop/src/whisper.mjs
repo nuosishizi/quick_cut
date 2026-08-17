@@ -17,23 +17,219 @@ import { captionMatchLineLimit } from "./text-layout.mjs";
 import { mediaBinary, supportRoot } from "./media.mjs";
 import { mapSourceTime, mergeRanges } from "./pausecut.mjs";
 import { extractArchive, isWindows } from "./platform.mjs";
-import { completeGeminiMedia, loadReviewSettings, reviewReady } from "./ai-settings.mjs";
+import { completeGeminiMedia, geminiMediaReady, loadReviewSettings, reviewReady } from "./ai-settings.mjs";
 import {
   applyJudgeDecisions,
   blockingScriptureIssues,
+  buildReviewCompareRecord,
   judgeAlignmentIssues,
   normalizeReviewMode,
+  writeReviewCompareLog,
 } from "./script-judge.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const downloads = new Map();
 const analyses = new Map();
-const MODEL_URL =
-  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin";
-const MODEL_NAME = "ggml-large-v3-turbo-q5_0.bin";
+const HF_WHISPER =
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 
-export function modelPath() {
-  return path.join(supportRoot(), "models", MODEL_NAME);
+export const LOCAL_WHISPER_MODELS = [
+  {
+    id: "small-en",
+    file: "ggml-small.en.bin",
+    label: "Small English",
+    hint: "约 470MB，快。口播草稿可以，卡壳和经文容易听错。",
+    sizeLabel: "约 470MB",
+    minBytes: 350_000_000,
+    language: "en",
+    englishOnly: true,
+    dtwPreset: "SmallEn",
+    recommended: false,
+  },
+  {
+    id: "medium-en",
+    file: "ggml-medium.en.bin",
+    label: "Medium English",
+    hint: "约 1.5GB，英文专用。口播、口吃比 Small 稳。",
+    sizeLabel: "约 1.5GB",
+    minBytes: 1_200_000_000,
+    language: "en",
+    englishOnly: true,
+    dtwPreset: "MediumEn",
+    recommended: false,
+  },
+  {
+    id: "turbo-q5",
+    file: "ggml-large-v3-turbo-q5_0.bin",
+    label: "Large v3 Turbo Q5（推荐）",
+    hint: "约 550MB。快，质量和 Large v3 接近，口播对齐默认用这个。",
+    sizeLabel: "约 550MB",
+    minBytes: 400_000_000,
+    language: "en",
+    englishOnly: false,
+    dtwPreset: "LargeV3",
+    recommended: true,
+  },
+  {
+    id: "large-v3-q5",
+    file: "ggml-large-v3-q5_0.bin",
+    label: "Large v3 Q5（最高质量）",
+    hint: "约 1.0GB，完整 Large v3。词更准，速度慢一截。",
+    sizeLabel: "约 1.0GB",
+    minBytes: 800_000_000,
+    language: "en",
+    englishOnly: false,
+    dtwPreset: "LargeV3",
+    recommended: false,
+  },
+];
+
+export const SPEECH_LANGUAGES = [
+  { id: "auto", label: "自动检测", english: "auto", aliases: ["detect", "自动"] },
+  { id: "en", label: "英语（默认）", english: "english", aliases: ["英文", "english"] },
+  { id: "zh", label: "中文（普通话）", english: "chinese", aliases: ["汉语", "国语", "普通话", "mandarin", "zh-cn", "zh-tw", "cn"] },
+  { id: "yue", label: "粤语", english: "cantonese", aliases: ["广东话", "cantonese"] },
+  { id: "ja", label: "日语", english: "japanese", aliases: ["日本語", "日文"] },
+  { id: "ko", label: "韩语", english: "korean", aliases: ["한국어", "朝鲜语"] },
+  { id: "es", label: "西班牙语", english: "spanish", aliases: ["español"] },
+  { id: "fr", label: "法语", english: "french", aliases: ["français"] },
+  { id: "de", label: "德语", english: "german", aliases: ["deutsch"] },
+  { id: "pt", label: "葡萄牙语", english: "portuguese", aliases: ["português"] },
+  { id: "ru", label: "俄语", english: "russian", aliases: ["русский"] },
+  { id: "it", label: "意大利语", english: "italian", aliases: ["italiano"] },
+  { id: "ar", label: "阿拉伯语", english: "arabic" },
+  { id: "hi", label: "印地语", english: "hindi" },
+  { id: "id", label: "印尼语", english: "indonesian" },
+  { id: "vi", label: "越南语", english: "vietnamese", aliases: ["tiếng việt"] },
+  { id: "th", label: "泰语", english: "thai" },
+  { id: "tr", label: "土耳其语", english: "turkish" },
+  { id: "pl", label: "波兰语", english: "polish" },
+  { id: "nl", label: "荷兰语", english: "dutch" },
+  { id: "sv", label: "瑞典语", english: "swedish" },
+  { id: "uk", label: "乌克兰语", english: "ukrainian" },
+  { id: "el", label: "希腊语", english: "greek" },
+  { id: "he", label: "希伯来语", english: "hebrew" },
+  { id: "cs", label: "捷克语", english: "czech" },
+  { id: "ro", label: "罗马尼亚语", english: "romanian" },
+  { id: "da", label: "丹麦语", english: "danish" },
+  { id: "fi", label: "芬兰语", english: "finnish" },
+  { id: "hu", label: "匈牙利语", english: "hungarian" },
+  { id: "no", label: "挪威语", english: "norwegian" },
+  { id: "nn", label: "新挪威语", english: "nynorsk" },
+  { id: "ms", label: "马来语", english: "malay" },
+  { id: "ta", label: "泰米尔语", english: "tamil" },
+  { id: "te", label: "泰卢固语", english: "telugu" },
+  { id: "ur", label: "乌尔都语", english: "urdu" },
+  { id: "fa", label: "波斯语", english: "persian", aliases: ["farsi"] },
+  { id: "bn", label: "孟加拉语", english: "bengali" },
+  { id: "pa", label: "旁遮普语", english: "punjabi" },
+  { id: "mr", label: "马拉地语", english: "marathi" },
+  { id: "gu", label: "古吉拉特语", english: "gujarati" },
+  { id: "kn", label: "卡纳达语", english: "kannada" },
+  { id: "ml", label: "马拉雅拉姆语", english: "malayalam" },
+  { id: "si", label: "僧伽罗语", english: "sinhala" },
+  { id: "ne", label: "尼泊尔语", english: "nepali" },
+  { id: "as", label: "阿萨姆语", english: "assamese" },
+  { id: "sa", label: "梵语", english: "sanskrit" },
+  { id: "my", label: "缅甸语", english: "myanmar", aliases: ["burmese"] },
+  { id: "km", label: "高棉语", english: "khmer", aliases: ["柬埔寨语"] },
+  { id: "lo", label: "老挝语", english: "lao" },
+  { id: "bo", label: "藏语", english: "tibetan" },
+  { id: "ka", label: "格鲁吉亚语", english: "georgian" },
+  { id: "hy", label: "亚美尼亚语", english: "armenian" },
+  { id: "az", label: "阿塞拜疆语", english: "azerbaijani" },
+  { id: "kk", label: "哈萨克语", english: "kazakh" },
+  { id: "uz", label: "乌兹别克语", english: "uzbek" },
+  { id: "mn", label: "蒙古语", english: "mongolian" },
+  { id: "tg", label: "塔吉克语", english: "tajik" },
+  { id: "tk", label: "土库曼语", english: "turkmen" },
+  { id: "tt", label: "鞑靼语", english: "tatar" },
+  { id: "ba", label: "巴什基尔语", english: "bashkir" },
+  { id: "be", label: "白俄罗斯语", english: "belarusian" },
+  { id: "bg", label: "保加利亚语", english: "bulgarian" },
+  { id: "sr", label: "塞尔维亚语", english: "serbian" },
+  { id: "hr", label: "克罗地亚语", english: "croatian" },
+  { id: "bs", label: "波斯尼亚语", english: "bosnian" },
+  { id: "sl", label: "斯洛文尼亚语", english: "slovenian" },
+  { id: "sk", label: "斯洛伐克语", english: "slovak" },
+  { id: "lt", label: "立陶宛语", english: "lithuanian" },
+  { id: "lv", label: "拉脱维亚语", english: "latvian" },
+  { id: "et", label: "爱沙尼亚语", english: "estonian" },
+  { id: "mk", label: "马其顿语", english: "macedonian" },
+  { id: "sq", label: "阿尔巴尼亚语", english: "albanian" },
+  { id: "ca", label: "加泰罗尼亚语", english: "catalan" },
+  { id: "gl", label: "加利西亚语", english: "galician" },
+  { id: "eu", label: "巴斯克语", english: "basque" },
+  { id: "cy", label: "威尔士语", english: "welsh" },
+  { id: "is", label: "冰岛语", english: "icelandic" },
+  { id: "fo", label: "法罗语", english: "faroese" },
+  { id: "mt", label: "马耳他语", english: "maltese" },
+  { id: "lb", label: "卢森堡语", english: "luxembourgish" },
+  { id: "br", label: "布列塔尼语", english: "breton" },
+  { id: "oc", label: "奥克语", english: "occitan" },
+  { id: "la", label: "拉丁语", english: "latin" },
+  { id: "yi", label: "意第绪语", english: "yiddish" },
+  { id: "af", label: "南非荷兰语", english: "afrikaans" },
+  { id: "sw", label: "斯瓦希里语", english: "swahili" },
+  { id: "am", label: "阿姆哈拉语", english: "amharic" },
+  { id: "ha", label: "豪萨语", english: "hausa" },
+  { id: "yo", label: "约鲁巴语", english: "yoruba" },
+  { id: "so", label: "索马里语", english: "somali" },
+  { id: "sn", label: "绍纳语", english: "shona" },
+  { id: "ln", label: "林加拉语", english: "lingala" },
+  { id: "mg", label: "马尔加什语", english: "malagasy" },
+  { id: "ht", label: "海地克里奥尔语", english: "haitian creole" },
+  { id: "tl", label: "他加禄语", english: "tagalog", aliases: ["菲律宾语", "filipino"] },
+  { id: "jw", label: "爪哇语", english: "javanese" },
+  { id: "su", label: "巽他语", english: "sundanese" },
+  { id: "mi", label: "毛利语", english: "maori" },
+  { id: "haw", label: "夏威夷语", english: "hawaiian" },
+  { id: "sd", label: "信德语", english: "sindhi" },
+  { id: "ps", label: "普什图语", english: "pashto" },
+];
+
+export function normalizeSpeechLanguage(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (SPEECH_LANGUAGES.some((item) => item.id === raw)) return raw;
+  const alias = SPEECH_LANGUAGES.find((item) =>
+    (item.aliases || []).some((name) => String(name).toLowerCase() === raw),
+  );
+  if (alias) return alias.id;
+  return "en";
+}
+
+export function filterSpeechLanguages(query, languages = SPEECH_LANGUAGES) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return languages;
+  return languages.filter((item) => {
+    const hay = [item.id, item.label, item.english, ...(item.aliases || [])]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+export function speechLanguage() {
+  return loadSpeechSettings().speechLanguage || "en";
+}
+
+const DEFAULT_LOCAL_WHISPER = "turbo-q5";
+
+export function normalizeLocalWhisperModel(value) {
+  if (LOCAL_WHISPER_MODELS.some((item) => item.id === value)) return value;
+  if (value === "local" || value === "turbo" || value === "whisper-turbo")
+    return "turbo-q5";
+  return DEFAULT_LOCAL_WHISPER;
+}
+
+export function localWhisperSpec(id = "") {
+  const normalized = normalizeLocalWhisperModel(id);
+  return LOCAL_WHISPER_MODELS.find((item) => item.id === normalized);
+}
+
+export function modelPath(id = "") {
+  const spec = localWhisperSpec(id || loadSpeechSettings().localModel);
+  return path.join(supportRoot(), "models", spec.file);
 }
 
 function modelHeaderValid(file) {
@@ -48,11 +244,11 @@ function modelHeaderValid(file) {
   return !header.toString("utf8").trimStart().startsWith("<");
 }
 
-function modelFileComplete(file) {
+function modelFileComplete(file, minBytes = 400_000_000) {
   return (
     !!file &&
     fs.existsSync(file) &&
-    fs.statSync(file).size > 400_000_000 &&
+    fs.statSync(file).size > minBytes &&
     modelHeaderValid(file)
   );
 }
@@ -172,12 +368,25 @@ export function clearDeepgramApiKey() {
 }
 
 function normalizeSpeechEngine(value) {
-  if (value === "gemini" || value === "deepgram" || value === "groq") return value;
+  if (value === "gemini" || value === "deepgram" || value === "groq" || value === "local")
+    return value;
   return "groq";
 }
 
-export function localModelInstalled() {
-  return modelFileComplete(modelPath());
+export function localModelInstalled(id = "") {
+  const spec = localWhisperSpec(id || loadSpeechSettings().localModel);
+  return modelFileComplete(modelPath(spec.id), spec.minBytes);
+}
+
+export function listLocalWhisperModels() {
+  return LOCAL_WHISPER_MODELS.map((item) => ({
+    ...item,
+    url: `${HF_WHISPER}/${item.file}`,
+    installed: modelFileComplete(
+      path.join(supportRoot(), "models", item.file),
+      item.minBytes,
+    ),
+  }));
 }
 
 function speechSettingsPath() {
@@ -193,13 +402,23 @@ export function loadSpeechSettings() {
   } catch {
     stored = {};
   }
-  return { engine: normalizeSpeechEngine(stored.engine) };
+  return {
+    engine: normalizeSpeechEngine(stored.engine),
+    localModel: normalizeLocalWhisperModel(stored.localModel),
+    speechLanguage: normalizeSpeechLanguage(stored.speechLanguage),
+  };
 }
 
 export function saveSpeechSettings(input = {}) {
   const current = loadSpeechSettings();
   const next = {
     engine: input.engine ? normalizeSpeechEngine(input.engine) : current.engine,
+    localModel: input.localModel
+      ? normalizeLocalWhisperModel(input.localModel)
+      : current.localModel,
+    speechLanguage: input.speechLanguage
+      ? normalizeSpeechLanguage(input.speechLanguage)
+      : current.speechLanguage,
   };
   fs.writeFileSync(speechSettingsPath(), JSON.stringify(next, null, 2), { mode: 0o600, encoding: "utf8" });
   return speechStatus();
@@ -209,29 +428,37 @@ export function speechStatus() {
   const settings = loadSpeechSettings();
   const groq = groqKeyStatus();
   const deepgram = deepgramKeyStatus();
-  const gemini = reviewReady();
+  const gemini = geminiMediaReady();
   const localInstalled = localModelInstalled();
   const ready =
     settings.engine === "gemini"
       ? gemini
       : settings.engine === "deepgram"
         ? deepgram.configured
-        : groq.configured || localInstalled;
+        : settings.engine === "local"
+          ? localInstalled
+          : groq.configured;
+  const spec = localWhisperSpec(settings.localModel);
   return {
     engine: settings.engine,
     groq,
     deepgram,
     gemini: { configured: gemini, model: loadReviewSettings().model || "gemini-3.7-flash" },
+    localModel: spec.id,
+    localModels: listLocalWhisperModels(),
     localInstalled,
+    speechLanguage: settings.speechLanguage,
+    speechLanguages: SPEECH_LANGUAGES,
     ready,
   };
 }
 
 export function canTranscribe() {
   const settings = loadSpeechSettings();
-  if (settings.engine === "gemini") return reviewReady();
+  if (settings.engine === "gemini") return geminiMediaReady();
   if (settings.engine === "deepgram") return Boolean(getDeepgramApiKey());
-  return Boolean(getGroqApiKey()) || localModelInstalled();
+  if (settings.engine === "local") return localModelInstalled();
+  return Boolean(getGroqApiKey());
 }
 
 export function modelStatus() {
@@ -246,16 +473,17 @@ export function modelStatus() {
   const geminiReady = preferred === "gemini" && speech.gemini.configured;
   const deepgramReady = preferred === "deepgram" && deepgram.configured;
   const groqReady = preferred === "groq" && groq.configured;
+  const localReady = preferred === "local" && localInstalled;
   const engine = geminiReady
     ? "gemini"
     : deepgramReady
       ? "deepgram"
       : groqReady
         ? "groq"
-        : localInstalled && preferred === "groq"
+        : localReady
           ? "local"
           : "none";
-  const ready = geminiReady || deepgramReady || groqReady || (localInstalled && preferred === "groq");
+  const ready = geminiReady || deepgramReady || groqReady || localReady;
   return {
     installed: ready,
     localInstalled,
@@ -273,13 +501,20 @@ export function modelStatus() {
           ? "Deepgram Nova-3"
           : engine === "groq"
             ? "Groq Whisper"
-            : "Whisper Turbo",
-    expectedSize: "约 600MB",
+            : engine === "local"
+              ? `本地 ${localWhisperSpec(speech.localModel).label}`
+              : "Whisper",
+    expectedSize: localWhisperSpec(speech.localModel).sizeLabel,
+    localModel: speech.localModel,
+    localModels: speech.localModels,
+    speechLanguage: speech.speechLanguage,
+    speechLanguages: speech.speechLanguages,
     partialBytes: fs.existsSync(partial) ? fs.statSync(partial).size : 0,
   };
 }
 
-export function startModelDownload() {
+export function startModelDownload(input = {}) {
+  const spec = localWhisperSpec(input.model || loadSpeechSettings().localModel);
   for (const job of downloads.values())
     if (["starting", "downloading"].includes(job.state))
       return { jobId: job.id };
@@ -293,20 +528,22 @@ export function startModelDownload() {
     total: 0,
     error: "",
     controller,
+    model: spec.id,
   };
   downloads.set(id, job);
   (async () => {
     try {
-      fs.mkdirSync(path.dirname(modelPath()), { recursive: true, mode: 0o700 });
-      const partial = `${modelPath()}.download`;
+      const destination = modelPath(spec.id);
+      fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
+      const partial = `${destination}.download`;
       const existing = fs.existsSync(partial) ? fs.statSync(partial).size : 0;
-      if (modelFileComplete(partial)) {
-        fs.renameSync(partial, modelPath());
+      if (modelFileComplete(partial, spec.minBytes)) {
+        fs.renameSync(partial, destination);
         job.state = "completed";
         job.progress = 1;
         return;
       }
-      const response = await fetch(MODEL_URL, {
+      const response = await fetch(`${HF_WHISPER}/${spec.file}`, {
         redirect: "follow",
         signal: controller.signal,
         headers: existing ? { Range: `bytes=${existing}-` } : {},
@@ -331,13 +568,13 @@ export function startModelDownload() {
           flags: resumed ? "a" : "w",
         }),
       );
-      if (fs.statSync(partial).size < 400_000_000)
+      if (fs.statSync(partial).size < spec.minBytes)
         throw new Error("下载的模型文件不完整，请重试。");
       if (!modelHeaderValid(partial)) {
         fs.rmSync(partial, { force: true });
         throw new Error("下载内容不是有效模型，请重试。");
       }
-      fs.renameSync(partial, modelPath());
+      fs.renameSync(partial, destination);
       job.state = "completed";
       job.progress = 1;
     } catch (error) {
@@ -659,7 +896,7 @@ const GEMINI_STT_SCHEMA = {
 };
 
 async function geminiTranscribeFile(filePath, { signal } = {}) {
-  if (!reviewReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
+  if (!geminiMediaReady()) throw new Error("请先在纠正设置里保存 Gemini 或 Vertex 凭证。");
   const bytes = await fs.promises.readFile(filePath);
   if (bytes.length > GEMINI_MAX_INLINE_BYTES)
     throw new Error("这段音频太大，请把视频剪短后再用 Gemini 听写。");
@@ -792,7 +1029,9 @@ async function deepgramTranscribeFile(filePath, { signal } = {}) {
   url.searchParams.set("punctuate", "true");
   url.searchParams.set("utterances", "true");
   url.searchParams.set("filler_words", "true");
-  url.searchParams.set("language", "en");
+  const language = speechLanguage();
+  if (language === "auto") url.searchParams.set("detect_language", "true");
+  else url.searchParams.set("language", language);
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -925,7 +1164,8 @@ async function groqTranscribeFile(filePath, { script, signal } = {}) {
     path.basename(filePath) || "audio.wav",
   );
   form.append("model", GROQ_STT_MODEL);
-  form.append("language", "en");
+  const language = speechLanguage();
+  if (language && language !== "auto") form.append("language", language);
   form.append("response_format", "verbose_json");
   form.append("temperature", "0");
   form.append("timestamp_granularities[]", "word");
@@ -1239,19 +1479,28 @@ async function finalizeScriptAnalysis(job, segments, fallbackText, duration, scr
 
 export async function reviewScriptIssues(input = {}) {
   if (!reviewReady())
-    throw new Error("请先在纠正设置里保存 Gemini API Key，或填好 Vertex 项目和 Key。");
+    throw new Error("请先在纠正设置里保存 Gemini / Vertex 凭证，或安装并登录 Antigravity CLI。");
   const mode = normalizeReviewMode(input.mode);
   const issues = Array.isArray(input.issues) ? input.issues.map((issue) => ({ ...issue })) : [];
   if (!issues.length) throw new Error("请先匹配文案，再使用 AI 纠正。");
   const operations = Array.isArray(input.operations) ? input.operations : [];
-  const decisions = await judgeAlignmentIssues({
+  const judged = await judgeAlignmentIssues({
     script: input.script || "",
     issues,
     operations,
     mode,
   });
+  const decisions = judged.decisions || judged;
   const aligned = { issues, operations };
   const summary = applyJudgeDecisions(aligned, decisions, mode);
+  const compare = buildReviewCompareRecord({
+    mode,
+    issues,
+    decisions,
+    summary,
+    batches: judged.batches || [],
+  });
+  const logged = writeReviewCompareLog(compare);
   const visibleIssues = issues.filter((issue) => !issue.suppressReview);
   const outputDuration = Math.max(
     0.04,
@@ -1262,7 +1511,8 @@ export async function reviewScriptIssues(input = {}) {
     mode,
     issues: visibleIssues,
     reviewCaptions: buildReviewCaptions(visibleIssues, [], outputDuration),
-    judgeSummary: summary,
+    judgeSummary: { ...summary, logPath: logged.latest },
+    reviewLogPath: logged.latest,
   };
 }
 
@@ -1340,7 +1590,7 @@ function watchTranscriptChild(job, child, { wavPath, duration, script, removals,
 async function beginTranscription(job, context) {
   const preferred = loadSpeechSettings().engine;
   if (preferred === "gemini") {
-    if (!reviewReady()) {
+    if (!geminiMediaReady()) {
       job.state = "failed";
       job.error = "听写选了 Gemini，请先在纠正设置里保存 Gemini 或 Vertex 凭证。";
       context.cleanup();
@@ -1423,49 +1673,70 @@ async function beginTranscription(job, context) {
     }
     return;
   }
-  if (getGroqApiKey()) {
-    const controller = new AbortController();
-    job.controller = controller;
-    try {
-      job.progress = 0.1;
-      const transcribed = await transcribeWithGroq(context.wavPath, {
-        duration: context.duration,
-        script: context.script,
-        job,
-        signal: controller.signal,
-      });
-      if (job.state === "cancelled") {
-        context.cleanup();
-        return;
-      }
-      context.cleanup();
-      job.child = null;
-      await finalizeScriptAnalysis(
-        job,
-        transcribed.segments,
-        transcribed.fallbackText,
-        context.duration,
-        context.script,
-        context.removals,
-      );
-      job.controller = null;
-    } catch (error) {
-      context.cleanup();
-      job.child = null;
-      job.controller = null;
-      if (job.state === "cancelled" || error?.name === "AbortError" || error?.message === "cancelled")
-        return;
-      job.state = "failed";
-      job.error = error.message;
-    }
+  if (preferred === "local") {
+    void startLocalTranscription(job, context);
     return;
   }
+  if (!getGroqApiKey()) {
+    job.state = "failed";
+    job.error = "听写选了 Groq，请先保存 Groq API Key。";
+    context.cleanup();
+    return;
+  }
+  const controller = new AbortController();
+  job.controller = controller;
+  try {
+    job.progress = 0.1;
+    const transcribed = await transcribeWithGroq(context.wavPath, {
+      duration: context.duration,
+      script: context.script,
+      job,
+      signal: controller.signal,
+    });
+    if (job.state === "cancelled") {
+      context.cleanup();
+      return;
+    }
+    context.cleanup();
+    job.child = null;
+    await finalizeScriptAnalysis(
+      job,
+      transcribed.segments,
+      transcribed.fallbackText,
+      context.duration,
+      context.script,
+      context.removals,
+    );
+    job.controller = null;
+  } catch (error) {
+    context.cleanup();
+    job.child = null;
+    job.controller = null;
+    if (job.state === "cancelled" || error?.name === "AbortError" || error?.message === "cancelled")
+      return;
+    job.state = "failed";
+    job.error = error.message;
+  }
+}
+
+async function startLocalTranscription(job, context) {
+  if (!localModelInstalled()) {
+    job.state = "failed";
+    job.error = "还没有这个本地模型。请先下载后再匹配。";
+    context.cleanup();
+    return;
+  }
+  const spec = localWhisperSpec(loadSpeechSettings().localModel);
   if (canUseNapiWhisper()) {
     watchTranscriptChild(
       job,
-      spawn(process.execPath, [workerPath(), modelPath(), context.wavPath], {
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      spawn(
+        process.execPath,
+        [workerPath(), modelPath(spec.id), context.wavPath, spec.dtwPreset, speechLanguage()],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
       context,
     );
     return;
@@ -1477,11 +1748,11 @@ async function beginTranscription(job, context) {
     const jsonPath = `${prefix}.json`;
     const args = [
       "-m",
-      modelPath(),
+      modelPath(spec.id),
       "-f",
       context.wavPath,
       "-l",
-      "en",
+      speechLanguage() === "auto" ? "auto" : speechLanguage(),
       "-t",
       String(Math.max(2, Math.min(8, os.cpus()?.length || 4))),
       "-sow",
@@ -1510,13 +1781,23 @@ export function startScriptAnalysis({
   removals = [],
   captionLines = 2,
 }) {
-  if (!canTranscribe())
-    throw new Error("请先保存 Groq API Key。没有独立显卡时使用 Groq 云端识别，无需下载本地模型。");
+  if (!canTranscribe()) {
+    const engine = loadSpeechSettings().engine;
+    throw new Error(
+      engine === "local"
+        ? "请先下载当前选的本地 Whisper 模型。"
+        : engine === "deepgram"
+          ? "请先保存 Deepgram API Key。"
+          : engine === "gemini"
+            ? "请先在纠正设置里保存 Gemini / Vertex 凭证。"
+            : "请先保存 Groq API Key。",
+    );
+  }
   if (!String(script || "").trim()) throw new Error("请先粘贴正确文案。");
   const id = crypto.randomUUID();
   const tempDir = fs.mkdtempSync(path.join(supportRoot(), "analysis-"));
-  const useGroq = Boolean(getGroqApiKey());
-  const wavPath = path.join(tempDir, useGroq ? "audio.flac" : "audio.wav");
+  const useLocal = loadSpeechSettings().engine === "local";
+  const wavPath = path.join(tempDir, useLocal ? "audio.wav" : "audio.flac");
   const job = {
     id,
     state: "extracting",
@@ -1552,7 +1833,7 @@ export function startScriptAnalysis({
       "-ar",
       "16000",
       "-c:a",
-      useGroq ? "flac" : "pcm_s16le",
+      useLocal ? "pcm_s16le" : "flac",
       wavPath,
     ],
     { stdio: ["ignore", "ignore", "pipe"] },

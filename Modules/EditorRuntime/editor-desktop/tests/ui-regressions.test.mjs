@@ -483,6 +483,12 @@ test("preview workspace zoom, rotated selection and app context menus are wired"
   const stageWheel = ui.match(/\$\("stage"\)\.addEventListener\(\s*"wheel",[\s\S]*?\{ passive: false \}/)?.[0] || "";
   assert.match(stageWheel, /state\.canvasZoom = clamp/);
   assert.doesNotMatch(stageWheel, /selected\.scale = clamp/);
+  assert.match(ui, /function preventBrowserPageZoom\(/);
+  assert.match(ui, /function eventInTimelineZoomArea\(/);
+  assert.match(ui, /touch-action:\s*none/);
+  assert.match(ui, /addEventListener\(\s*"wheel",[\s\S]*?capture:\s*true/);
+  assert.match(ui, /gesturestart/);
+  assert.match(ui, /code === "Equal"/);
 });
 
 test("caption typing does not steal play and color swatches stay small", () => {
@@ -501,6 +507,28 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /if \(!model\.ready && !model\.installed\) \{[\s\S]*?groqKeyInput/);
   assert.match(ui, /id="groqKeyInput"/);
   assert.match(ui, /id="speechEngine"/);
+  assert.match(ui, /option value="local"/);
+  assert.match(ui, /id="downloadLocalModel"/);
+  assert.match(ui, /id="localSpeechSettings"/);
+  assert.match(ui, /id="localWhisperModel"/);
+  assert.match(ui, /id="speechLanguage"/);
+  assert.match(ui, /id="speechLanguageSearch"/);
+  assert.match(ui, /id="speechLanguageCombo"/);
+  assert.match(ui, /id="speechLanguageButton"/);
+  assert.match(ui, /lang-combo-panel/);
+  assert.doesNotMatch(ui, /id="speechLanguage"[^>]*size=/);
+  assert.match(ui, /function filterSpeechLanguageList\(/);
+  assert.match(whisper, /filterSpeechLanguages/);
+  assert.match(whisper, /SPEECH_LANGUAGES/);
+  assert.match(whisper, /normalizeSpeechLanguage/);
+  assert.match(whisper, /filler_words", "true"\);/);
+  assert.doesNotMatch(whisper, /form.append\("language", "en"\)/);
+  assert.match(whisper, /LOCAL_WHISPER_MODELS/);
+  assert.match(whisper, /turbo-q5/);
+  assert.match(whisper, /large-v3-q5/);
+  assert.match(main, /startModelDownload: safe\(\(input\) => startModelDownload\(input/);
+  assert.match(whisper, /value === "local"/);
+  assert.match(whisper, /preferred === "local"/);
   assert.match(ui, /id="deepgramKeyInput"/);
   assert.match(ui, /Deepgram Nova-3/);
   assert.match(ui, /Gemini 听写|Gemini \/ Vertex 听写/);
@@ -513,6 +541,15 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(ui, /id="aiReviewStrict"/);
   assert.match(ui, /id="openReviewSettings"/);
   assert.match(ui, /id="reviewSettingsModal"/);
+  assert.match(ui, /async function openReviewSettings\(\) \{[\s\S]*classList\.add\("on"\)[\s\S]*fillReviewSettings/);
+  assert.match(ui, /value="antigravity"/);
+  assert.match(ui, /id="antigravitySettings"/);
+  assert.match(ui, /id="browseAntigravityCli"/);
+  assert.match(ui, /id="checkAntigravity"/);
+  assert.match(ui, /id="installAntigravity"/);
+  assert.match(ui, /id="loginAntigravity"/);
+  assert.match(main, /checkAntigravityStatus: safe/);
+  assert.match(main, /installAntigravityCli: safe/);
   assert.match(ui, /id="refreshGeminiModels"/);
   assert.match(ui, /refreshGeminiModels/);
   assert.match(ui, /gemini-3\.7-flash/);
@@ -570,12 +607,18 @@ test("media import is optimistic and export offers mainstream color spaces", () 
 test("pause cut settings modal supports noise sensitivity, min duration and caption gap trimming", () => {
   assert.match(ui, /id="openPauseCutSettings"/);
   assert.match(ui, /id="pauseCutModal"/);
+  assert.match(ui, /id="pauseMinDuration"/);
+  assert.match(ui, /id="pauseBuffer"/);
+  assert.match(ui, /id="pauseSensitivity"/);
+  assert.match(ui, /id="pauseTrimCaptionGaps"/);
+  assert.match(ui, /id="analyzePauseBtn"/);
   assert.match(ui, /id="pauseMinFrames"/);
   assert.match(ui, /id="pauseThresholdDb"/);
   assert.match(ui, /id="pauseHeadFrames"/);
   assert.match(ui, /id="pauseTailFrames"/);
   assert.match(ui, /function openPauseCutSettingsModal/);
   assert.match(ui, /function currentPauseCutOptions/);
+  assert.match(ui, /minPauseSeconds: Math\.max\(0\.2, minPause\)/);
 });
 
 test("timeline ruler stays pinned and blade shows a cut line", () => {
@@ -690,5 +733,12 @@ test("overlay ripple delete only slides later clips on the same track", () => {
   assert.match(
     ui,
     /function deleteSelected\(ripple = false\) \{[\s\S]*?if \(ripple && !rippleClips\.length\) \{[\s\S]*?rippleOverlayTrack/,
+  );
+  assert.match(ui, /function applyTimelineRangeSelection\(/);
+  assert.match(ui, /splitClipsAt\(start, targetsAt\(start\), \{ record: false, quiet: true \}\)/);
+  assert.match(ui, /clipInsideRange\(clip, start, end\)/);
+  assert.doesNotMatch(
+    ui.match(/function deleteSelected\(ripple = false\) \{[\s\S]*?\n      function shiftTracks/)?.[0] || "",
+    /rangedCut/,
   );
 });
