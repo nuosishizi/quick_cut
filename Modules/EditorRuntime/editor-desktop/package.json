@@ -1,6 +1,6 @@
 {
   "name": "quickcut-editor",
-  "version": "2.7.32",
+  "version": "2.7.33",
   "private": true,
   "type": "module",
   "description": "QuickCut local editor for pause cutting, script alignment, captions and multi-track editing.",

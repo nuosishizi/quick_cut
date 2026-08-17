@@ -111,9 +111,11 @@ export function listProjects() {
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
       try {
+        const directory = path.join(projectsRoot(), entry.name);
+        if (projectFolderHidden(directory)) return [];
         const value = JSON.parse(
           fs.readFileSync(
-            path.join(projectsRoot(), entry.name, "project.json"),
+            path.join(directory, "project.json"),
             "utf8",
           ),
         );
@@ -143,13 +145,84 @@ export function listProjects() {
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
-export function deleteProject(id) {
+function isBusyError(error) {
+  return ["EPERM", "EACCES", "EBUSY", "ENOTEMPTY", "EAGAIN"].includes(error?.code);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function tryUnlockTree(root) {
+  if (!fs.existsSync(root)) return;
+  try {
+    fs.chmodSync(root, 0o700);
+  } catch {}
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const next = path.join(root, entry.name);
+    if (entry.isDirectory()) tryUnlockTree(next);
+    else {
+      try {
+        fs.chmodSync(next, 0o666);
+      } catch {}
+    }
+  }
+}
+
+function hideProjectFromList(source) {
+  const marker = path.join(source, ".deleted");
+  try {
+    fs.writeFileSync(marker, `${Date.now()}\n`, { encoding: "utf8", mode: 0o600 });
+    return true;
+  } catch {}
+  const file = path.join(source, "project.json");
+  if (fs.existsSync(file)) {
+    try {
+      fs.renameSync(file, path.join(source, "project.json.deleted"));
+      return true;
+    } catch {}
+  }
+  return false;
+}
+
+function projectFolderHidden(directory) {
+  return (
+    fs.existsSync(path.join(directory, ".deleted")) ||
+    !fs.existsSync(path.join(directory, "project.json"))
+  );
+}
+
+export async function deleteProject(id) {
   const source = projectDirectory(id);
   if (!fs.existsSync(source)) return false;
   const trash = path.join(supportRoot(), "deleted-projects");
   fs.mkdirSync(trash, { recursive: true, mode: 0o700 });
-  fs.renameSync(source, path.join(trash, `${id}-${Date.now()}`));
-  return true;
+  const destination = path.join(trash, `${id}-${Date.now()}`);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    tryUnlockTree(source);
+    try {
+      fs.renameSync(source, destination);
+      return true;
+    } catch (error) {
+      if (!isBusyError(error)) throw error;
+      await wait(70 * (attempt + 1));
+    }
+  }
+  try {
+    fs.cpSync(source, destination, { recursive: true, force: true });
+    fs.rmSync(source, { recursive: true, force: true, maxRetries: 8, retryDelay: 80 });
+    return true;
+  } catch (error) {
+    if (!isBusyError(error)) throw error;
+  }
+  if (hideProjectFromList(source)) return true;
+  throw new Error("工程文件正被占用，请先关闭这个工程或退出播放后再删除。");
 }
 
 export function resetProject(id) {

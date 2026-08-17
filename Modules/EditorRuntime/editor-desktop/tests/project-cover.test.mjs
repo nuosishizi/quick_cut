@@ -84,6 +84,19 @@ test("project cover is a real 9:16 render and project store prefers it", async (
   assert.equal(store.listProjects()[0].thumbnailPath, "");
 });
 
+test("deleteProject removes the project from the home list", async () => {
+  const project = store.createProject({ name: "待删除工程", ratio: "9:16" });
+  assert.ok(store.listProjects().some((item) => item.id === project.id));
+  assert.equal(await store.deleteProject(project.id), true);
+  assert.equal(store.listProjects().some((item) => item.id === project.id), false);
+});
+
+test("listProjects hides folders marked deleted when the folder cannot be moved", () => {
+  const project = store.createProject({ name: "占用中的工程", ratio: "9:16" });
+  fs.writeFileSync(path.join(store.projectStoragePath(project.id), ".deleted"), "1");
+  assert.equal(store.listProjects().some((item) => item.id === project.id), false);
+});
+
 test("bundled-compatible metadata probe reads streams before every export", () => {
   const source = path.join(temporaryRoot, "probe-source.mp4");
   run(ffmpeg, [

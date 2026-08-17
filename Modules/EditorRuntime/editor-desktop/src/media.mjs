@@ -243,7 +243,13 @@ export function detectExportHardware() {
   return hardwareProbe;
 }
 
-export function preferredVideoEncoder(useHevc) {
+export function normalizeExportDevice(value) {
+  return String(value || "").trim().toLowerCase() === "cpu" ? "cpu" : "gpu";
+}
+
+export function preferredVideoEncoder(useHevc, options = {}) {
+  if (normalizeExportDevice(options.device || options.encoderDevice) === "cpu")
+    return useHevc ? "libx265" : "libx264";
   const hardware = detectExportHardware();
   return useHevc ? hardware.hevc : hardware.h264;
 }
@@ -2488,10 +2494,11 @@ function beginExportJob(config, info, job) {
     useHevc = config.codec === "hevc" ||
       (config.codec === "source" && /hevc|h265/.test(String(info.videoCodec || "").toLowerCase())) ||
       colorProfile.hdr;
-  const preferredEncoder = preferredVideoEncoder(useHevc);
+  const encoderDevice = normalizeExportDevice(config.encoderDevice || config.device);
+  const preferredEncoder = preferredVideoEncoder(useHevc, { device: encoderDevice });
   const fallbackEncoder = useHevc ? "libx265" : "libx264";
   const encodeQueue = [preferredEncoder];
-  if (preferredEncoder !== fallbackEncoder) encodeQueue.push(fallbackEncoder);
+  if (encoderDevice !== "cpu" && preferredEncoder !== fallbackEncoder) encodeQueue.push(fallbackEncoder);
   const launch = (encoder, rest, decodeKind) => {
     const logical = Math.max(2, Number(os.cpus?.().length || 4));
     const budget = config.resourceBudget && typeof config.resourceBudget === "object" ? config.resourceBudget : {};

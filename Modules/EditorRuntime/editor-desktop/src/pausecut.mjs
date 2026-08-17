@@ -260,6 +260,72 @@ export function mergeRanges(ranges, duration = Infinity) {
   return merged;
 }
 
+export function buildPauseGapPlan(captions = [], issues = [], options = {}) {
+  const minPause = Math.max(0.4, Number(options.minPauseSeconds || 0.8));
+  const edgeKeep = Math.max(0.05, Number(options.edgeKeepSeconds || 0.15));
+  const cutAfter = minPause + 0.3;
+  const sorted = [...(captions || [])]
+    .filter((item) => Number(item?.end || 0) > Number(item?.start || 0) + 0.02)
+    .sort((left, right) => Number(left.start || 0) - Number(right.start || 0));
+  const scriptureWindows = [];
+  for (const issue of issues || []) {
+    if (!(issue?.scripture || issue?.strict)) continue;
+    scriptureWindows.push({
+      start: Number(issue.start || 0) - 0.3,
+      end: Number(issue.end || issue.start || 0) + 0.3,
+    });
+  }
+  for (const caption of sorted) {
+    const holy =
+      caption.scripture ||
+      caption.strict ||
+      (caption.words || []).some((word) => word.scripture || word.strict);
+    if (holy)
+      scriptureWindows.push({
+        start: Number(caption.start || 0) - 0.3,
+        end: Number(caption.end || 0) + 0.3,
+      });
+  }
+  const overlapsScripture = (start, end) =>
+    scriptureWindows.some((window) => window.start < end && window.end > start);
+  const clip = (value) => String(value || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const gaps = [];
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const left = sorted[index];
+    const right = sorted[index + 1];
+    const start = Number(left.end || 0);
+    const end = Number(right.start || 0);
+    const duration = end - start;
+    if (duration <= 0.04) continue;
+    const cutStart = start + edgeKeep;
+    const cutEnd = end - edgeKeep;
+    const nearScripture = overlapsScripture(start, end);
+    let verdict = "keep";
+    if (duration >= cutAfter && cutEnd > cutStart + 0.1) verdict = "cut";
+    if (nearScripture) verdict = "scripture-keep";
+    gaps.push({
+      id: `gap-${index}-${start.toFixed(3)}`,
+      index,
+      start,
+      end,
+      cutStart,
+      cutEnd,
+      duration: Number(duration.toFixed(3)),
+      leftText: clip(left.text || left.expectedText),
+      rightText: clip(right.text || right.expectedText),
+      verdict,
+      checked: verdict === "cut",
+    });
+  }
+  return {
+    gaps,
+    cutAfter,
+    minPause,
+    suggestCut: gaps.filter((item) => item.verdict === "cut").length,
+    locked: gaps.filter((item) => item.verdict === "scripture-keep").length,
+  };
+}
+
 export function mapSourceTime(time, removals) {
   let removed = 0;
   for (const range of removals) {

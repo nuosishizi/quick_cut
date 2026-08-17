@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzePauseFrames, samplesToFrames } from "../src/pausecut.mjs";
+import { analyzePauseFrames, buildPauseGapPlan, samplesToFrames } from "../src/pausecut.mjs";
 
 test("fast edge detection ignores steady room noise and keeps 0.1 seconds around voice", () => {
   const sampleRate = 8000,
@@ -41,4 +41,25 @@ test("short clicks do not become the beginning of speech", () => {
     edgeKeepSeconds: 0.1,
   });
   assert.ok(result.diagnostics.voiceStart > 0.92);
+});
+
+test("pause gap plan suggests cutting long gaps but never near scripture", () => {
+  const plan = buildPauseGapPlan(
+    [
+      { start: 0, end: 1, text: "Hello" },
+      { start: 3.2, end: 4, text: "world" },
+      { start: 4.3, end: 5, text: "today" },
+      { start: 7, end: 8, text: "Psalm 23" },
+    ],
+    [{ start: 6.8, end: 8.1, scripture: true, type: "mismatch" }],
+    { minPauseSeconds: 0.8, edgeKeepSeconds: 0.15 },
+  );
+  const long = plan.gaps.find((item) => item.leftText === "Hello");
+  const short = plan.gaps.find((item) => item.leftText === "world");
+  const holy = plan.gaps.find((item) => item.rightText === "Psalm 23");
+  assert.equal(long.verdict, "cut");
+  assert.equal(long.checked, true);
+  assert.equal(short.verdict, "keep");
+  assert.equal(holy.verdict, "scripture-keep");
+  assert.equal(holy.checked, false);
 });

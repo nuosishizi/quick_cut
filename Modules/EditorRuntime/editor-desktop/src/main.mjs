@@ -64,7 +64,7 @@ import {
   openAntigravityLogin,
   saveReviewSettings,
 } from "./ai-settings.mjs";
-import { blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
+import { applyCaptionPolish, blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
 import { writeResolveTimeline } from "./resolve-export.mjs";
 import {
   installResolveLink,
@@ -73,7 +73,7 @@ import {
   revealResolveLog,
   sendToResolve,
 } from "./resolve-link.mjs";
-import { mergeRanges, mapSourceTime } from "./pausecut.mjs";
+import { mergeRanges, mapSourceTime, buildPauseGapPlan } from "./pausecut.mjs";
 import { buildCaptions, regroupProjectCaptions, spokenCaptionWords } from "./alignment.mjs";
 import { captionMatchLineLimit } from "./text-layout.mjs";
 import {
@@ -197,6 +197,18 @@ function mimeType(filePath) {
       ".woff2": "font/woff2",
     }[extension] || "application/octet-stream"
   );
+}
+
+function releaseProjectAssets(projectId) {
+  try {
+    const root = path.resolve(projectStoragePath(projectId));
+    for (const [token, filePath] of assets.entries()) {
+      const relative = path.relative(root, path.resolve(filePath));
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) continue;
+      assets.delete(token);
+    }
+  } catch {}
+  return true;
 }
 
 function registerAsset(filePath) {
@@ -374,7 +386,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.32" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.33" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1272,7 +1284,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.32",
+    version: "2.7.33",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1293,6 +1305,7 @@ nativeMethods = {
   ),
   createProject: safe((input) => createProject(input || {})),
   deleteProject: safe((id) => deleteProject(id)),
+  releaseProjectAssets: safe((id) => releaseProjectAssets(id)),
   resetProject: safe((id) => resetProject(id)),
   clearProjectCache: safe((id) => clearProjectCache(id)),
   loadProject: safe((id) => loadProjectForUi(id)),
@@ -1391,6 +1404,12 @@ nativeMethods = {
   readClipboard: safe(() => readClipboard()),
   analyzePauses: safe((input) =>
     analyzePauses(input.path, input.options || {}),
+  ),
+  pauseGapPlan: safe((input = {}) =>
+    buildPauseGapPlan(input.captions || [], input.issues || [], input.options || {}),
+  ),
+  polishCaptions: safe((input = {}) =>
+    applyCaptionPolish(input.captions || [], input.keepSpoken || [], input.issues || []),
   ),
   denoisePreview: safe(async (input) =>
     registerAsset(

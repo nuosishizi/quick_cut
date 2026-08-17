@@ -5,6 +5,7 @@ import {
   encoderDisplayName,
   formatExportClock,
   parseFfmpegProgress,
+  normalizeExportDevice,
   preferredVideoEncoder,
   refreshExportJob,
   videoEncodeArgs,
@@ -68,6 +69,14 @@ test("export status keeps the clock moving before ffmpeg reports frames", () => 
   assert.match(job.message, /已用 0:25/);
   assert.ok(job.progress > 0.02, "soft progress should creep during silence");
   assert.match(job.message, /正在启动编码器|正在准备导出/);
+});
+
+test("export device checkbox can force CPU software encoding", () => {
+  assert.equal(normalizeExportDevice(""), "gpu");
+  assert.equal(normalizeExportDevice("GPU"), "gpu");
+  assert.equal(normalizeExportDevice("cpu"), "cpu");
+  assert.equal(preferredVideoEncoder(false, { device: "cpu" }), "libx264");
+  assert.equal(preferredVideoEncoder(true, { device: "cpu" }), "libx265");
 });
 
 test("Windows preferred encoder is a working encoder, not just a compiled name", () => {

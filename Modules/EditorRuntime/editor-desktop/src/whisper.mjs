@@ -21,7 +21,9 @@ import { completeGeminiMedia, geminiMediaReady, loadReviewSettings, reviewReady 
 import {
   applyJudgeDecisions,
   blockingScriptureIssues,
+  buildGlobalPolishPlan,
   buildReviewCompareRecord,
+  formatGlobalPolishSummary,
   judgeAlignmentIssues,
   normalizeReviewMode,
   writeReviewCompareLog,
@@ -1507,12 +1509,15 @@ export async function reviewScriptIssues(input = {}) {
     Number(input.outputDuration || 0),
     ...issues.map((issue) => Number(issue.end || 0)),
   );
+  const polishPlan = buildGlobalPolishPlan(issues);
   return {
     mode,
     issues: visibleIssues,
     reviewCaptions: buildReviewCaptions(visibleIssues, [], outputDuration),
     judgeSummary: { ...summary, logPath: logged.latest },
     reviewLogPath: logged.latest,
+    polishPlan,
+    polishSummary: formatGlobalPolishSummary(polishPlan, polishPlan.autoCut.length),
   };
 }
 

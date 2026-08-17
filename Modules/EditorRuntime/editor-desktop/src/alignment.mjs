@@ -1297,12 +1297,63 @@ function rematchPrefixFalseStarts(operations = []) {
   return operations;
 }
 
-function looksLikeAbandonedPrefix(phrase, after) {
+const LIST_MARKERS = new Set("number point item step part no".split(" "));
+const LIST_ORDINALS = new Map(
+  Object.entries({
+    one: "1",
+    first: "1",
+    two: "2",
+    second: "2",
+    three: "3",
+    third: "3",
+    four: "4",
+    fourth: "4",
+    five: "5",
+    fifth: "5",
+    six: "6",
+    sixth: "6",
+    seven: "7",
+    seventh: "7",
+    eight: "8",
+    eighth: "8",
+    nine: "9",
+    ninth: "9",
+    ten: "10",
+    tenth: "10",
+  }),
+);
+
+function listOrdinalValue(word) {
+  const raw = String(word || "").toLowerCase();
+  if (LIST_ORDINALS.has(raw)) return LIST_ORDINALS.get(raw);
+  if (/^\d+$/.test(raw)) return String(Number(raw));
+  return "";
+}
+
+function normalizeListPhrase(words = []) {
+  const list = (words || []).map((word) => String(word || "").toLowerCase()).filter(Boolean);
+  if (list.length >= 2 && LIST_MARKERS.has(list[0])) {
+    const ordinal = listOrdinalValue(list[1]);
+    if (ordinal) return ["list", ordinal, ...list.slice(2)];
+  }
+  if (list.length >= 1) {
+    const ordinal = listOrdinalValue(list[0]);
+    if (ordinal) return ["list", ordinal, ...list.slice(1)];
+  }
+  return list;
+}
+
+export function looksLikeAbandonedPrefix(phrase, after) {
   const extra = phraseWordList(phrase);
   const next = phraseWordList(after);
-  if (extra.length < 2 || next.length < 2) return false;
-  if (extra.slice(0, 2).join(" ") !== next.slice(0, 2).join(" ")) return false;
-  return true;
+  if (!extra.length || next.length < 2) return false;
+  if (extra.length >= 2 && extra.slice(0, 2).join(" ") === next.slice(0, 2).join(" "))
+    return true;
+  const a = normalizeListPhrase(extra);
+  const b = normalizeListPhrase(next);
+  if (a[0] === "list" && b[0] === "list" && a[1] && a[1] === b[1]) return true;
+  if (extra.length === 1 && LIST_MARKERS.has(extra[0]) && b[0] === "list") return true;
+  return false;
 }
 
 function sentenceContinues(display) {

@@ -1337,7 +1337,7 @@
         display: none;
         align-items: center;
         justify-content: center;
-        z-index: 120;
+        z-index: 260;
       }
       .modal.on {
         display: flex;
@@ -1656,15 +1656,15 @@
         position: absolute;
         top: 8px;
         right: 8px;
-        width: 25px;
-        height: 25px;
+        z-index: 3;
+        width: 28px;
+        height: 28px;
         border: 1px solid #454a50;
         border-radius: 6px;
         color: #c8ccd2;
-        background: rgba(22,24,26,.9);
-        opacity: 0;
+        background: rgba(22,24,26,.92);
+        opacity: 1;
       }
-      .projectcard:hover .projectdelete { opacity: 1; }
       .projectdelete:hover { color: #fff; background: #a8373e; border-color: #a8373e; }
       .emptyprojects {
         flex: 1;
@@ -2557,6 +2557,20 @@
       .timeline-marquee.on {
         display: block;
       }
+      .timeline-range {
+        display: none;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 8;
+        background: rgba(31, 131, 255, 0.12);
+        border-left: 1px solid #58a6ff;
+        border-right: 1px solid #58a6ff;
+        pointer-events: none;
+      }
+      .timeline-range.on {
+        display: block;
+      }
       .tracktypegrid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2789,6 +2803,12 @@
                   自然流畅
                 </button>
               </div>
+              <button class="btn wide primary" id="globalPolish" disabled style="margin-top:7px" title="先匹配再自然纠正，自动切重录，口语并进绿字幕，清掉文稿备注；经文和神的话语只锁定等人点">
+                全局整理
+              </button>
+              <button class="btn wide" id="lastPolishReport" disabled style="margin-top:7px" title="重新打开上次整理结果，不用再识别">
+                上次整理结果
+              </button>
               <div class="field" style="margin-top:10px">
                 <div class="fieldhead"><span>字幕切句</span></div>
                 <div class="align-buttons" id="captionLinesButtons">
@@ -3578,6 +3598,7 @@
                 <div class="trackrow" id="track-audio" data-track-key="audio">
                   <canvas class="wavecanvas" id="waveform"></canvas>
                 </div>
+                <div class="timeline-range" id="timelineRange"></div>
                 <div class="timeline-marquee" id="timelineMarquee"></div>
               </div>
             </div>
@@ -3648,6 +3669,19 @@
               <option value="maximum">最高画质</option>
             </select></label
           >
+          <div class="field">
+            <span class="small">渲染设备</span>
+            <div class="row" style="gap:16px;margin-top:6px;flex-wrap:wrap">
+              <label class="row" style="gap:6px;align-items:center;margin:0">
+                <input type="checkbox" id="exportUseGpu" checked />
+                <span class="small">GPU 显卡（默认）</span>
+              </label>
+              <label class="row" style="gap:6px;align-items:center;margin:0">
+                <input type="checkbox" id="exportUseCpu" />
+                <span class="small">CPU 软件编码</span>
+              </label>
+            </div>
+          </div>
           <label class="field"
             ><span class="small">色彩空间</span
             ><select class="select" id="exportColorSpace">
@@ -3665,13 +3699,24 @@
           <div style="margin-top:6px"><span class="small">预计大小</span> <b id="exportSizeText">正在计算…</b></div>
         </div>
         <p class="small">
-          默认跟随原素材编码。未修改时零重编码直出；有剪辑或效果时优先使用 NVIDIA / Intel / AMD / Apple 显卡编码，失败再回退软件编码。
+          默认勾选 GPU。未改编码时可零重编码直出；有剪辑或效果时 GPU 走 NVIDIA / Intel / AMD / Apple 显卡，失败再回退 CPU。只勾 CPU 则全程软件编码。
         </p>
         <div class="dialogactions">
           <button class="btn" id="exportSettingsCancel">取消</button
           ><button class="btn primary" type="button" id="exportSettingsConfirm">
             选择路径并导出
           </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="globalPolishModal">
+      <div class="dialog newdialog" style="max-width:520px">
+        <h2>全局整理结果</h2>
+        <p class="small" id="globalPolishSummary"></p>
+        <div id="globalPolishBody" style="max-height:360px; overflow:auto; margin-top:8px"></div>
+        <div class="dialogactions">
+          <button class="btn" id="globalPolishClose">关闭</button>
+          <button class="btn primary" id="applyPauseGapsBtn">切勾选的气口</button>
         </div>
       </div>
     </div>
@@ -4658,7 +4703,7 @@
         $("homeProjectGrid").innerHTML = filtered
           .map(
             (item) =>
-              `<div class="projectcard" data-project-id="${item.id}" tabindex="0"><button class="projectdelete" data-delete-project="${item.id}" title="删除工程">×</button><div class="projectthumb">${item.thumbnailUrl ? `<img src="${escapeHtml(item.thumbnailUrl)}" alt="工程预览">` : escapeHtml(item.ratio || "9:16")}</div><b class="ellipsis" title="${escapeHtml(item.name || "未命名工程")}">${escapeHtml(item.name || "未命名工程")}</b><div class="projectmeta ellipsis">${escapeHtml(item.videoName || "尚未导入视频")}</div><div class="projectmeta">更新于 ${projectDate(item.updatedAt)}</div></div>`,
+              `<div class="projectcard" data-project-id="${item.id}" tabindex="0"><button type="button" class="projectdelete" data-delete-project="${item.id}" title="删除工程">×</button><div class="projectthumb">${item.thumbnailUrl ? `<img src="${escapeHtml(item.thumbnailUrl)}" alt="工程预览">` : escapeHtml(item.ratio || "9:16")}</div><b class="ellipsis" title="${escapeHtml(item.name || "未命名工程")}">${escapeHtml(item.name || "未命名工程")}</b><div class="projectmeta ellipsis">${escapeHtml(item.videoName || "尚未导入视频")}</div><div class="projectmeta">更新于 ${projectDate(item.updatedAt)}</div></div>`,
           )
           .join("");
         $("homeProjectGrid").style.display = filtered.length ? "grid" : "none";
@@ -5091,6 +5136,14 @@
         });
         state.projectCoverPath = result.path;
       }
+      function unloadEditorMedia() {
+        const video = $("video");
+        if (video) {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        }
+      }
       async function backToHome() {
         try {
           await refreshProjectCover();
@@ -5098,6 +5151,7 @@
           console.warn("工程封面更新失败", error);
         }
         await flushAutoSave();
+        unloadEditorMedia();
         state.editorActive = false;
         $("app").classList.remove("active");
         $("home").classList.remove("hidden");
@@ -5473,49 +5527,18 @@
         if (end - start >= mainLength - 0.08) return null;
         return { start, end };
       }
-      function applyTimelineRangeSelection(range, hits, additive = false) {
-        const start = Number(range?.start || 0);
-        const end = Number(range?.end || 0);
-        if (end <= start + 0.08) return false;
-        const types = new Set((hits || []).map((item) => item.type));
-        if (!types.size) return false;
-        snapshot();
-        const targetsAt = (time) => {
-          const targets = [];
-          if (types.has("video") || (state.avLinked && types.has("audio"))) {
-            for (const clip of mainClips())
-              if (playheadInside(clip, time, 0.02)) targets.push({ type: "video", id: clip.id });
-          }
-          if (!state.avLinked && types.has("audio")) {
-            for (const clip of mainAudioClips())
-              if (playheadInside(clip, time, 0.02)) targets.push({ type: "audio", id: clip.id });
-          }
-          for (const [type, list] of [
-            ["videolayer", state.videoLayers],
-            ["audioasset", state.audioAssets],
-            ["image", state.images],
-            ["text", state.titles],
-            ["caption", state.captions],
-            ["review", state.reviewCaptions],
-          ]) {
-            if (!types.has(type)) continue;
-            for (const item of list || [])
-              if (playheadInside(item, time, 0.02)) targets.push({ type, id: item.id });
-          }
-          return targets;
-        };
-        splitClipsAt(start, targetsAt(start), { record: false, quiet: true });
-        splitClipsAt(end, targetsAt(end), { record: false, quiet: true });
+      function collectRangeHits(types, start, end) {
         const picked = [];
-        if (types.has("video") || (state.avLinked && types.has("audio"))) {
+        const typeSet = types instanceof Set ? types : new Set(types || []);
+        if (typeSet.has("video") || (state.avLinked && typeSet.has("audio"))) {
           for (const clip of mainClips())
             if (clipInsideRange(clip, start, end)) picked.push({ type: "video", id: clip.id });
         }
-        if (!state.avLinked && types.has("audio")) {
+        if (!state.avLinked && typeSet.has("audio")) {
           for (const clip of mainAudioClips())
             if (clipInsideRange(clip, start, end)) picked.push({ type: "audio", id: clip.id });
         }
-        if (state.avLinked && types.has("audio") && !types.has("video")) {
+        if (state.avLinked && typeSet.has("audio") && !typeSet.has("video")) {
           for (const clip of mainAudioClips())
             if (clipInsideRange(clip, start, end)) picked.push({ type: "audio", id: clip.id });
         }
@@ -5527,17 +5550,85 @@
           ["caption", state.captions],
           ["review", state.reviewCaptions],
         ]) {
-          if (!types.has(type)) continue;
+          if (!typeSet.has(type)) continue;
           for (const item of list || [])
             if (clipInsideRange(item, start, end)) picked.push({ type, id: item.id });
         }
+        return picked;
+      }
+      function rangeTargetsAt(types, time) {
+        const typeSet = types instanceof Set ? types : new Set(types || []);
+        const targets = [];
+        if (typeSet.has("video") || (state.avLinked && typeSet.has("audio"))) {
+          for (const clip of mainClips())
+            if (playheadInside(clip, time, 0.02)) targets.push({ type: "video", id: clip.id });
+        }
+        if (!state.avLinked && typeSet.has("audio")) {
+          for (const clip of mainAudioClips())
+            if (playheadInside(clip, time, 0.02)) targets.push({ type: "audio", id: clip.id });
+        }
+        if (state.avLinked && typeSet.has("audio") && !typeSet.has("video")) {
+          for (const clip of mainAudioClips())
+            if (playheadInside(clip, time, 0.02)) targets.push({ type: "audio", id: clip.id });
+        }
+        for (const [type, list] of [
+          ["videolayer", state.videoLayers],
+          ["audioasset", state.audioAssets],
+          ["image", state.images],
+          ["text", state.titles],
+          ["caption", state.captions],
+          ["review", state.reviewCaptions],
+        ]) {
+          if (!typeSet.has(type)) continue;
+          for (const item of list || [])
+            if (playheadInside(item, time, 0.02)) targets.push({ type, id: item.id });
+        }
+        return targets;
+      }
+      function applyTimelineRangeSelection(range, hits, additive = false) {
+        const start = Number(range?.start || 0);
+        const end = Number(range?.end || 0);
+        if (end <= start + 0.08) return false;
+        const types = new Set((hits || []).map((item) => item.type).filter(Boolean));
+        if (!types.size) return false;
+        const picked = collectRangeHits(types, start, end);
         const merged = additive ? [...(state.selectedItems || []), ...picked] : picked;
-        state.timelineRange = { start, end };
+        state.timelineRange = { start, end, types: [...types] };
         state.selectedItems = expandLinkedSelection(
           [...new Map(merged.map((item) => [selectionKey(item.type, item.id), item])).values()],
         );
         state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
         return true;
+      }
+      function materializeTimelineRangeSelection() {
+        const range = state.timelineRange;
+        const start = Number(range?.start || 0);
+        const end = Number(range?.end || 0);
+        if (end <= start + 0.08) return false;
+        const types = new Set(range.types || []);
+        if (!types.size) return false;
+        splitClipsAt(start, rangeTargetsAt(types, start), { record: false, quiet: true });
+        splitClipsAt(end, rangeTargetsAt(types, end), { record: false, quiet: true });
+        const picked = collectRangeHits(types, start, end);
+        state.selectedItems = expandLinkedSelection(
+          [...new Map(picked.map((item) => [selectionKey(item.type, item.id), item])).values()],
+        );
+        state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
+        return state.selectedItems.length > 0;
+      }
+      function syncTimelineRangeOverlay() {
+        const el = $("timelineRange");
+        if (!el) return;
+        const range = state.timelineRange;
+        const start = Number(range?.start || 0);
+        const end = Number(range?.end || 0);
+        if (!range || end <= start + 0.08) {
+          el.classList.remove("on");
+          return;
+        }
+        el.style.left = `${start * state.zoom}px`;
+        el.style.width = `${Math.max(2, (end - start) * state.zoom)}px`;
+        el.classList.add("on");
       }
       function resolveWorkingSelection(items) {
         const result = [];
@@ -7828,6 +7919,7 @@
           if (label) label.style.height = laneHeight;
         }
         syncTimelineChrome();
+        syncTimelineRangeOverlay();
         drawWaveform();
         drawAssetWaveforms();
         $("durationLabel").textContent = formatTime(state.duration, false);
@@ -9528,6 +9620,7 @@
         cleanupEmptyDynamicTracks();
       }
       function deleteSelected(ripple = false) {
+        if (state.timelineRange) materializeTimelineRangeSelection();
         const requested = resolveWorkingSelection(
           (state.selectedItems || []).length
             ? [...state.selectedItems]
@@ -9631,6 +9724,7 @@
         }
         cleanupEmptyDynamicTracks();
         recomputeContentDuration();
+        state.timelineRange = null;
         state.selectedItems = [];
         state.selected = state.video
           ? { type: "video", id: "main" }
@@ -9989,11 +10083,11 @@
       async function matchScript() {
         if (!state.video) {
           toast("请先导入视频");
-          return;
+          return false;
         }
         if (!$("scriptText").value.trim()) {
           toast("请先粘贴正确文案");
-          return;
+          return false;
         }
         try {
           const model = unwrap(await window.native.modelStatus());
@@ -10012,7 +10106,7 @@
               toast("请先保存 Groq API Key，或把听写改成本地 / Deepgram / Gemini");
               $("groqKeyInput")?.focus();
             }
-            return;
+            return false;
           }
           const btn = $("matchScript");
           btn.disabled = true;
@@ -10051,7 +10145,10 @@
                   ? `匹配完成：共 ${state.issues.length} 处差异。绿字幕按文稿。再选“严格对照”或“自然流畅”。`
                   : "匹配完成：口播与正确文案一致",
               );
-              break;
+              btn.disabled = false;
+              btn.textContent = "匹配文案";
+              $("modelProgress").style.display = "none";
+              return true;
             }
             if (s.state === "failed") throw new Error(s.error);
           }
@@ -10061,16 +10158,227 @@
           $("matchScript").disabled = false;
           $("matchScript").textContent = "匹配文案";
           toast(e.message);
+          return false;
         }
       }
       function updateAiReviewButton() {
         const ready = (state.matchIssues || state.issues || []).length > 0;
-        for (const id of ["aiReviewStrict", "aiReviewNatural"]) {
+        for (const id of ["aiReviewStrict", "aiReviewNatural", "globalPolish"]) {
           const button = $(id);
-          if (button) button.disabled = !ready;
+          if (button) button.disabled = !ready && id !== "globalPolish";
+        }
+        if ($("globalPolish")) $("globalPolish").disabled = false;
+      }
+      function polishSectionHtml(title, rows, emptyText) {
+        const items = (rows || [])
+          .map(
+            (row) =>
+              `<button type="button" class="btn wide" data-polish-id="${escapeHtml(row.id)}" style="margin:4px 0; text-align:left; white-space:normal">
+                <strong>${escapeHtml(row.type || "")}</strong>
+                ${escapeHtml(row.spoken || row.text || row.expected || "（无文字）")}
+              </button>`,
+          )
+          .join("");
+        return `<div style="margin-top:10px"><div class="small" style="font-weight:600">${escapeHtml(title)}（${(rows || []).length}）</div>${items || `<div class="small">${escapeHtml(emptyText)}</div>`}</div>`;
+      }
+      function pauseGapSectionHtml(plan) {
+        const gaps = plan.pauseGaps || [];
+        if (!gaps.length) return `<div style="margin-top:10px"><div class="small" style="font-weight:600">气口体检</div><div class="small">字幕太少，或句间没有空隙。</div></div>`;
+        const rows = gaps
+          .map((gap) => {
+            const locked = gap.verdict === "scripture-keep";
+            const label =
+              locked
+                ? "经文附近，默认不切"
+                : gap.verdict === "cut"
+                  ? "过长，建议切"
+                  : "合理，建议留";
+            return `<label class="row" style="align-items:flex-start; gap:8px; margin:6px 0">
+              <input type="checkbox" data-pause-gap="${escapeHtml(gap.id)}" ${gap.checked ? "checked" : ""} ${locked ? "disabled" : ""} />
+              <span class="small" data-polish-time="${Number(gap.start || 0)}">
+                ${Number(gap.duration || 0).toFixed(2)} 秒 · ${label}<br/>
+                ${escapeHtml(gap.leftText || "…")} → ${escapeHtml(gap.rightText || "…")}
+              </span>
+            </label>`;
+          })
+          .join("");
+        return `<div style="margin-top:10px"><div class="small" style="font-weight:600">气口体检（${gaps.length}，建议切 ${(plan.pauseSuggestCut || 0)}，经文附近 ${(plan.pauseLocked || 0)}）</div>${rows}</div>`;
+      }
+      function persistPauseGapChecks() {
+        const planned = window.__pauseGapPlan || [];
+        const boxes = [...document.querySelectorAll("[data-pause-gap]")];
+        if (!boxes.length) return planned;
+        const chosen = new Set(boxes.filter((item) => item.checked).map((item) => item.dataset.pauseGap));
+        for (const gap of planned) {
+          if (gap.verdict === "scripture-keep") {
+            gap.checked = false;
+            continue;
+          }
+          gap.checked = chosen.has(gap.id);
+        }
+        return planned;
+      }
+      function rememberPolishPlan(plan, autoApplied = 0) {
+        const next = { ...(plan || {}), autoApplied: Number(autoApplied) || 0 };
+        window.__lastPolishPlan = next;
+        window.__pauseGapPlan = next.pauseGaps || [];
+        if ($("lastPolishReport")) $("lastPolishReport").disabled = false;
+      }
+      function showLastPolishReport() {
+        const plan = window.__lastPolishPlan;
+        if (!plan) {
+          toast("还没有整理结果。请先点全局整理。");
+          return;
+        }
+        showGlobalPolishReport(plan, plan.autoApplied || 0);
+      }
+      function showGlobalPolishReport(plan, autoApplied) {
+        const summary =
+          `自动切 ${autoApplied} 处重录/废读，口语并进 ${(plan.mergedSpoken || []).length} 条，清掉 ${(plan.strippedNotes || []).length} 处备注，${(plan.scriptureLock || []).length} 处经文请你点，${(plan.missing || []).length} 处缺读待补${(plan.leftover || []).length ? `，${plan.leftover.length} 处仍待确认` : ""}。气口建议切 ${plan.pauseSuggestCut || 0} 处。`;
+        if ($("globalPolishSummary")) $("globalPolishSummary").textContent = summary;
+        if ($("globalPolishBody")) {
+          $("globalPolishBody").innerHTML = [
+            polishSectionHtml("经文 / 神的话语（只锁定，请你点）", plan.scriptureLock, "没有经文待复核"),
+            polishSectionHtml("缺读待补", plan.missing, "没有缺读"),
+            polishSectionHtml("已自动切除", plan.autoCut, "没有自动切除"),
+            polishSectionHtml("已并进绿字幕", plan.mergedSpoken, "没有口语需要并进"),
+            polishSectionHtml("已清字幕备注", plan.strippedNotes, "没有备注"),
+            polishSectionHtml("已保留口语", plan.keepSpoken, "没有额外口语"),
+            polishSectionHtml("仍待确认", plan.leftover, "没有其余项"),
+            pauseGapSectionHtml(plan),
+          ].join("");
+        }
+        rememberPolishPlan(plan, autoApplied);
+        if ($("globalPolishModal")) $("globalPolishModal").classList.add("on");
+      }
+      async function runGlobalPolish() {
+        const button = $("globalPolish");
+        try {
+          if (button) {
+            button.disabled = true;
+            button.textContent = "整理中…";
+          }
+          const hasCaptions = (state.captions || []).some((item) => String(item.text || "").trim());
+          const hasMatch = (state.matchIssues || state.issues || []).length > 0;
+          if (!hasCaptions || !hasMatch) {
+            const matched = await matchScript();
+            if (matched === false && !hasCaptions) return;
+          }
+          let plan = {
+            autoCut: [],
+            keepSpoken: [],
+            scriptureLock: [],
+            missing: [],
+            leftover: [],
+          };
+          let autoCut = 0;
+          if ((state.matchIssues || state.issues || []).length) {
+            const reviewed = await reviewScriptWithAi("natural", { quiet: true });
+            if (!reviewed) return;
+            plan = reviewed.plan || plan;
+            autoCut = reviewed.autoCut || 0;
+          }
+          try {
+            const polished = unwrap(
+              await window.native.polishCaptions({
+                captions: state.captions || [],
+                keepSpoken: plan.keepSpoken || [],
+                issues: [...(state.issues || []), ...(state.matchIssues || [])],
+              }),
+            );
+            if (Array.isArray(polished.captions)) state.captions = polished.captions;
+            plan.mergedSpoken = polished.mergedSpoken || [];
+            plan.strippedNotes = polished.strippedNotes || [];
+          } catch {
+            plan.mergedSpoken = [];
+            plan.strippedNotes = [];
+          }
+          try {
+            const pause = unwrap(
+              await window.native.pauseGapPlan({
+                captions: state.captions || [],
+                issues: state.issues || [],
+                options: currentPauseCutOptions(),
+              }),
+            );
+            plan.pauseGaps = pause.gaps || [];
+            plan.pauseSuggestCut = pause.suggestCut || 0;
+            plan.pauseLocked = pause.locked || 0;
+          } catch {
+            plan.pauseGaps = [];
+          }
+          clampTracksToDuration();
+          renderAll();
+          if (!(state.captions || []).some((item) => String(item.text || "").trim()))
+            toast("整理有结果，但时间线上还没有绿字幕。请确认已粘贴文案并完成匹配。");
+          showGlobalPolishReport(plan, autoCut);
+          toast(
+            (state.matchIssues || state.issues || []).length
+              ? `全局整理完成：${autoCut} 处已自动切，口语并进 ${(plan.mergedSpoken || []).length} 条，清掉 ${(plan.strippedNotes || []).length} 处备注，${(plan.scriptureLock || []).length} 处经文请你点，气口建议切 ${plan.pauseSuggestCut || 0} 处`
+              : `口播与文案一致。清掉 ${(plan.strippedNotes || []).length} 处备注，气口建议切 ${plan.pauseSuggestCut || 0} 处，经文附近默认不切`,
+          );
+        } catch (error) {
+          toast(error.message);
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "全局整理";
+          }
+          updateAiReviewButton();
         }
       }
-      async function reviewScriptWithAi(mode) {
+      function applySelectedPauseGaps() {
+        persistPauseGapChecks();
+        const planned = window.__pauseGapPlan || [];
+        const cuts = planned
+          .filter((gap) => gap.checked && gap.verdict !== "scripture-keep")
+          .sort((left, right) => Number(right.start || 0) - Number(left.start || 0));
+        if (!cuts.length) {
+          toast("没有勾选可切的气口。经文附近默认不能切。");
+          return 0;
+        }
+        snapshot();
+        let applied = 0;
+        const appliedIds = new Set();
+        for (const gap of cuts) {
+          const start = Math.max(0, Number(gap.cutStart || gap.start || 0));
+          let end = Math.max(start + 0.04, Number(gap.cutEnd || gap.end || 0));
+          end = Math.min(end, Math.max(start + 0.04, Number(gap.end || end) - 0.05));
+          if (end <= start + 0.04) continue;
+          const sourceStart = timelineToSource(start);
+          let sourceEnd = timelineToSource(end);
+          if (sourceEnd <= sourceStart + 0.04) continue;
+          const nextCaption = (state.captions || [])
+            .map((item) => Number(item.start || 0))
+            .filter((time) => time >= Number(gap.end || end) - 0.02)
+            .sort((left, right) => left - right)[0];
+          if (Number.isFinite(nextCaption)) {
+            const nextSource = timelineToSource(nextCaption);
+            sourceEnd = Math.min(sourceEnd, Math.max(sourceStart + 0.04, nextSource - 0.05));
+          }
+          if (sourceEnd <= sourceStart + 0.04) continue;
+          state.removals.push({
+            start: sourceStart,
+            end: sourceEnd,
+            source: "pause-gap",
+          });
+          shiftTracks(start, end - start);
+          appliedIds.add(gap.id);
+          applied += 1;
+        }
+        normalizeRemovals();
+        recomputeContentDuration();
+        clampTracksToDuration();
+        seekTimeline(0);
+        renderAll();
+        if ($("globalPolishModal")) $("globalPolishModal").classList.remove("on");
+        for (const gap of planned) {
+          if (appliedIds.has(gap.id)) gap.checked = false;
+        }
+        toast(applied ? `已切 ${applied} 处勾选气口，后面字幕只前移不删` : "这些气口没法安全切除");
+        return applied;
+      }
+      async function reviewScriptWithAi(mode, { quiet = false } = {}) {
         const sourceIssues = state.matchIssues?.length ? state.matchIssues : state.issues;
         if (!sourceIssues.length) {
           toast("请先匹配文案");
@@ -10104,20 +10412,25 @@
           );
           state.captions = captionsBefore;
           const autoCut = applyConfirmedRepeatCuts();
+          state.lastAutoCutCount = autoCut;
           renderAll();
           const judged = result.judgeSummary || {};
           const leftover = (state.issues || []).filter((item) =>
             item.action === "cut" || item.confirmedCut === true,
           ).length;
-          toast(
-            judged.error
-              ? `${label}失败：${judged.error}`
-              : strict
-                ? `严格对照完成：自动剪掉 ${autoCut} 处重复阅读，${judged.keep || 0} 处识别误差已忽略，${leftover} 处仍待确认。对比日志在启动控制台`
-                : `自然流畅完成：保留 ${judged.keep || 0} 处近义/口语，自动剪掉 ${autoCut} 处重复阅读${leftover ? `，${leftover} 处仍待确认` : ""}。对比日志在启动控制台`,
-          );
+          if (!quiet) {
+            toast(
+              judged.error
+                ? `${label}失败：${judged.error}`
+                : strict
+                  ? `严格对照完成：自动剪掉 ${autoCut} 处重复阅读，${judged.keep || 0} 处识别误差已忽略，${leftover} 处仍待确认。对比日志在启动控制台`
+                  : `自然流畅完成：保留 ${judged.keep || 0} 处近义/口语，自动剪掉 ${autoCut} 处重复阅读${leftover ? `，${leftover} 处仍待确认` : ""}。对比日志在启动控制台`,
+            );
+          }
+          return { result, autoCut, plan: result.polishPlan };
         } catch (error) {
           toast(error.message);
+          return null;
         } finally {
           if (button) button.textContent = label;
           updateAiReviewButton();
@@ -10977,6 +11290,7 @@
       }
       let cachedExportHardware = null;
       function hardwareExportLabel() {
+        if (selectedExportDevice() === "cpu") return "CPU 软件编码导出";
         const vendor = cachedExportHardware?.vendor;
         if (vendor === "nvidia") return "NVIDIA 显卡加速导出";
         if (vendor === "intel") return "Intel 核显加速导出";
@@ -10986,6 +11300,26 @@
         return cachedExportHardware?.label
           ? `${cachedExportHardware.label}导出`
           : "自动选择编码器";
+      }
+      function selectedExportDevice() {
+        return $("exportUseCpu")?.checked && !$("exportUseGpu")?.checked ? "cpu" : "gpu";
+      }
+      function applyExportDevice(device) {
+        const gpu = String(device || "gpu").toLowerCase() !== "cpu";
+        if ($("exportUseGpu")) $("exportUseGpu").checked = gpu;
+        if ($("exportUseCpu")) $("exportUseCpu").checked = !gpu;
+      }
+      function persistExportDevice() {
+        try {
+          localStorage.setItem("quickcut_export_device", selectedExportDevice());
+        } catch {}
+      }
+      function restoreExportDevice() {
+        let stored = "gpu";
+        try {
+          stored = localStorage.getItem("quickcut_export_device") || "gpu";
+        } catch {}
+        applyExportDevice(stored);
       }
       async function loadExportHardware() {
         if (cachedExportHardware) return cachedExportHardware;
@@ -11003,6 +11337,7 @@
         }
         $("exportName").value =
           `${state.video.name.replace(/\.[^.]+$/, "")}-已剪辑`;
+        restoreExportDevice();
         updateExportSummary();
         $("exportSettingsModal").classList.add("on");
         loadExportHardware().then(() => updateExportSummary());
@@ -11418,6 +11753,7 @@
             bitrate,
             colorSpace: $("exportColorSpace").value,
             qualityMode: $("exportQuality").value,
+            encoderDevice: selectedExportDevice(),
             removals: state.removals,
             audioMutes: state.audioMutes,
             audioAssets: state.audioAssets.map((x) => ({
@@ -11683,26 +12019,49 @@
       };
       $("homeSearch").oninput = () =>
         renderProjectHome(window.__projectItems || []);
+      function askDeleteProject(projectId, event) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const item = (window.__projectItems || []).find((project) => project.id === projectId);
+        askConfirm(
+          `确定删除工程“${item?.name || "未命名工程"}”？工程会移入可恢复目录。`,
+          async () => {
+            const cardImg = document.querySelector(
+              `[data-project-id="${projectId}"] img`,
+            );
+            if (cardImg) {
+              cardImg.removeAttribute("src");
+              cardImg.src = "";
+            }
+            if (state.projectId === projectId) unloadEditorMedia();
+            try {
+              await nativeCall("releaseProjectAssets", projectId);
+            } catch {}
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            await nativeCall("deleteProject", projectId);
+            if (state.projectId === projectId) {
+              resetEditorState();
+              state.projectId = "";
+            }
+            await refreshHome();
+            toast("工程已删除");
+          },
+          "删除工程",
+        );
+      }
       $("homeProjectGrid").onclick = (event) => {
         const remove = event.target.closest("[data-delete-project]");
         if (remove) {
-          event.stopPropagation();
-          const item = (window.__projectItems || []).find(
-            (project) => project.id === remove.dataset.deleteProject,
-          );
-          askConfirm(
-            `确定删除工程“${item?.name || "未命名工程"}”？工程会移入可恢复目录。`,
-            async () => {
-              await nativeCall("deleteProject", remove.dataset.deleteProject);
-              await refreshHome();
-              toast("工程已删除");
-            },
-            "删除工程",
-          );
+          askDeleteProject(remove.dataset.deleteProject, event);
           return;
         }
         const card = event.target.closest("[data-project-id]");
         if (card) openProjectById(card.dataset.projectId);
+      };
+      $("homeProjectGrid").onpointerdown = (event) => {
+        const remove = event.target.closest("[data-delete-project]");
+        if (!remove) return;
+        event.stopPropagation();
       };
       $("backHome").onclick = backToHome;
       $("homeBackup").onclick = async () => {
@@ -11931,6 +12290,20 @@
         "exportFormat", "exportResolution", "exportFps", "exportCodec",
         "exportBitrate", "exportQuality", "exportColorSpace",
       ]) $(id).addEventListener("change", updateExportSummary);
+      if ($("exportUseGpu"))
+        $("exportUseGpu").onchange = () => {
+          if ($("exportUseGpu").checked) applyExportDevice("gpu");
+          else applyExportDevice("cpu");
+          persistExportDevice();
+          updateExportSummary();
+        };
+      if ($("exportUseCpu"))
+        $("exportUseCpu").onchange = () => {
+          if ($("exportUseCpu").checked) applyExportDevice("cpu");
+          else applyExportDevice("gpu");
+          persistExportDevice();
+          updateExportSummary();
+        };
       $("exportColorSpace").onchange = (event) => {
         if (["hlg", "pq"].includes(event.target.value)) {
           $("exportCodec").value = "hevc";
@@ -13588,6 +13961,29 @@
       $("matchScript").onclick = matchScript;
       $("aiReviewStrict").onclick = () => reviewScriptWithAi("strict");
       $("aiReviewNatural").onclick = () => reviewScriptWithAi("natural");
+      if ($("globalPolish")) $("globalPolish").onclick = runGlobalPolish;
+      if ($("lastPolishReport")) $("lastPolishReport").onclick = showLastPolishReport;
+      if ($("globalPolishClose"))
+        $("globalPolishClose").onclick = () => {
+          persistPauseGapChecks();
+          $("globalPolishModal").classList.remove("on");
+        };
+      if ($("applyPauseGapsBtn")) $("applyPauseGapsBtn").onclick = applySelectedPauseGaps;
+      if ($("globalPolishBody"))
+        $("globalPolishBody").onclick = (event) => {
+          persistPauseGapChecks();
+          const button = event.target.closest("[data-polish-id]");
+          if (button) {
+            persistPauseGapChecks();
+            $("globalPolishModal").classList.remove("on");
+            selectIssue(button.dataset.polishId);
+            return;
+          }
+          const timeEl = event.target.closest("[data-polish-time]");
+          if (timeEl) seekTimeline(Number(timeEl.dataset.polishTime || 0));
+        };
+      if ($("globalPolishBody"))
+        $("globalPolishBody").onchange = () => persistPauseGapChecks();
       if ($("openReviewSettings")) $("openReviewSettings").onclick = openReviewSettings;
       $("reviewProvider").onchange = async () => {
         toggleReviewProviderFields();

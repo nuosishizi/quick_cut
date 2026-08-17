@@ -6,6 +6,7 @@ import {
   buildReviewCaptions,
   endsCaptionSentence,
   flattenCaptionWords,
+  looksLikeAbandonedPrefix,
   manuscriptCaptionWords,
   regroupCaptions,
   regroupProjectCaptions,
@@ -24,6 +25,32 @@ const textOf = (operations) =>
     .join(" ")
     .replace(/\s+([.,!?;:])/g, "$1")
     .replace(/([\-–—])\s+(?=\d)/g, "$1");
+
+test("number one before point one is an abandoned false start, not a second caption", () => {
+  assert.equal(looksLikeAbandonedPrefix("number one", "point one God hates these sins"), true);
+  assert.equal(looksLikeAbandonedPrefix("point one", "point one God hates these sins"), true);
+  assert.equal(looksLikeAbandonedPrefix("you know", "point one God hates these sins"), false);
+  const aligned = alignScript({
+    segments: [
+      { text: "number one", start: 0, end: 0.7 },
+      { text: "point one God hates these sins", start: 1.1, end: 4.2 },
+    ],
+    script: "Point one: God hates these sins.",
+    duration: 5,
+  });
+  const reread = aligned.issues.find(
+    (issue) =>
+      issue.type === "repeat" ||
+      issue.abandonedPrefix ||
+      /number one/i.test(String(issue.spokenText || "")),
+  );
+  assert.ok(reread, "the wrong number one take should be marked");
+  assert.equal(reread.confirmedCut, true);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  const texts = captions.map((caption) => caption.text).join(" ");
+  assert.match(texts, /Point one/i);
+  assert.doesNotMatch(texts, /number one/i);
+});
 
 test("main captions use the exact manuscript and harmless connectors do not create gaps", () => {
   const script = "Not every prayer gets a yes from God, because His answer can be wait.";

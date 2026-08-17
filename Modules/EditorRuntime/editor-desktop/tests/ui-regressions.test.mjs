@@ -13,6 +13,7 @@ const whisperWorker = fs.readFileSync(
   path.join(root, "src/whisper-worker.mjs"),
   "utf8",
 );
+const projectStore = fs.readFileSync(path.join(root, "src/project-store.mjs"), "utf8");
 
 test("all embedded UI scripts parse", () => {
   const scripts = [...ui.matchAll(/<script>([\s\S]*?)<\/script>/g)];
@@ -39,6 +40,21 @@ test("main timeline drag is smooth and persisted", () => {
   assert.match(ui, /state\.mainAudioClipOffsets\[clipKey\]\s*=/);
   assert.match(ui, /mainTimelineOffset:\s*state\.mainTimelineOffset/);
   assert.match(ui, /snapClipStart\(/);
+});
+
+test("home delete confirm sits above the project list", () => {
+  const modal = ui.match(/\.modal\s*\{[\s\S]*?z-index:\s*(\d+)/);
+  const home = ui.match(/\.home\s*\{[\s\S]*?z-index:\s*(\d+)/);
+  assert.ok(modal);
+  assert.ok(home);
+  assert.ok(Number(modal[1]) > Number(home[1]), `modal ${modal[1]} should be above home ${home[1]}`);
+  assert.match(ui, /function askDeleteProject/);
+  assert.match(ui, /releaseProjectAssets/);
+  assert.match(ui, /function unloadEditorMedia/);
+  assert.match(ui, /data-delete-project/);
+  assert.match(ui, /id="confirmModal"/);
+  assert.match(main, /releaseProjectAssets: safe/);
+  assert.match(projectStore, /projectFolderHidden|\.deleted/);
 });
 
 test("project cards are vertical and preset previews stay contrasting", () => {
@@ -418,6 +434,12 @@ test("export defaults balance Apple hardware speed and Rec. 709 quality", () => 
   assert.match(media, /-hwaccel", "cuda/);
   assert.match(ui, /NVIDIA 显卡加速导出/);
   assert.match(ui, /function hardwareExportLabel/);
+  assert.match(ui, /id="exportUseGpu"/);
+  assert.match(ui, /id="exportUseCpu"/);
+  assert.match(ui, /encoderDevice: selectedExportDevice\(\)/);
+  assert.match(ui, /GPU 显卡（默认）/);
+  assert.match(media, /normalizeExportDevice/);
+  assert.match(media, /encoderDevice !== "cpu"/);
   assert.match(main, /exportHardware/);
   assert.match(media, /bt709:\s*\{\s*space:\s*"bt709"/);
   assert.match(media, /arib-std-b67/);
@@ -557,6 +579,24 @@ test("first script match automatically resumes and validates the speech model", 
   assert.match(main, /refreshGeminiModels: safe\(\(\) => listReviewModels\(\{ refresh: true \}\)/);
   assert.match(ui, /blockingScriptureOnTimeline/);
   assert.match(ui, /id="aiReviewNatural"/);
+  assert.match(ui, /id="globalPolish"/);
+  assert.match(ui, /id="globalPolishModal"/);
+  assert.match(ui, /async function runGlobalPolish/);
+  assert.match(ui, /经文 \/ 神的话语/);
+  assert.match(ui, /已并进绿字幕/);
+  assert.match(ui, /已清字幕备注/);
+  assert.match(ui, /window\.native\.polishCaptions/);
+  assert.match(ui, /function applySelectedPauseGaps/);
+  assert.match(ui, /id="applyPauseGapsBtn"/);
+  assert.match(ui, /id="lastPolishReport"/);
+  assert.match(ui, /function persistPauseGapChecks/);
+  assert.match(ui, /function showLastPolishReport/);
+  assert.match(ui, /gap\.checked && gap\.verdict !== "scripture-keep"/);
+  assert.match(ui, /id="globalPolishClose">关闭/);
+  assert.match(ui, /气口体检/);
+  assert.match(main, /pauseGapPlan: safe/);
+  assert.match(main, /polishCaptions: safe/);
+  assert.match(whisper, /buildGlobalPolishPlan\(issues\)/);
   assert.match(ui, /async function reviewScriptWithAi/);
   assert.match(ui, /mode: strict \? "strict" : "natural"/);
   const matchOnly = whisper.slice(
@@ -735,10 +775,20 @@ test("overlay ripple delete only slides later clips on the same track", () => {
     /function deleteSelected\(ripple = false\) \{[\s\S]*?if \(ripple && !rippleClips\.length\) \{[\s\S]*?rippleOverlayTrack/,
   );
   assert.match(ui, /function applyTimelineRangeSelection\(/);
-  assert.match(ui, /splitClipsAt\(start, targetsAt\(start\), \{ record: false, quiet: true \}\)/);
+  const rangeSelect = ui.slice(
+    ui.indexOf("function applyTimelineRangeSelection("),
+    ui.indexOf("function materializeTimelineRangeSelection("),
+  );
+  assert.doesNotMatch(rangeSelect, /splitClipsAt\(/);
+  assert.match(ui, /function materializeTimelineRangeSelection\(/);
+  assert.match(ui, /if \(state\.timelineRange\) materializeTimelineRangeSelection\(\)/);
+  assert.match(ui, /splitClipsAt\(start, rangeTargetsAt\(types, start\), \{ record: false, quiet: true \}\)/);
   assert.match(ui, /clipInsideRange\(clip, start, end\)/);
+  assert.match(ui, /id="timelineRange"/);
   assert.doesNotMatch(
     ui.match(/function deleteSelected\(ripple = false\) \{[\s\S]*?\n      function shiftTracks/)?.[0] || "",
     /rangedCut/,
   );
+  assert.match(ui, /const hasCaptions = \(state\.captions \|\| \[\]\)\.some/);
+  assert.match(ui, /if \(!hasCaptions \|\| !hasMatch\)/);
 });
