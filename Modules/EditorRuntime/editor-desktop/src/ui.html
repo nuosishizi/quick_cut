@@ -968,17 +968,11 @@
       .timelinebar-left {
         display: flex;
         align-items: center;
-        justify-content: flex-start;
-        padding: 0 12px;
+        gap: 5px;
+        padding: 0 8px;
         background: #16181a;
-        overflow: hidden;
-      }
-      .timelinebar-left-timecode {
-        font-family: monospace;
-        font-size: 13px;
-        font-weight: 700;
-        color: #e5e7eb;
-        letter-spacing: 0.5px;
+        overflow: visible;
+        position: relative;
       }
       .timelinebar-divider {
         background: var(--line);
@@ -986,8 +980,8 @@
       .timelinebar-tools {
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding: 0 8px;
+        gap: 6px;
+        padding: 0 10px;
         min-width: 0;
         overflow: hidden;
       }
@@ -996,8 +990,21 @@
         width: 1px;
         height: 18px;
         background: #34383c;
-        margin: 0 3px;
+        margin: 0 6px;
         flex-shrink: 0;
+      }
+      .timelinebar-tools .iconbtn {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: #d1d5db;
+      }
+      .timelinebar-tools .iconbtn svg {
+        pointer-events: none;
       }
       #selectTool.active,
       #bladeTool.active {
@@ -3063,14 +3070,22 @@
             </div>
           </div>
           <div class="transport">
-            <button class="btn iconbtn" id="toStart" title="跳至时间线开头（Home）">|◀</button>
-            <button class="btn iconbtn" id="jumpPrevCut" title="跳转到上一个剪切点（↑）">⤒</button>
-            <button class="btn iconbtn" id="stepBack" title="后退一帧（←）">‹</button>
+            <button class="btn iconbtn" id="jumpPrevCut" title="跳转到上一个剪切点（↑）">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+            </button>
+            <button class="btn iconbtn" id="stepBack" title="后退一帧（←）">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
             <button class="btn iconbtn primary" id="play" title="播放 / 暂停（空格键）">▶</button>
-            <button class="btn iconbtn" id="stepForward" title="前进一帧（→）">›</button>
-            <button class="btn iconbtn" id="jumpNextCut" title="跳转到下一个剪切点（↓）">⤓</button>
-            <button class="btn iconbtn" id="toEnd" title="跳至时间线结尾（End）">▶|</button>
-            <button class="btn iconbtn" id="loopPlayback" title="循环播放">🔁</button>
+            <button class="btn iconbtn" id="stepForward" title="前进一帧（→）">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="btn iconbtn" id="jumpNextCut" title="跳转到下一个剪切点（↓）">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+            </button>
+            <button class="btn iconbtn" id="loopPlayback" title="循环播放">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            </button>
             <span class="timecode" id="timecode">00:00.000 / 00:00.000</span>
           </div>
         </main>
@@ -3566,75 +3581,21 @@
         <div class="timeline-resizer" id="timelineResizer"></div>
         <div class="timelinebar">
           <div class="timelinebar-left">
-            <span class="timelinebar-left-timecode" id="timelineBarTimecode">00:00:00:00</span>
-          </div>
-          <div class="timelinebar-divider"></div>
-          <div class="timelinebar-tools">
-            <!-- 达芬奇标准组 1: 核心剪辑工具 -->
-            <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
-              ↖</button
-            ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
-              ✂</button
-            ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
-              ╎</button
-            ><button
-              class="btn iconbtn"
-              id="trimLeft"
-              title="波纹剪左：删除播放头左侧到入点（Q）"
-            >
-              ◀|</button
-            ><button
-              class="btn iconbtn"
-              id="trimRight"
-              title="波纹剪右：删除播放头右侧到出点（W）"
-            >
-              |▶</button>
-
-            <span class="tool-separator"></span>
-
-            <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
-            <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
-              🧲</button
-            ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
-              🔗</button>
-
-            <span class="tool-separator"></span>
-
-            <!-- 达芬奇标准组 3: 删除、撤销与辅助 -->
-            <button
-              class="btn iconbtn danger"
-              id="deleteClip"
-              title="波纹删除：删除所选并前移靠拢（Delete）"
-            >
-              🗑</button
-            ><button
-              class="btn iconbtn danger"
-              id="rippleDelete"
-              title="普通删除：原地留空（Backspace）"
-            >
-              ⌫</button
-            ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">↶</button
-            ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">↷</button
-            ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
-              ▣</button>
-
-            <span class="tool-separator"></span>
-
-            <!-- 达芬奇标准组 4: 智能工具与轨道 -->
             <button
               class="btn"
               id="pauseCut"
               title="自动剪停顿：根据气口设置快速剪除多余停顿与底噪"
+              style="padding: 4px 8px; font-size: 12px; font-weight: 500;"
             >
               自动剪停顿</button
             ><button
               class="btn iconbtn"
               id="openPauseCutSettings"
               title="剪辑气口设置（调节停顿阈值、抗噪灵敏度与保留缓冲）"
-              style="padding: 4px 7px; margin-right: 3px; font-size: 13px;"
+              style="padding: 4px 6px; font-size: 13px;"
             >
               ⚙</button
-            ><button class="btn iconbtn" id="addTrack" title="添加文本/轨道">
+            ><button class="btn iconbtn" id="addTrack" title="添加文本/字幕轨道" style="font-weight: 700; font-size: 13px;">
               T＋</button>
 
             <div class="trackmenu" id="trackMenu">
@@ -3644,11 +3605,77 @@
               <button data-add-track-kind="caption">新增字幕轨道</button>
               <button data-add-track-kind="text">新增文字轨道</button>
             </div>
+          </div>
+          <div class="timelinebar-divider"></div>
+          <div class="timelinebar-tools">
+            <!-- 达芬奇标准组 1: 核心剪辑工具 -->
+            <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 2l10 16.5-4 1.5 4 4-2.5 1-4-4-3 3.5V2z"/></svg>
+            </button
+            ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+            </button
+            ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 3"/><polyline points="8 8 4 12 8 16"/><polyline points="16 8 20 12 16 16"/></svg>
+            </button
+            ><button
+              class="btn iconbtn"
+              id="trimLeft"
+              title="波纹剪左：删除播放头左侧到入点（Q）"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="4" x2="5" y2="20"/><polyline points="19 6 11 12 19 18"/></svg>
+            </button
+            ><button
+              class="btn iconbtn"
+              id="trimRight"
+              title="波纹剪右：删除播放头右侧到出点（W）"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="19" y2="20"/><polyline points="5 6 13 12 5 18"/></svg>
+            </button>
+
+            <span class="tool-separator"></span>
+
+            <!-- 达芬奇标准组 2: 辅助对齐与联动开关 -->
+            <button class="btn iconbtn active" id="snapToggle" title="时间线吸附开关（N）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4v7a8 8 0 0016 0V4"/><line x1="4" y1="8" x2="9" y2="8"/><line x1="15" y1="8" x2="20" y2="8"/></svg>
+            </button
+            ><button class="btn iconbtn active" id="linkAV" title="音画联动选择：成组音画一起移动和删除">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            </button>
+
+            <span class="tool-separator"></span>
+
+            <!-- 达芬奇标准组 3: 删除、撤销与辅助 -->
+            <button
+              class="btn iconbtn danger"
+              id="deleteClip"
+              title="波纹删除：删除所选并前移靠拢（Delete）"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </button
+            ><button
+              class="btn iconbtn danger"
+              id="rippleDelete"
+              title="普通删除：原地留空（Backspace）"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
+            </button
+            ><button class="btn iconbtn" id="undo" title="撤销（⌘Z / Ctrl+Z）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+            </button
+            ><button class="btn iconbtn" id="redo" title="重做（⇧⌘Z / Ctrl+Shift+Z）">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>
+            </button
+            ><button class="btn iconbtn" id="freezeFrame" title="截取当前静帧">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
 
             <div class="topspacer"></div>
 
-            <!-- 达芬奇标准组 5: 右侧视图缩放区 -->
-            <button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-right: 4px;">⛶</button
+            <!-- 达芬奇标准组 4: 右侧视图缩放区 -->
+            <button class="btn iconbtn" id="zoomToFitTimeline" title="缩放到适应全部内容（Shift+Z）" style="font-size: 13px; padding: 4px 7px; margin-right: 4px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            </button
             ><button class="btn iconbtn" id="zoomOutBtn" title="缩小时间线（-）" style="width:24px;height:24px;font-size:14px;padding:0;">−</button
             ><input
               class="zoom"
