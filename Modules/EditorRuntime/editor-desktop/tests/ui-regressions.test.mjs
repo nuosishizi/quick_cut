@@ -760,6 +760,7 @@ test("imported images default to 100 percent scale in preview and export", () =>
   assert.doesNotMatch(importer, /scale:\s*0\.35/);
   assert.match(media, /image\.scale \?\? 1/);
   assert.doesNotMatch(media, /image\.scale \|\| 0\.35/);
+  assert.doesNotMatch(media, /imageWidth = Math\.round\(width \* imageScale\)/);
 });
 
 test("overlay ripple delete only slides later clips on the same track", () => {

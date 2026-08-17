@@ -679,8 +679,11 @@
         box-shadow: 0 0 0 3px rgba(22, 132, 255, 0.18);
       }
       .imageobject {
-        max-width: 100%;
-        max-height: 100%;
+        position: absolute;
+        max-width: none;
+        max-height: none;
+        user-select: none;
+        -webkit-user-drag: none;
       }
       .textobject {
         white-space: nowrap;
@@ -7375,6 +7378,13 @@
             enterDuration: 0.45,
             exitDuration: 0.45,
           };
+          const imgTester = new Image();
+          imgTester.src = asset.url;
+          imgTester.onload = () => {
+            item.sourceWidth = imgTester.naturalWidth;
+            item.sourceHeight = imgTester.naturalHeight;
+            renderPreviewObjects();
+          };
           state.images.push(item);
           recomputeContentDuration();
           state.selected = { type: "image", id: item.id };
@@ -7933,6 +7943,10 @@
               `[data-type="${state.titles.includes(item) ? "text" : "image"}"][data-id="${item.id}"]`,
             );
             if (!element) continue;
+            if (element.tagName === "IMG" && item.sourceWidth && item.sourceHeight) {
+              element.style.width = `${item.sourceWidth * ($("frame").clientWidth / state.width)}px`;
+              element.style.height = `${item.sourceHeight * ($("frame").clientHeight / state.height)}px`;
+            }
             const base = `translate(calc(-50% + ${Number(item.x || 0) * ($("frame").clientWidth / state.width)}px),calc(-50% + ${Number(item.y || 0) * ($("frame").clientHeight / state.height)}px)) rotate(${Number(item.rotation || 0)}deg) scale(${item.scale || 1})`;
             applyAnimatedObjectStyle(element, item, base);
           }
@@ -8001,6 +8015,29 @@
           const el = document.createElement("img");
           el.src = image.url;
           el.className = `visualobject imageobject ${isSelected("image", image.id) ? "selected" : ""}`;
+          if (image.sourceWidth && image.sourceHeight) {
+            el.style.width = `${image.sourceWidth * px}px`;
+            el.style.height = `${image.sourceHeight * py}px`;
+          } else {
+            const onMeasure = () => {
+              if (el.naturalWidth && el.naturalHeight) {
+                image.sourceWidth = el.naturalWidth;
+                image.sourceHeight = el.naturalHeight;
+                const fw = $("frame").clientWidth || 1;
+                const fh = $("frame").clientHeight || 1;
+                const currentPx = fw / Math.max(1, state.width);
+                const currentPy = fh / Math.max(1, state.height);
+                el.style.width = `${el.naturalWidth * currentPx}px`;
+                el.style.height = `${el.naturalHeight * currentPy}px`;
+                updateSelectionBox();
+              }
+            };
+            if (el.complete && el.naturalWidth) {
+              onMeasure();
+            } else {
+              el.onload = onMeasure;
+            }
+          }
           applyAnimatedObjectStyle(
             el,
             image,
@@ -12923,6 +12960,13 @@
           for (const image of state.images) {
             const a = unwrap(await window.native.addImagePath(image.path));
             image.url = a.url;
+            const imgTester = new Image();
+            imgTester.src = a.url;
+            imgTester.onload = () => {
+              image.sourceWidth = imgTester.naturalWidth;
+              image.sourceHeight = imgTester.naturalHeight;
+              renderPreviewObjects();
+            };
           }
           $("scriptText").value = d.script || "";
           setRatio(d.ratio || "9:16");
@@ -13477,6 +13521,8 @@
                 x: x.x,
                 y: x.y,
                 scale: x.scale,
+                sourceWidth: x.sourceWidth,
+                sourceHeight: x.sourceHeight,
                 opacity: x.opacity,
                 rotation: x.rotation || 0,
                 blendMode: x.blendMode || "normal",

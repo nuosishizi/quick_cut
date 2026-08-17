@@ -2403,7 +2403,6 @@ function buildExportGraph(config, info) {
     const cropLeft = Math.max(0, Math.min(95, Number(image.cropLeft || 0)));
     const cropRight = Math.max(0, Math.min(95, Number(image.cropRight || 0)));
     const imageScale = Math.max(0.03, Number(image.scale ?? 1));
-    const imageWidth = Math.max(8, Math.round(width * imageScale));
     const imageFilters = [];
     if (cropTop > 0 || cropBottom > 0 || cropLeft > 0 || cropRight > 0) {
       const cropW = Math.max(0.01, 1 - (cropLeft + cropRight) / 100);
@@ -2411,7 +2410,13 @@ function buildExportGraph(config, info) {
       imageFilters.push(`crop=w=iw*${cropW.toFixed(4)}:h=ih*${cropH.toFixed(4)}:x=iw*${(cropLeft / 100).toFixed(4)}:y=ih*${(cropTop / 100).toFixed(4)}`);
     }
     if (!image.pixelExact) {
-      imageFilters.push(`scale=${imageWidth}:-1:flags=lanczos+accurate_rnd`);
+      if (image.sourceWidth && image.sourceHeight) {
+        const targetW = Math.max(8, Math.round(Number(image.sourceWidth) * imageScale));
+        const targetH = Math.max(8, Math.round(Number(image.sourceHeight) * imageScale));
+        imageFilters.push(`scale=${targetW}:${targetH}:flags=lanczos+accurate_rnd`);
+      } else if (Math.abs(imageScale - 1) > 0.001) {
+        imageFilters.push(`scale=trunc(iw*${imageScale.toFixed(4)}/2)*2:trunc(ih*${imageScale.toFixed(4)}/2)*2:flags=lanczos+accurate_rnd`);
+      }
     }
     if (Math.abs(Number(image.rotation || 0)) > 0.001)
       imageFilters.push(
