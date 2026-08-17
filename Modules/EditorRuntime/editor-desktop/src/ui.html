@@ -3611,7 +3611,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.6</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.36</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -11631,16 +11631,16 @@
       }
       let cachedExportHardware = null;
       function hardwareExportLabel() {
-        if (selectedExportDevice() === "cpu") return "CPU 软件编码导出";
+        if (selectedExportDevice() === "cpu") return "⚙️ CPU 软件编码导出";
         const vendor = cachedExportHardware?.vendor;
-        if (vendor === "nvidia") return "NVIDIA 显卡加速导出";
-        if (vendor === "intel") return "Intel 核显加速导出";
-        if (vendor === "amd") return "AMD 显卡加速导出";
-        if (vendor === "apple") return "Apple 硬件加速导出";
-        if (vendor === "software") return "软件编码导出";
+        if (vendor === "nvidia") return "🚀 NVIDIA 显卡加速 (NVENC)";
+        if (vendor === "intel") return "🚀 Intel 显卡加速 (QSV)";
+        if (vendor === "amd") return "🚀 AMD 显卡加速 (AMF)";
+        if (vendor === "apple") return "🚀 Apple 硬件加速 (VideoToolbox)";
+        if (vendor === "software") return "⚙️ 软件编码 (未检测到兼容显卡)";
         return cachedExportHardware?.label
-          ? `${cachedExportHardware.label}导出`
-          : "自动选择编码器";
+          ? `🚀 ${cachedExportHardware.label}`
+          : "自动检测硬件加速";
       }
       function selectedExportDevice() {
         return $("exportUseCpu")?.checked && !$("exportUseGpu")?.checked ? "cpu" : "gpu";

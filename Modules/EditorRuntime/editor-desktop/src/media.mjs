@@ -255,12 +255,12 @@ export function preferredVideoEncoder(useHevc, options = {}) {
 }
 
 export function encoderDisplayName(encoder = "") {
-  if (/nvenc/.test(encoder)) return "NVIDIA NVENC";
-  if (/qsv/.test(encoder)) return "Intel QSV";
-  if (/amf/.test(encoder)) return "AMD AMF";
-  if (/videotoolbox/.test(encoder)) return "Apple 硬件";
-  if (encoder === "copy") return "原码流直出";
-  if (encoder.startsWith("libx")) return "软件编码";
+  if (/nvenc/.test(encoder)) return "🚀 NVIDIA NVENC 显卡加速";
+  if (/qsv/.test(encoder)) return "🚀 Intel QSV 显卡加速";
+  if (/amf/.test(encoder)) return "🚀 AMD AMF 显卡加速";
+  if (/videotoolbox/.test(encoder)) return "🚀 Apple 硬件加速";
+  if (encoder === "copy") return "⚡ 原码流直出";
+  if (encoder.startsWith("libx")) return "⚙️ CPU 软件编码";
   return encoder || "编码器";
 }
 
@@ -300,7 +300,8 @@ export function listBusyGpuApps() {
 }
 
 export function shouldSkipHardwareForBusyGpu(encoder, busyApps = []) {
-  return Array.isArray(busyApps) && busyApps.length > 0 && /qsv/i.test(String(encoder || ""));
+  // Respect user GPU choice: Never pre-emptively downgrade to CPU just because other video apps are open
+  return false;
 }
 
 export function exportStallLimit(job = {}) {
@@ -313,7 +314,7 @@ export function exportStallLimit(job = {}) {
 
 export function encoderStallMessage(job = {}) {
   if (isHardwareEncoder(job.encoder))
-    return "编码器长时间没有输出画面。请改勾 CPU，或先关掉达芬奇/其他占用显卡的软件。";
+    return "编码器长时间没有输出画面。正在自动尝试切换为 CPU 软件编码…";
   return "编码器长时间没有输出画面。请检查素材是否能打开，或先关掉占满 CPU 的软件后重试。";
 }
 
@@ -3110,38 +3111,27 @@ function exportStageMessage(job) {
   const percent = Math.round((job.progress || 0) * 100);
   const label = job.encoderLabel || encoderDisplayName(job.encoder || "");
   const used = formatExportClock(elapsed);
-  if (job.state === "completed") return label ? `导出完成 · ${label}` : "导出完成";
+  if (job.state === "completed") return label ? `✅ 导出完成 · ${label} · 共用时 ${used}` : `✅ 导出完成 · 共用时 ${used}`;
   if (job.state === "failed") return job.error || "视频导出失败。";
   if (job.state === "cancelled") return "已取消导出";
   if (job.stage === "retry") {
-    const busy = Array.isArray(job.busyGpuApps) && job.busyGpuApps.length
-      ? job.busyGpuApps.join("、")
-      : "";
-    return busy
-      ? `检测到${busy}占用显卡，正在改用 CPU 编码… · 已用 ${used}`
-      : `显卡编码器没响应，正在改用备用编码… · 已用 ${used}`;
+    return `⚠️ 显卡编码无响应，已自动转为 CPU 软件编码… · 已用 ${used}`;
   }
   if (job.stage === "prepare" || job.stage === "captions" || job.state === "preparing")
-    return `正在准备导出（字幕/滤镜/显卡）… · 已用 ${used}`;
+    return `正在准备导出（字幕/滤镜/硬件加速）… · 已用 ${used}`;
   if (job.stage === "muxing" || (job.progress >= 0.98 && job.state === "exporting"))
     return `正在封装文件… ${percent}% · ${label} · 已用 ${used}`;
   if (!job.frameProgress) {
     const hardware = isHardwareEncoder(job.encoder);
-    const busy = Array.isArray(job.busyGpuApps) && job.busyGpuApps.length
-      ? job.busyGpuApps.join("、")
-      : "";
-    if (!hardware && busy && elapsed < 10) {
-      return `检测到${busy}占用核显，已改用 CPU 编码… ${percent}% · ${label} · 已用 ${used}`;
-    }
     if (elapsed >= 8) {
       return hardware
-        ? `正在启动编码器（显卡较慢，还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`
-        : `正在启动编码器（还在等第一帧）… ${percent}% · ${label} · 已用 ${used}`;
+        ? `正在启动显卡编码器… ${percent}% · ${label} · 已用 ${used}`
+        : `正在启动 CPU 编码器… ${percent}% · ${label} · 已用 ${used}`;
     }
     return `正在启动编码器… ${percent}% · ${label} · 已用 ${used}`;
   }
   if (job.speed > 0)
-    return `正在导出 ${percent}% · ${label} · ${job.speed.toFixed(1)}x · 已用 ${used}`;
+    return `正在导出 ${percent}% · ${label} · ${job.speed.toFixed(1)}x 实时倍速 · 已用 ${used}`;
   return `正在导出 ${percent}% · ${label} · 已用 ${used}`;
 }
 
