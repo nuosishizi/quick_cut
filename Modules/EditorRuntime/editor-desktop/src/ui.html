@@ -2771,22 +2771,28 @@
         :root { --side: 245px; --inspector: 245px; --timeline: 230px; }
         .workspace { grid-template-columns: minmax(220px,var(--side)) 3px minmax(250px,1fr) 3px minmax(230px,var(--inspector)); }
         .sidebody,.inspectbody { padding:8px; }
-      /* 全局体检审校面板样式 */
-      #side-polish.active {
-        display: flex !important;
-        flex-direction: column;
-        height: 100%;
-        max-height: 100%;
-        box-sizing: border-box;
       }
+      /* 全局体检审校面板样式 */
+      .sidebody.polish-active,
       .sidebody:has(#side-polish.active) {
-        display: flex;
-        flex-direction: column;
+        display: flex !important;
+        flex-direction: column !important;
         overflow: hidden !important;
         padding-bottom: 4px;
       }
+      #side-polish.active {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box;
+      }
       .polish-top-header {
-        flex-shrink: 0;
+        flex: 0 0 auto !important;
+        flex-shrink: 0 !important;
       }
       .polish-controls-card {
         background: #1e2023;
@@ -2798,7 +2804,7 @@
       .polish-filter-tabs {
         display: flex;
         gap: 3px;
-        margin-bottom: 8px;
+        margin-bottom: 4px;
         flex-wrap: wrap;
       }
       .polish-filter-tabs .btn {
@@ -2815,10 +2821,18 @@
         color: #fff;
         font-weight: 700;
       }
+      .polish-actions-bar {
+        margin-top: 4px;
+        margin-bottom: 8px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
       .polish-list {
-        flex: 1 1 0;
-        min-height: 0;
-        overflow-y: auto;
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        overflow-y: auto !important;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
         display: flex;
@@ -2826,13 +2840,6 @@
         gap: 6px;
         padding-right: 2px;
         margin-bottom: 6px;
-      }
-      .polish-actions-bar {
-        margin-top: 4px;
-        margin-bottom: 8px;
-        display: flex;
-        gap: 6px;
-        align-items: center;
       }
       .polish-card {
         background: #1a1c1e;
@@ -13175,6 +13182,7 @@
               .forEach((x) =>
                 x.classList.toggle("active", x.id === `side-${b.dataset.side}`),
               );
+            document.querySelector(".sidebody")?.classList.toggle("polish-active", b.dataset.side === "polish");
             if (b.dataset.side === "style" || b.dataset.side === "subtitle") {
               if (state.selected.type !== "caption" && state.selected.type !== "text") {
                 state.selected = { type: "caption", id: state.captions[0]?.id || "caption-track" };
