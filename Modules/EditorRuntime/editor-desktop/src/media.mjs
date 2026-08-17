@@ -909,6 +909,74 @@ function escapeFilterPath(value) {
     .replace(/'/g, "\\'");
 }
 
+export const WINDOWS_SPAWN_SAFE_CHARS = 24000;
+
+export function estimateSpawnCommandLength(binary, args = []) {
+  const quote = (value) => {
+    const text = String(value ?? "");
+    if (!text) return '""';
+    if (!/[\s"]/.test(text)) return text;
+    return `"${text.replace(/"/g, '\\"')}"`;
+  };
+  return [binary, ...args].reduce((sum, part) => sum + quote(part).length + 1, 0);
+}
+
+export function captionRasterItems(config = {}) {
+  return (config.images || []).filter((image) => image?._quickCutCaptionRaster);
+}
+
+export function captionRastersUseMovieFilter(config = {}) {
+  const rasters = captionRasterItems(config);
+  if (!rasters.length) return false;
+  const listed = rasters.reduce((sum, image) => sum + String(image.path || "").length + 16, 0);
+  return rasters.length >= 8 || listed >= 6000 || (process.platform === "win32" && rasters.length >= 6);
+}
+
+export function collectExportExtraInputs(config = {}) {
+  const viaMovie = captionRastersUseMovieFilter(config);
+  const extraInputs = [];
+  for (const video of config.videoLayers || []) extraInputs.push("-i", video.path);
+  for (const image of config.images || []) {
+    if (viaMovie && image?._quickCutCaptionRaster) continue;
+    extraInputs.push("-loop", "1", "-i", image.path);
+  }
+  for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
+  return { extraInputs, captionRastersViaMovie: viaMovie };
+}
+
+export function shouldWriteFilterComplexScript(args = [], options = {}) {
+  const index = args.indexOf("-filter_complex");
+  const graph = index >= 0 ? String(args[index + 1] || "") : "";
+  const length = estimateSpawnCommandLength(options.binary || "ffmpeg", args);
+  const limit = Number(options.limit || WINDOWS_SPAWN_SAFE_CHARS);
+  if (length >= limit) return true;
+  if (graph.length >= 8000) return true;
+  if (options.force) return true;
+  if (process.platform === "win32" && Number(options.rasterCount || 0) >= 12) return true;
+  return false;
+}
+
+export function compactFfmpegFilterArgs(args = [], options = {}) {
+  const list = [...args];
+  const index = list.findIndex(
+    (item, offset) => item === "-filter_complex" && typeof list[offset + 1] === "string",
+  );
+  if (index < 0) return { args: list, scriptPath: "" };
+  if (!shouldWriteFilterComplexScript(list, options)) return { args: list, scriptPath: "" };
+  const directory = options.directory || path.join(supportRoot(), "temp");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const scriptPath = path.join(directory, `export-filter-${crypto.randomUUID()}.ffscript`);
+  fs.writeFileSync(scriptPath, list[index + 1], "utf8");
+  list.splice(index, 2, "-filter_complex_script", scriptPath);
+  return { args: list, scriptPath };
+}
+
+export function isSpawnTooLongError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || error || "");
+  return code === "ENAMETOOLONG" || /ENAMETOOLONG/i.test(message);
+}
+
 function animationMotion(id = "") {
   const value = String(id || "").toLowerCase();
   if (value.includes("orbit") || value.includes("ring")) return "rotate";
@@ -2135,6 +2203,12 @@ function buildExportGraph(config, info) {
         `fade=t=out:st=${Math.max(Number(image.start || 0), Number(image.end || 0) - duration).toFixed(4)}:d=${duration.toFixed(4)}:alpha=1`,
       );
     }
+    if (config.captionRastersViaMovie && image._quickCutCaptionRaster) {
+      graph.push(
+        `movie='${escapeFilterPath(image.path)}':loop=1,${imageFilters.join(",")}[img${index}]`,
+      );
+      return { image, label: `[img${index}]` };
+    }
     graph.push(
       `[${inputIndex}:v]${imageFilters.join(",")}[img${index}]`,
     );
@@ -2572,10 +2646,10 @@ function beginExportJob(config, info, job) {
     monitorExport(child, job, config, info);
     return;
   }
-  for (const video of config.videoLayers || []) extraInputs.push("-i", video.path);
-  for (const image of config.images || []) extraInputs.push("-loop", "1", "-i", image.path);
-  for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
-  const built = buildExportGraph(config, info);
+  const preparedInputs = collectExportExtraInputs(config);
+  config.captionRastersViaMovie = preparedInputs.captionRastersViaMovie;
+  extraInputs.push(...preparedInputs.extraInputs);
+  let built = buildExportGraph(config, info);
   const colorProfiles = {
       bt709: { space: "bt709", primaries: "bt709", transfer: "bt709", pixel: "yuv420p" },
       p3: { space: "bt709", primaries: "smpte432", transfer: "iec61966-2-1", pixel: "yuv420p" },
@@ -2656,7 +2730,14 @@ function beginExportJob(config, info, job) {
       "-nostats",
       config.outputPath,
     );
-    const child = spawn(mediaBinary("ffmpeg"), args, {
+    const packed = compactFfmpegFilterArgs(args, {
+      binary: mediaBinary("ffmpeg"),
+      directory: config.captionRasterDirectory || path.join(supportRoot(), "temp"),
+      rasterCount: captionRasterItems(config).length,
+      force: !!config.forceFilterComplexScript,
+    });
+    if (packed.scriptPath) config.filterComplexScriptPath = packed.scriptPath;
+    const child = spawn(mediaBinary("ffmpeg"), packed.args, {
       stdio: ["ignore", "ignore", "pipe"],
     });
     if (child.pid) {
@@ -2671,10 +2752,20 @@ function beginExportJob(config, info, job) {
     job.stage = "encoding";
     job.encoderLabel = encoderDisplayName(encoder);
     job.decodeKind = decodeKindNow || "none";
-    const retry = () => {
+    const retry = (reason = "") => {
       job.progress = 0.015;
       job.error = "";
       job.stallRetried = false;
+      if (String(reason).includes("ENAMETOOLONG") && !config.spawnLengthRetried) {
+        config.spawnLengthRetried = true;
+        config.captionRastersViaMovie = true;
+        config.forceFilterComplexScript = true;
+        extraInputs.length = 0;
+        extraInputs.push(...collectExportExtraInputs(config).extraInputs);
+        built = buildExportGraph(config, info);
+        launch(encoder, rest, decodeKind);
+        return;
+      }
       if (decodeKindNow && decodeKindNow !== "none") {
         launch(encoder, rest, decodeKindNow === "cuda" ? "d3d11va" : "none");
         return;
@@ -2795,7 +2886,7 @@ function monitorExport(child, job, config, info, retry = null) {
     }
     clearInterval(stallWatch);
   }, 500);
-  child.stderr.on("data", (chunk) => {
+  child.stderr?.on("data", (chunk) => {
     const text = chunk.toString();
     stderr = (stderr + text).slice(-16000);
     progressBuffer = (progressBuffer + text).slice(-8000);
@@ -2816,9 +2907,18 @@ function monitorExport(child, job, config, info, retry = null) {
     if (lastNewline > 0) progressBuffer = progressBuffer.slice(lastNewline + 1);
   });
   child.on("error", (error) => {
+    if (isSpawnTooLongError(error) && retry && !config.spawnLengthRetried) {
+      job.state = "preparing";
+      job.stage = "retry";
+      job.message = "导出命令太长，正在改用字幕脚本重试…";
+      retry("ENAMETOOLONG");
+      return;
+    }
     job.state = "failed";
-    job.error = error.message;
-    job.message = error.message;
+    job.error = isSpawnTooLongError(error)
+      ? "导出命令太长，显卡通道无法启动。请再导一次，或改勾 CPU。"
+      : error.message;
+    job.message = job.error;
   });
   child.on("close", (code) => {
     clearInterval(stallWatch);

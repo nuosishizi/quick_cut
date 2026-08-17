@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   detectExportHardware,
   encoderDisplayName,
@@ -11,6 +14,12 @@ import {
   exportIsStalled,
   refreshExportJob,
   videoEncodeArgs,
+  estimateSpawnCommandLength,
+  captionRastersUseMovieFilter,
+  collectExportExtraInputs,
+  shouldWriteFilterComplexScript,
+  compactFfmpegFilterArgs,
+  isSpawnTooLongError,
 } from "../src/media.mjs";
 
 test("hardware probe never selects NVENC unless the GPU actually encodes", () => {
@@ -105,6 +114,66 @@ test("export device checkbox can force CPU software encoding", () => {
   assert.equal(normalizeExportDevice("cpu"), "cpu");
   assert.equal(preferredVideoEncoder(false, { device: "cpu" }), "libx264");
   assert.equal(preferredVideoEncoder(true, { device: "cpu" }), "libx265");
+});
+
+test("many caption rasters stay off the Windows command line", () => {
+  const rasters = Array.from({ length: 80 }, (_, index) => ({
+    path: `C:\\Users\\newnew\\AppData\\Roaming\\QuickCut\\temp\\caption-raster-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\\c${index}.png`,
+    start: index * 0.2,
+    end: index * 0.2 + 0.18,
+    _quickCutCaptionRaster: true,
+  }));
+  assert.equal(captionRastersUseMovieFilter({ images: rasters }), true);
+  const collected = collectExportExtraInputs({
+    images: [...rasters, { path: "C:\\pics\\logo.png" }],
+    videoLayers: [{ path: "C:\\clips\\broll.mp4" }],
+  });
+  assert.equal(collected.captionRastersViaMovie, true);
+  assert.deepEqual(collected.extraInputs, [
+    "-i",
+    "C:\\clips\\broll.mp4",
+    "-loop",
+    "1",
+    "-i",
+    "C:\\pics\\logo.png",
+  ]);
+  const graph = rasters
+    .map(
+      (image, index) =>
+        `movie='${image.path}':loop=1[img${index}];[layer${index}][img${index}]overlay=x=0:y=0:enable='between(t,${image.start},${image.end})'[layer${index + 1}]`,
+    )
+    .join(";");
+  const longArgs = [
+    "-y",
+    "-i",
+    "C:\\Users\\newnew\\Videos\\source.mp4",
+    ...rasters.flatMap((image) => ["-loop", "1", "-i", image.path]),
+    "-filter_complex",
+    graph,
+    "out.mp4",
+  ];
+  assert.ok(estimateSpawnCommandLength("C:\\ffmpeg\\bin\\ffmpeg.exe", longArgs) > 24000);
+  assert.equal(
+    shouldWriteFilterComplexScript(["-filter_complex", graph, "out.mp4"], {
+      binary: "ffmpeg",
+      rasterCount: rasters.length,
+    }),
+    true,
+  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "qc-ffscript-"));
+  const packed = compactFfmpegFilterArgs(["-y", "-i", "source.mp4", "-filter_complex", graph, "out.mp4"], {
+    directory,
+    binary: "ffmpeg",
+    rasterCount: rasters.length,
+  });
+  assert.ok(packed.scriptPath);
+  assert.ok(packed.args.includes("-filter_complex_script"));
+  assert.ok(!packed.args.includes("-filter_complex"));
+  assert.ok(estimateSpawnCommandLength("ffmpeg", packed.args) < 4000);
+  assert.equal(isSpawnTooLongError({ code: "ENAMETOOLONG", message: "spawn ENAMETOOLONG" }), true);
+  assert.equal(isSpawnTooLongError(new Error("spawn ffmpeg.exe ENAMETOOLONG")), true);
+  assert.equal(isSpawnTooLongError(new Error("encoder failed")), false);
+  fs.rmSync(directory, { recursive: true, force: true });
 });
 
 test("Windows preferred encoder is a working encoder, not just a compiled name", () => {
