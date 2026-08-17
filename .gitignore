@@ -26,3 +26,7 @@ secrets/
 /中文文案.txt
 /原始文案.txt
 /原始文案 - 副本.txt
+
+*.zip
+快剪-*
+QuickCut-*
