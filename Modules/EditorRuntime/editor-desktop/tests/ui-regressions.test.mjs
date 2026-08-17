@@ -726,8 +726,7 @@ test("playhead split and blade work without selecting a real clip first", () => 
   assert.match(ui, /editTool === "blade"/);
   assert.match(ui, /code === "KeyB" && !command/);
   assert.match(ui, /code === "KeyB" \|\| code === "Backslash"/);
-  assert.match(ui, /videoIds\.delete\("main"\)/);
-  assert.match(ui, /shiftTracks\(originStart, Math\.max\(0, edgeTime - originStart\)\)/);
+  assert.match(ui, /applyMainTrimEdge\(/);
   assert.match(ui, /把播放头放到要切的片段上，再按切割/);
   assert.doesNotMatch(
     ui,

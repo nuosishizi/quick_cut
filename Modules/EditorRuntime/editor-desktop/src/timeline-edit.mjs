@@ -338,3 +338,148 @@ export function snapGroupDelta(moving, delta, points, threshold) {
     target,
   };
 }
+
+export function normalizeRemovalsList(removals = []) {
+  const clean = (removals || [])
+    .filter((r) => Number(r?.end) > Number(r?.start) + 0.002)
+    .sort((a, b) => Number(a.start) - Number(b.start));
+  if (!clean.length) return [];
+  const merged = [{ ...clean[0] }];
+  for (let i = 1; i < clean.length; i++) {
+    const prev = merged[merged.length - 1];
+    const curr = clean[i];
+    if (Number(curr.start) <= Number(prev.end) + 0.002) {
+      prev.end = Math.max(Number(prev.end), Number(curr.end));
+    } else {
+      merged.push({ ...curr });
+    }
+  }
+  return merged.filter((r) => r.end > r.start + 0.002);
+}
+
+export function applyMainTrimEdge(removals = [], manualCuts = [], clip = {}, edge = "end", targetSource = 0, sourceDuration = 0) {
+  const cleanRemovals = (removals || []).map((r) => ({ ...r }));
+  let cleanCuts = [...(manualCuts || [])];
+  const srcStart = Number(clip.sourceStart || 0);
+  const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
+  const maxDur = Math.max(srcEnd, Number(sourceDuration || 0));
+  const clampedTarget = Math.max(0, Math.min(maxDur, Number(targetSource || 0)));
+  let deltaSource = 0;
+
+  if (edge === "start") {
+    if (clampedTarget > srcStart + 0.002) {
+      // Inward trim (cutting away head)
+      cleanRemovals.push({ start: srcStart, end: Math.min(srcEnd - 0.04, clampedTarget), source: "edge-trim" });
+      deltaSource = -(Math.min(srcEnd - 0.04, clampedTarget) - srcStart);
+    } else if (clampedTarget < srcStart - 0.002) {
+      // Outward trim (recovering earlier content)
+      const recoverStart = clampedTarget;
+      const recoverEnd = srcStart;
+      deltaSource = +(srcStart - recoverStart);
+      for (let i = cleanRemovals.length - 1; i >= 0; i--) {
+        const r = cleanRemovals[i];
+        if (r.end >= recoverStart && r.start <= recoverEnd) {
+          if (r.start >= recoverStart && r.end <= recoverEnd) {
+            cleanRemovals.splice(i, 1);
+          } else if (r.end > recoverStart && r.start < recoverStart) {
+            r.end = recoverStart;
+          } else if (r.start < recoverEnd && r.end > recoverEnd) {
+            r.start = recoverEnd;
+          }
+        }
+      }
+      cleanCuts = cleanCuts.filter((c) => c < recoverStart + 0.002 || c > recoverEnd - 0.002);
+    }
+  } else if (edge === "end") {
+    if (clampedTarget < srcEnd - 0.002) {
+      // Inward trim (cutting away tail)
+      cleanRemovals.push({ start: Math.max(srcStart + 0.04, clampedTarget), end: srcEnd, source: "edge-trim" });
+      deltaSource = -(srcEnd - Math.max(srcStart + 0.04, clampedTarget));
+    } else if (clampedTarget > srcEnd + 0.002) {
+      // Outward trim (recovering later content)
+      const recoverStart = srcEnd;
+      const recoverEnd = clampedTarget;
+      deltaSource = +(recoverEnd - srcEnd);
+      for (let i = cleanRemovals.length - 1; i >= 0; i--) {
+        const r = cleanRemovals[i];
+        if (r.end >= recoverStart && r.start <= recoverEnd) {
+          if (r.start >= recoverStart && r.end <= recoverEnd) {
+            cleanRemovals.splice(i, 1);
+          } else if (r.start < recoverStart && r.end > recoverStart) {
+            r.end = recoverStart;
+          } else if (r.start < recoverEnd && r.end > recoverEnd) {
+            r.start = recoverEnd;
+          }
+        }
+      }
+      cleanCuts = cleanCuts.filter((c) => c < recoverStart + 0.002 || c > recoverEnd - 0.002);
+    }
+  }
+
+  return {
+    removals: normalizeRemovalsList(cleanRemovals),
+    manualCuts: cleanCuts.sort((a, b) => a - b),
+    deltaSource,
+  };
+}
+
+export function rollingEditMainClips(removals = [], manualCuts = [], leftClip = {}, rightClip = {}, targetSource = 0) {
+  const cleanRemovals = (removals || []).map((r) => ({ ...r }));
+  const cleanCuts = (manualCuts || []).filter(
+    (c) => c < Number(leftClip.sourceStart || 0) + 0.002 || c > Number(rightClip.sourceEnd || 0) - 0.002,
+  );
+  const minBound = Number(leftClip.sourceStart || 0) + 0.04;
+  const maxBound = Number(rightClip.sourceEnd || minBound + 0.04) - 0.04;
+  const cutPoint = Math.max(minBound, Math.min(maxBound, Number(targetSource || 0)));
+
+  // Remove any removals that existed between left and right clip (e.g. gaps)
+  for (let i = cleanRemovals.length - 1; i >= 0; i--) {
+    const r = cleanRemovals[i];
+    if (r.start >= Number(leftClip.sourceStart || 0) && r.end <= Number(rightClip.sourceEnd || 0)) {
+      cleanRemovals.splice(i, 1);
+    }
+  }
+  cleanCuts.push(cutPoint);
+  return {
+    removals: normalizeRemovalsList(cleanRemovals),
+    manualCuts: cleanCuts.sort((a, b) => a - b),
+    cutPoint,
+  };
+}
+
+export function slipClipSource(clip = {}, deltaSource = 0, minSource = 0, maxSource = Infinity) {
+  const srcStart = Number(clip.sourceStart || 0);
+  const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
+  const duration = srcEnd - srcStart;
+  const targetStart = Math.max(minSource, Math.min(maxSource - duration, srcStart + deltaSource));
+  return {
+    sourceStart: targetStart,
+    sourceEnd: targetStart + duration,
+  };
+}
+
+export function rippleShiftAllTracks(collections = {}, fromTimelineTime = 0, deltaTimeline = 0) {
+  if (Math.abs(deltaTimeline) <= 0.001) return collections;
+  const shiftList = (list) => {
+    for (const item of list || []) {
+      if (Number(item.start || 0) >= fromTimelineTime - 0.002) {
+        item.start = Math.max(0, Number(item.start || 0) + deltaTimeline);
+        item.end = Math.max(item.start + 0.04, Number(item.end || 0) + deltaTimeline);
+        if (Array.isArray(item.words)) {
+          for (const word of item.words) {
+            word.start = Math.max(0, Number(word.start || 0) + deltaTimeline);
+            word.end = Math.max(word.start + 0.01, Number(word.end || 0) + deltaTimeline);
+          }
+        }
+      }
+    }
+  };
+  shiftList(collections.videoLayers);
+  shiftList(collections.audioAssets);
+  shiftList(collections.images);
+  shiftList(collections.titles);
+  shiftList(collections.captions);
+  shiftList(collections.reviewCaptions);
+  return collections;
+}
+
