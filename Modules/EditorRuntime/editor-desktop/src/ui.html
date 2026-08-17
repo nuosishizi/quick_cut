@@ -5341,6 +5341,24 @@
           editorActive: true,
           initializing: true,
         });
+        state.lastPolishPlan = data.lastPolishPlan || null;
+        state.pauseGapPlan = data.pauseGapPlan || null;
+        state.ignoredPolishIds = Array.isArray(data.ignoredPolishIds) ? data.ignoredPolishIds : [];
+        window.__lastPolishPlan = state.lastPolishPlan;
+        window.__pauseGapPlan = state.pauseGapPlan
+          ? (state.pauseGapPlan || []).map(g => ({ ...g }))
+          : (state.lastPolishPlan?.pauseGaps || []).map(g => ({ ...g }));
+        window.__ignoredPolishIds = new Set(state.ignoredPolishIds);
+        if (state.lastPolishPlan && $("lastPolishReport")) {
+          $("lastPolishReport").disabled = false;
+        }
+        if (state.lastPolishPlan) {
+          const summary =
+            `自动切 ${state.lastPolishPlan.autoApplied || 0} 处重录/废读，口语并进 ${(state.lastPolishPlan.mergedSpoken || []).length} 条，清掉 ${(state.lastPolishPlan.strippedNotes || []).length} 处备注，${(state.lastPolishPlan.scriptureLock || []).length} 处经文锁定，${(state.lastPolishPlan.missing || []).length} 处缺读待补${(state.lastPolishPlan.leftover || []).length ? `，${state.lastPolishPlan.leftover.length} 处待确认` : ""}。气口建议切 ${state.lastPolishPlan.pauseSuggestCut || 0} 处。`;
+          if ($("globalPolishSummarySidebar")) $("globalPolishSummarySidebar").textContent = summary;
+          if ($("globalPolishSummary")) $("globalPolishSummary").textContent = summary;
+          renderPolishSidebarList();
+        }
         repairScriptDifferenceLinks();
         ensureDynamicTracks();
         recomputeContentDuration();
@@ -11061,9 +11079,13 @@
       }
       function rememberPolishPlan(plan, autoApplied = 0) {
         const next = { ...(plan || {}), autoApplied: Number(autoApplied) || 0 };
+        state.lastPolishPlan = next;
         window.__lastPolishPlan = next;
-        window.__pauseGapPlan = (next.pauseGaps || []).map(g => ({ ...g }));
+        state.pauseGapPlan = (next.pauseGaps || []).map(g => ({ ...g }));
+        window.__pauseGapPlan = state.pauseGapPlan;
+        state.ignoredPolishIds = Array.from(window.__ignoredPolishIds || []);
         if ($("lastPolishReport")) $("lastPolishReport").disabled = false;
+        queueAutosave();
       }
       function showLastPolishReport() {
         const plan = window.__lastPolishPlan;
@@ -11340,6 +11362,7 @@
         snapshot();
         window.__ignoredPolishIds = window.__ignoredPolishIds || new Set();
         window.__ignoredPolishIds.add(issueId);
+        state.ignoredPolishIds = Array.from(window.__ignoredPolishIds);
 
         const review = (state.reviewCaptions || []).find((item) => item.id === issueId || item.issueId === issueId);
         const realIssueId = review?.issueId || review?.id || issueId;
@@ -11354,12 +11377,14 @@
 
         renderAll();
         renderPolishSidebarList();
+        queueAutosave();
         toast("已忽略此项（音画与文稿保持原样）");
       }
 
       function ignorePolishItem(type, id) {
         window.__ignoredPolishIds = window.__ignoredPolishIds || new Set();
         window.__ignoredPolishIds.add(id);
+        state.ignoredPolishIds = Array.from(window.__ignoredPolishIds);
 
         if (type === "gap") {
           const gap = (window.__pauseGapPlan || []).find(g => g.id === id);
@@ -11367,7 +11392,9 @@
             gap.ignored = true;
             gap.checked = false;
           }
+          state.pauseGapPlan = window.__pauseGapPlan;
           renderPolishSidebarList();
+          queueAutosave();
           toast("已忽略该气口");
         } else {
           ignoreReviewIssue(id);
@@ -11424,7 +11451,9 @@
         renderAll();
 
         window.__pauseGapPlan = (window.__pauseGapPlan || []).filter(g => g.id !== gapId);
+        state.pauseGapPlan = window.__pauseGapPlan;
         renderPolishSidebarList();
+        queueAutosave();
         toast(`已切除 ${Number(gap.duration || 0).toFixed(2)} 秒气口`);
       }
 
@@ -11440,7 +11469,9 @@
           state.captions = state.captions.filter(c => c.id !== rightCap.id);
           renderAll();
           window.__pauseGapPlan = (window.__pauseGapPlan || []).filter(g => g.id !== gapId);
+          state.pauseGapPlan = window.__pauseGapPlan;
           renderPolishSidebarList();
+          queueAutosave();
           toast("已合并前后两句字幕");
         } else {
           toast("未找到紧邻该气口的前后字幕");
@@ -11567,9 +11598,10 @@
         seekTimeline(0);
         renderAll();
         if ($("globalPolishModal")) $("globalPolishModal").classList.remove("on");
-        for (const gap of planned) {
-          if (appliedIds.has(gap.id)) gap.checked = false;
-        }
+        state.pauseGapPlan = planned.filter(g => !appliedIds.has(g.id));
+        window.__pauseGapPlan = state.pauseGapPlan;
+        renderPolishSidebarList();
+        queueAutosave();
         toast(applied ? `已切 ${applied} 处勾选气口，后面字幕只前移不删` : "这些气口没法安全切除");
         return applied;
       }
@@ -12414,6 +12446,9 @@
           audioProcessingEnabled: state.audioProcessingEnabled,
           mainAudioClipSettings: state.mainAudioClipSettings,
           projectCoverPath: state.projectCoverPath,
+          lastPolishPlan: state.lastPolishPlan || window.__lastPolishPlan || null,
+          pauseGapPlan: state.pauseGapPlan || window.__pauseGapPlan || null,
+          ignoredPolishIds: Array.from(window.__ignoredPolishIds || state.ignoredPolishIds || []),
           layout: state.layout,
           script: $("scriptText").value,
         };
@@ -12459,8 +12494,26 @@
             selectedItems: [],
             mainAudioClipSettings: d.mainAudioClipSettings || {},
             mainVideoClipSettings: d.mainVideoClipSettings || {},
+            lastPolishPlan: d.lastPolishPlan || null,
+            pauseGapPlan: d.pauseGapPlan || null,
+            ignoredPolishIds: Array.isArray(d.ignoredPolishIds) ? d.ignoredPolishIds : [],
             undo: [],
           });
+          window.__lastPolishPlan = state.lastPolishPlan;
+          window.__pauseGapPlan = state.pauseGapPlan
+            ? (state.pauseGapPlan || []).map(g => ({ ...g }))
+            : (state.lastPolishPlan?.pauseGaps || []).map(g => ({ ...g }));
+          window.__ignoredPolishIds = new Set(state.ignoredPolishIds);
+          if (state.lastPolishPlan && $("lastPolishReport")) {
+            $("lastPolishReport").disabled = false;
+          }
+          if (state.lastPolishPlan) {
+            const summary =
+              `自动切 ${state.lastPolishPlan.autoApplied || 0} 处重录/废读，口语并进 ${(state.lastPolishPlan.mergedSpoken || []).length} 条，清掉 ${(state.lastPolishPlan.strippedNotes || []).length} 处备注，${(state.lastPolishPlan.scriptureLock || []).length} 处经文锁定，${(state.lastPolishPlan.missing || []).length} 处缺读待补${(state.lastPolishPlan.leftover || []).length ? `，${state.lastPolishPlan.leftover.length} 处待确认` : ""}。气口建议切 ${state.lastPolishPlan.pauseSuggestCut || 0} 处。`;
+            if ($("globalPolishSummarySidebar")) $("globalPolishSummarySidebar").textContent = summary;
+            if ($("globalPolishSummary")) $("globalPolishSummary").textContent = summary;
+            renderPolishSidebarList();
+          }
           ensureDynamicTracks();
           if (d.video?.path) {
             const v = unwrap(await window.native.addVideoPath(d.video.path));
