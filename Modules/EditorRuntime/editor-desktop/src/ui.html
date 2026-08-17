@@ -1065,10 +1065,14 @@
         pointer-events: none;
       }
       #selectTool.active,
+      #trimTool.active,
       #bladeTool.active {
         background: #e54b4b !important;
         border-color: #e54b4b !important;
         color: #fff !important;
+      }
+      .trim-mode [data-trim] {
+        background: rgba(34, 197, 94, 0.85) !important;
       }
       #snapToggle.active,
       #linkAV.active {
@@ -4016,8 +4020,11 @@
           <div class="timelinebar-tools">
             <div class="timeline-center-tools">
               <!-- 达芬奇标准组 1: 核心剪辑工具 -->
-              <button class="btn iconbtn active" id="selectTool" title="选择模式（A）">
+              <button class="btn iconbtn active" id="selectTool" title="选择模式（A）：修剪当前片段，前后锁定不动">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7 18 3-7 7-3L3 3z"/><path d="M13 13l6 6"/></svg>
+              </button
+              ><button class="btn iconbtn" id="trimTool" title="波纹修剪模式（T / 按住Shift）：拖动边缘全轨道跟随推移">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><polyline points="8 4 4 8 8 12"/><polyline points="16 12 20 16 16 20"/></svg>
               </button
               ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
@@ -6354,10 +6361,13 @@
       }
       let editTool = "select";
       function setEditTool(tool) {
-        editTool = tool === "blade" ? "blade" : "select";
+        editTool = ["blade", "trim"].includes(tool) ? tool : "select";
         $("timeline")?.classList.toggle("blade-mode", editTool === "blade");
+        $("timeline")?.classList.toggle("trim-mode", editTool === "trim");
         $("timelineMain")?.classList.toggle("blade-mode", editTool === "blade");
+        $("timelineMain")?.classList.toggle("trim-mode", editTool === "trim");
         $("selectTool")?.classList.toggle("active", editTool === "select");
+        $("trimTool")?.classList.toggle("active", editTool === "trim");
         $("bladeTool")?.classList.toggle("active", editTool === "blade");
         $("bladeTool")?.classList.toggle("primary", editTool === "blade");
         if (editTool !== "blade") setBladeGuide(0, false);
@@ -14111,7 +14121,12 @@
       if ($("selectTool"))
         $("selectTool").onclick = () => {
           setEditTool("select");
-          toast("选择模式 (A)");
+          toast("选择模式 (A)：修剪当前片段，前后锁定不动");
+        };
+      if ($("trimTool"))
+        $("trimTool").onclick = () => {
+          setEditTool(editTool === "trim" ? "select" : "trim");
+          toast(editTool === "trim" ? "波纹修剪模式 (T)：拖动边缘全轨推移" : "选择模式 (A)");
         };
       if ($("bladeTool"))
         $("bladeTool").onclick = () => {
@@ -14529,6 +14544,7 @@
                 trimType: clip.dataset.type,
                 trimObject: object,
                 mainTrimClip: mainClip,
+                isRipple: editTool === "trim" || e.shiftKey,
                 mainClipsSnapshot: mainClips().map((c) => ({
                   id: c.id,
                   start: Number(c.start),
@@ -14738,18 +14754,28 @@
             } else if (timelineDrag.mainTrimClip) {
               const clip = timelineDrag.mainTrimClip;
               const speed = Math.max(0.05, Number(state.audio.speed || 1));
-              const prevClip = (timelineDrag.mainClipsSnapshot || []).filter(
-                (c) => c.id !== clip.id && c.end <= timelineDrag.originStart + 0.01,
-              ).sort((a, b) => b.end - a.end)[0];
-              const nextClip = (timelineDrag.mainClipsSnapshot || []).filter(
-                (c) => c.id !== clip.id && c.start >= timelineDrag.originEnd - 0.01,
-              ).sort((a, b) => a.start - b.start)[0];
-              const minTimeline = edge === "start"
-                ? Math.max(prevClip ? prevClip.end : 0, timelineDrag.originStart - Number(clip.sourceStart || 0) / speed)
-                : timelineDrag.originStart + 0.04;
-              const maxTimeline = edge === "start"
-                ? timelineDrag.originEnd - 0.04
-                : Math.min(nextClip ? nextClip.start : Infinity, timelineDrag.originStart + (Number(state.sourceDuration || 0) - Number(clip.sourceStart || 0)) / speed);
+              let minTimeline, maxTimeline;
+              if (timelineDrag.isRipple) {
+                minTimeline = edge === "start"
+                  ? Math.max(0, timelineDrag.originStart - Number(clip.sourceStart || 0) / speed)
+                  : timelineDrag.originStart + 0.04;
+                maxTimeline = edge === "start"
+                  ? timelineDrag.originEnd - 0.04
+                  : timelineDrag.originStart + (Number(state.sourceDuration || 0) - Number(clip.sourceStart || 0)) / speed;
+              } else {
+                const prevClip = (timelineDrag.mainClipsSnapshot || []).filter(
+                  (c) => c.id !== clip.id && c.end <= timelineDrag.originStart + 0.01,
+                ).sort((a, b) => b.end - a.end)[0];
+                const nextClip = (timelineDrag.mainClipsSnapshot || []).filter(
+                  (c) => c.id !== clip.id && c.start >= timelineDrag.originEnd - 0.01,
+                ).sort((a, b) => a.start - b.start)[0];
+                minTimeline = edge === "start"
+                  ? Math.max(prevClip ? prevClip.end : 0, timelineDrag.originStart - Number(clip.sourceStart || 0) / speed)
+                  : timelineDrag.originStart + 0.04;
+                maxTimeline = edge === "start"
+                  ? timelineDrag.originEnd - 0.04
+                  : Math.min(nextClip ? nextClip.start : Infinity, timelineDrag.originStart + (Number(state.sourceDuration || 0) - Number(clip.sourceStart || 0)) / speed);
+              }
               const rawTime = clamp(
                 (edge === "start" ? timelineDrag.originStart : timelineDrag.originEnd) + delta,
                 minTimeline,
@@ -14950,37 +14976,47 @@
                 }
               }
 
-              // Lock all other untouched clips to their exact pre-trim timeline positions!
-              const untouchedSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
-                (s) => s.id !== clip.id,
-              );
-              for (const snap of untouchedSnapshots) {
-                const otherBase = baseClips.find(
-                  (item) => item !== matchingClip && (
-                    (item.sourceStart >= snap.sourceStart - 0.05 && item.sourceEnd <= snap.sourceEnd + 0.05) ||
-                    Math.abs(item.sourceStart - snap.sourceStart) < 0.05 ||
-                    Math.abs(item.sourceEnd - snap.sourceEnd) < 0.05
-                  ),
+              if (timelineDrag.isRipple) {
+                const deltaTimeline = trimResult.deltaSource / speed;
+                const shiftFrom = timelineDrag.trimEdge === "start" ? originStart : originEnd;
+                if (deltaTimeline > 0.001) {
+                  rippleShiftAllTracks(state, shiftFrom, deltaTimeline);
+                } else if (deltaTimeline < -0.001) {
+                  shiftTracks(shiftFrom, -deltaTimeline);
+                }
+              } else {
+                // Lock all other untouched clips to their exact pre-trim timeline positions!
+                const untouchedSnapshots = (timelineDrag.mainClipsSnapshot || []).filter(
+                  (s) => s.id !== clip.id,
                 );
-                if (otherBase) {
-                  const otherOffset = snap.start - otherBase.start - globalOffset;
-                  state.mainVideoClipOffsets[otherBase.id] = otherOffset;
-                  state.mainAudioClipOffsets[otherBase.id] = otherOffset;
-                  if (snap.id && snap.id !== otherBase.id) {
-                    if (state.mainVideoClipSettings?.[snap.id]) {
-                      state.mainVideoClipSettings[otherBase.id] = { ...state.mainVideoClipSettings[snap.id] };
+                for (const snap of untouchedSnapshots) {
+                  const otherBase = baseClips.find(
+                    (item) => item !== matchingClip && (
+                      (item.sourceStart >= snap.sourceStart - 0.05 && item.sourceEnd <= snap.sourceEnd + 0.05) ||
+                      Math.abs(item.sourceStart - snap.sourceStart) < 0.05 ||
+                      Math.abs(item.sourceEnd - snap.sourceEnd) < 0.05
+                    ),
+                  );
+                  if (otherBase) {
+                    const otherOffset = snap.start - otherBase.start - globalOffset;
+                    state.mainVideoClipOffsets[otherBase.id] = otherOffset;
+                    state.mainAudioClipOffsets[otherBase.id] = otherOffset;
+                    if (snap.id && snap.id !== otherBase.id) {
+                      if (state.mainVideoClipSettings?.[snap.id]) {
+                        state.mainVideoClipSettings[otherBase.id] = { ...state.mainVideoClipSettings[snap.id] };
+                      }
+                      if (state.mainVideoTrackMap?.[snap.id]) {
+                        state.mainVideoTrackMap[otherBase.id] = state.mainVideoTrackMap[snap.id];
+                      }
+                      if (state.mainAudioTrackMap?.[snap.id]) {
+                        state.mainAudioTrackMap[otherBase.id] = state.mainAudioTrackMap[snap.id];
+                      }
+                      delete state.mainVideoClipOffsets[snap.id];
+                      delete state.mainAudioClipOffsets[snap.id];
+                      delete state.mainVideoTrackMap[snap.id];
+                      delete state.mainAudioTrackMap[snap.id];
+                      delete state.mainVideoClipSettings[snap.id];
                     }
-                    if (state.mainVideoTrackMap?.[snap.id]) {
-                      state.mainVideoTrackMap[otherBase.id] = state.mainVideoTrackMap[snap.id];
-                    }
-                    if (state.mainAudioTrackMap?.[snap.id]) {
-                      state.mainAudioTrackMap[otherBase.id] = state.mainAudioTrackMap[snap.id];
-                    }
-                    delete state.mainVideoClipOffsets[snap.id];
-                    delete state.mainAudioClipOffsets[snap.id];
-                    delete state.mainVideoTrackMap[snap.id];
-                    delete state.mainAudioTrackMap[snap.id];
-                    delete state.mainVideoClipSettings[snap.id];
                   }
                 }
               }
@@ -16527,6 +16563,18 @@
         if (command && (code === "KeyB" || code === "Backslash") && !textEditing) {
           e.preventDefault();
           splitSelected();
+          return;
+        }
+        if (code === "KeyA" && !command && !textEditing) {
+          e.preventDefault();
+          setEditTool("select");
+          toast("选择模式 (A)：修剪当前片段，前后锁定不动");
+          return;
+        }
+        if (code === "KeyT" && !command && !textEditing) {
+          e.preventDefault();
+          setEditTool(editTool === "trim" ? "select" : "trim");
+          toast(editTool === "trim" ? "波纹修剪模式 (T)：拖动边缘全轨推移" : "选择模式 (A)");
           return;
         }
         if (code === "KeyB" && !command && !textEditing) {
