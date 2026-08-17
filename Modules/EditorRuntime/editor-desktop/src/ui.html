@@ -2772,6 +2772,22 @@
         .workspace { grid-template-columns: minmax(220px,var(--side)) 3px minmax(250px,1fr) 3px minmax(230px,var(--inspector)); }
         .sidebody,.inspectbody { padding:8px; }
       /* 全局体检审校面板样式 */
+      #side-polish.active {
+        display: flex !important;
+        flex-direction: column;
+        height: 100%;
+        max-height: 100%;
+        box-sizing: border-box;
+      }
+      .sidebody:has(#side-polish.active) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden !important;
+        padding-bottom: 4px;
+      }
+      .polish-top-header {
+        flex-shrink: 0;
+      }
       .polish-controls-card {
         background: #1e2023;
         border: 1px solid var(--line);
@@ -2781,19 +2797,47 @@
       }
       .polish-filter-tabs {
         display: flex;
-        gap: 4px;
+        gap: 3px;
         margin-bottom: 8px;
+        flex-wrap: wrap;
       }
       .polish-filter-tabs .btn {
-        flex: 1;
+        flex: 1 1 auto;
+        min-width: 48px;
         font-size: 11px;
-        padding: 4px 2px;
+        padding: 4px 4px;
         text-align: center;
+        white-space: nowrap;
       }
       .polish-filter-tabs .btn.active {
         background: #2b3036;
         border-color: var(--blue);
         color: #fff;
+        font-weight: 700;
+      }
+      .polish-list {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-right: 2px;
+        margin-bottom: 6px;
+      }
+      .polish-bottom-actions {
+        flex-shrink: 0;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+        background: inherit;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
       }
       .polish-card {
         background: #1a1c1e;
@@ -2824,6 +2868,15 @@
       }
       .polish-card.keep-suggest {
         border-left: 3px solid #52c41a;
+      }
+      .polish-card.spoken-diff {
+        border-left: 3px solid #06b6d4;
+      }
+      .polish-card.repeat-suggest {
+        border-left: 3px solid #f97316;
+      }
+      .polish-card.missing-suggest {
+        border-left: 3px solid #ec4899;
       }
       .polish-card-header {
         display: flex;
@@ -2858,6 +2911,22 @@
       .polish-badge.keep {
         background: rgba(82, 196, 26, 0.2);
         color: #73d13d;
+      }
+      .polish-badge.spoken-diff {
+        background: rgba(6, 182, 212, 0.2);
+        color: #67e8f9;
+      }
+      .polish-badge.repeat {
+        background: rgba(249, 115, 22, 0.2);
+        color: #fb923c;
+      }
+      .polish-badge.missing {
+        background: rgba(236, 72, 153, 0.2);
+        color: #f472b6;
+      }
+      .polish-badge.notes {
+        background: rgba(156, 163, 175, 0.2);
+        color: #d1d5db;
       }
       .polish-card-text {
         font-size: 12px;
@@ -3117,42 +3186,47 @@
               <div class="caption-inspector-list" id="captionInspectorList"></div>
             </div>
             <div class="sidepage" id="side-polish">
-              <div class="sectiontitle" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span>全局体检与审校</span>
-                <button class="btn primary small" id="runGlobalPolishSidebar" style="padding:2px 8px; font-size:12px;">⚡ 一键体检</button>
-              </div>
-              <p class="small" id="globalPolishSummarySidebar" style="color:var(--muted); line-height:1.4; margin-bottom:8px;">
-                点击「一键体检」扫描重读、口播偏差、经文保护与停顿气口。
-              </p>
-
-              <!-- 气口阈值与经文保护参数区 -->
-              <div class="polish-controls-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                  <span class="small" style="font-weight:600;">气口筛选阈值</span>
-                  <span class="small" id="pauseThresholdValue" style="color:var(--blue); font-weight:700;">≥ 0.50 秒</span>
+              <div class="polish-top-header">
+                <div class="sectiontitle" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span>全局体检与审校</span>
+                  <button class="btn primary small" id="runGlobalPolishSidebar" style="padding:2px 8px; font-size:12px;">⚡ 一键体检</button>
                 </div>
-                <input type="range" class="range" id="pauseGapThreshold" min="0.10" max="2.50" step="0.05" value="0.50" style="width:100%; accent-color:var(--blue);" />
-                <label class="row" style="margin-top:6px; gap:6px; cursor:pointer; align-items:center;">
-                  <input type="checkbox" id="unlockScriptureGaps" />
-                  <span class="small" style="color:#eab308; font-weight:500;">✝ 允许勾选经文附近气口（默认受保护锁定）</span>
-                </label>
-              </div>
+                <p class="small" id="globalPolishSummarySidebar" style="color:var(--muted); line-height:1.4; margin-bottom:8px;">
+                  点击「一键体检」扫描重读、口播偏差、经文保护与停顿气口。
+                </p>
 
-              <!-- 分类筛选标签 Tabs -->
-              <div class="polish-filter-tabs">
-                <button class="btn small active" data-polish-filter="all" id="filterPolishAll">全部 (0)</button>
-                <button class="btn small" data-polish-filter="cut" id="filterPolishCut">建议切 (0)</button>
-                <button class="btn small" data-polish-filter="scripture" id="filterPolishScripture" style="color:#eab308;">经文保护 (0)</button>
-                <button class="btn small" data-polish-filter="keep" id="filterPolishKeep">合理留 (0)</button>
+                <!-- 气口阈值与经文保护参数区 -->
+                <div class="polish-controls-card">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span class="small" style="font-weight:600;">气口筛选阈值</span>
+                    <span class="small" id="pauseThresholdValue" style="color:var(--blue); font-weight:700;">≥ 0.50 秒</span>
+                  </div>
+                  <input type="range" class="range" id="pauseGapThreshold" min="0.10" max="2.50" step="0.05" value="0.50" style="width:100%; accent-color:var(--blue);" />
+                  <label class="row" style="margin-top:6px; gap:6px; cursor:pointer; align-items:center;">
+                    <input type="checkbox" id="unlockScriptureGaps" />
+                    <span class="small" style="color:#eab308; font-weight:500;">✝ 允许勾选经文附近气口（默认受保护锁定）</span>
+                  </label>
+                </div>
+
+                <!-- 分类筛选标签 Tabs -->
+                <div class="polish-filter-tabs">
+                  <button class="btn small active" data-polish-filter="all" id="filterPolishAll">全部 (0)</button>
+                  <button class="btn small" data-polish-filter="pause" id="filterPolishPause">气口 (0)</button>
+                  <button class="btn small" data-polish-filter="scripture" id="filterPolishScripture" style="color:#eab308;">✝ 经文 (0)</button>
+                  <button class="btn small" data-polish-filter="spokenDiff" id="filterPolishSpokenDiff">读法差异 (0)</button>
+                  <button class="btn small" data-polish-filter="repeat" id="filterPolishRepeat">重读卡壳 (0)</button>
+                  <button class="btn small" data-polish-filter="missing" id="filterPolishMissing">缺读待补 (0)</button>
+                  <button class="btn small" data-polish-filter="notes" id="filterPolishNotes">已清备注 (0)</button>
+                </div>
               </div>
 
               <!-- 体检卡片列表 -->
-              <div class="polish-list" id="globalPolishListSidebar" style="overflow-y:auto; flex:1; max-height:calc(100vh - 360px); display:flex; flex-direction:column; gap:6px; padding-right:2px;">
+              <div class="polish-list" id="globalPolishListSidebar">
                 <div class="small" style="text-align:center; padding:24px 0; color:var(--muted);">暂无体检结果，请先点击上方「⚡ 一键体检」</div>
               </div>
 
               <!-- 底部批量动作栏 -->
-              <div class="polish-bottom-actions" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line); display:flex; gap:6px; align-items:center;">
+              <div class="polish-bottom-actions">
                 <button class="btn small" id="selectAllPolishBtn">全选建议</button>
                 <button class="btn small" id="invertSelectPolishBtn">反选</button>
                 <button class="btn primary small grow" id="applyPauseGapsSidebarBtn" style="font-weight:600;">✂ 切勾选气口 (<span id="checkedGapsCount">0</span>)</button>
@@ -11008,6 +11082,7 @@
         if ($("globalPolishBody")) {
           $("globalPolishBody").innerHTML = [
             polishSectionHtml("经文 / 神的话语（只锁定，请你点）", plan.scriptureLock, "没有经文待复核"),
+            polishSectionHtml("气口体检", plan.pauseGaps, "没有需要切除的气口"),
             polishSectionHtml("缺读待补", plan.missing, "没有缺读"),
             polishSectionHtml("已自动切除", plan.autoCut, "没有自动切除"),
             polishSectionHtml("已并进绿字幕", plan.mergedSpoken, "没有口语需要并进"),
@@ -11030,109 +11105,224 @@
         const unlockScripture = Boolean($("unlockScriptureGaps")?.checked);
         if ($("pauseThresholdValue")) $("pauseThresholdValue").textContent = `≥ ${threshold.toFixed(2)} 秒`;
 
-        const gaps = (window.__pauseGapPlan || plan.pauseGaps || []).map((gap) => {
-          const isScripture = gap.verdict === "scripture-keep" || gap.isScripture === true;
-          const locked = isScripture && !unlockScripture;
-          if (gap.userChecked === undefined) {
-            gap.checked = !locked && (Number(gap.duration || 0) >= threshold || gap.verdict === "cut");
-          } else if (locked) {
-            gap.checked = false;
-          }
-          return {
-            ...gap,
-            isScripture,
-            locked,
-          };
-        });
+        window.__ignoredPolishIds = window.__ignoredPolishIds || new Set();
+
+        // 1. 气口列表
+        const gaps = (window.__pauseGapPlan || plan.pauseGaps || [])
+          .filter(g => !window.__ignoredPolishIds.has(g.id) && !g.ignored)
+          .map((gap) => {
+            const isScripture = gap.verdict === "scripture-keep" || gap.isScripture === true;
+            const locked = isScripture && !unlockScripture;
+            if (gap.userChecked === undefined) {
+              gap.checked = !locked && (Number(gap.duration || 0) >= threshold || gap.verdict === "cut");
+            } else if (locked) {
+              gap.checked = false;
+            }
+            return {
+              ...gap,
+              isScripture,
+              locked,
+            };
+          });
         window.__pauseGapPlan = gaps;
 
-        const scriptureCount = gaps.filter(g => g.isScripture).length + (plan.scriptureLock || []).length;
-        const cutCount = gaps.filter(g => g.checked && !g.locked).length;
-        const keepCount = gaps.filter(g => !g.checked && !g.isScripture).length;
-        const allCount = gaps.length + (plan.scriptureLock || []).length + (plan.missing || []).length + (plan.leftover || []).length;
+        // 2. 经文审校项
+        const scriptures = (plan.scriptureLock || [])
+          .filter(i => !window.__ignoredPolishIds.has(i.id) && !window.__ignoredPolishIds.has(i.issueId));
+
+        // 3. 读法差异 / 口播补充项
+        const allIssues = [...(state.issues || []), ...(state.matchIssues || []), ...(state.reviewCaptions || [])];
+        const spokenDiffs = allIssues.filter(i => {
+          if (window.__ignoredPolishIds.has(i.id) || window.__ignoredPolishIds.has(i.issueId)) return false;
+          if (i.isScripture || i.scripture) return false;
+          return i.type === "addition" || i.type === "extra" || i.type === "spokenDiff" || i.action === "insert" || i.action === "accept" || i.type === "mismatch";
+        });
+        const uniqueSpokenDiffs = Array.from(new Map(spokenDiffs.map(i => [i.issueId || i.id, i])).values());
+
+        // 4. 重读 / 卡壳项
+        const repeats = allIssues.filter(i => {
+          if (window.__ignoredPolishIds.has(i.id) || window.__ignoredPolishIds.has(i.issueId)) return false;
+          return i.type === "repeat" || i.action === "cut" || i.confirmedCut === true;
+        });
+        const uniqueRepeats = Array.from(new Map(repeats.map(i => [i.issueId || i.id, i])).values());
+
+        // 5. 缺读待补项
+        const missings = (plan.missing || []).concat(allIssues.filter(i => i.type === "missing" || i.action === "missing"))
+          .filter(i => !window.__ignoredPolishIds.has(i.id) && !window.__ignoredPolishIds.has(i.issueId));
+        const uniqueMissings = Array.from(new Map(missings.map(i => [i.issueId || i.id, i])).values());
+
+        // 6. 备注清理项
+        const notes = (plan.strippedNotes || []).filter(i => !window.__ignoredPolishIds.has(i.id));
+
+        // 计算各 Tab 数量
+        const pauseCount = gaps.length;
+        const scriptureCount = scriptures.length + gaps.filter(g => g.isScripture).length;
+        const spokenDiffCount = uniqueSpokenDiffs.length;
+        const repeatCount = uniqueRepeats.length;
+        const missingCount = uniqueMissings.length;
+        const notesCount = notes.length;
+        const allCount = pauseCount + scriptures.length + spokenDiffCount + repeatCount + missingCount + notesCount;
+        const checkedCutCount = gaps.filter(g => g.checked && !g.locked).length;
 
         if ($("filterPolishAll")) $("filterPolishAll").textContent = `全部 (${allCount})`;
-        if ($("filterPolishCut")) $("filterPolishCut").textContent = `建议切 (${cutCount})`;
-        if ($("filterPolishScripture")) $("filterPolishScripture").textContent = `经文保护 (${scriptureCount})`;
-        if ($("filterPolishKeep")) $("filterPolishKeep").textContent = `合理留 (${keepCount})`;
-        if ($("checkedGapsCount")) $("checkedGapsCount").textContent = cutCount;
+        if ($("filterPolishPause")) $("filterPolishPause").textContent = `气口 (${pauseCount})`;
+        if ($("filterPolishScripture")) $("filterPolishScripture").textContent = `✝ 经文 (${scriptureCount})`;
+        if ($("filterPolishSpokenDiff")) $("filterPolishSpokenDiff").textContent = `读法差异 (${spokenDiffCount})`;
+        if ($("filterPolishRepeat")) $("filterPolishRepeat").textContent = `重读卡壳 (${repeatCount})`;
+        if ($("filterPolishMissing")) $("filterPolishMissing").textContent = `缺读待补 (${missingCount})`;
+        if ($("filterPolishNotes")) $("filterPolishNotes").textContent = `已清备注 (${notesCount})`;
+        if ($("checkedGapsCount")) $("checkedGapsCount").textContent = checkedCutCount;
 
         const listEl = $("globalPolishListSidebar");
         if (!listEl) return;
 
         let cardsHtml = [];
 
-        // 1. 经文/神的话语审校项
+        // --- 渲染经文项 ---
         if (currentPolishFilter === "all" || currentPolishFilter === "scripture") {
-          for (const item of (plan.scriptureLock || [])) {
+          for (const item of scriptures) {
             cardsHtml.push(`
               <div class="polish-card scripture-card" data-polish-card-type="scripture-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
                   <div class="polish-card-title"><span class="polish-badge scripture">✝ 经文保护</span></div>
                   <span class="small" style="font-family:monospace; color:#facc15;">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text" style="color:#fef08a; font-weight:500;">
-                  ${escapeHtml(item.spoken || item.text || item.expected || "（经文差异）")}
+                <div class="polish-card-text">
+                  <div style="color:#fef08a; font-weight:600; margin-bottom:2px;">口播: ${escapeHtml(item.spoken || item.text || "（无语音）")}</div>
+                  <div style="color:var(--muted); font-size:11px;">经文: ${escapeHtml(item.expected || item.scripture || "（标准经文）")}</div>
                 </div>
                 <div class="polish-card-actions">
-                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}">▶ 试听</button>
-                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}">定位复核</button>
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}" title="跳点试听此段">▶ 试听</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}" title="定位并复核">定位</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || "")}" title="确认保留">✓ 保留</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || "")}" title="忽略此项（不做任何改动）">✕ 忽略</button>
                 </div>
               </div>
             `);
           }
         }
 
-        // 2. 气口体检项
-        for (const gap of gaps) {
-          if (currentPolishFilter === "cut" && (!gap.checked || gap.locked)) continue;
-          if (currentPolishFilter === "scripture" && !gap.isScripture) continue;
-          if (currentPolishFilter === "keep" && (gap.checked || gap.isScripture)) continue;
-
-          const isScripture = gap.isScripture;
-          const isCut = gap.checked && !gap.locked;
-          const cardClass = isScripture ? "polish-card scripture-card" : isCut ? "polish-card cut-suggest" : "polish-card keep-suggest";
-          const badgeClass = isScripture ? "polish-badge scripture" : isCut ? "polish-badge cut" : "polish-badge keep";
-          const badgeLabel = isScripture ? "✝ 经文附近" : isCut ? "过长建议切" : "合理建议留";
-
-          cardsHtml.push(`
-            <div class="${cardClass}" data-polish-card-type="gap" data-gap-id="${escapeHtml(gap.id || "")}" data-start="${Number(gap.start || 0)}">
-              <div class="polish-card-header">
-                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
-                  <input type="checkbox" data-pause-gap="${escapeHtml(gap.id)}" ${gap.checked ? "checked" : ""} ${gap.locked ? "disabled title='经文保护默认锁定，可勾选上方解锁开关'" : ""} />
-                  <span class="polish-card-title">${Number(gap.duration || 0).toFixed(2)}s</span>
-                  <span class="${badgeClass}">${badgeLabel}</span>
-                </label>
-                <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(gap.start || 0))}</span>
-              </div>
-              <div class="polish-card-text">
-                <span style="color:#d1d5db;">${escapeHtml(gap.leftText || "…")}</span>
-                <span style="color:var(--blue); margin:0 4px;">→</span>
-                <span style="color:#d1d5db;">${escapeHtml(gap.rightText || "…")}</span>
-              </div>
-              <div class="polish-card-actions">
-                <button class="btn small" data-polish-action="preview-gap" data-gap-id="${escapeHtml(gap.id)}">▶ 试听</button>
-                <button class="btn small danger" data-polish-action="cut-gap" data-gap-id="${escapeHtml(gap.id)}" ${gap.locked ? "disabled title='受经文保护锁定'" : ""}>✂ 切除</button>
-                <button class="btn small" data-polish-action="merge-gap" data-gap-id="${escapeHtml(gap.id)}">╎ 合并</button>
-                <button class="btn small" data-polish-action="toggle-gap-keep" data-gap-id="${escapeHtml(gap.id)}">${gap.checked ? "留" : "切"}</button>
-              </div>
-            </div>
-          `);
-        }
-
-        // 3. 缺读待补
-        if (currentPolishFilter === "all") {
-          for (const item of (plan.missing || [])) {
+        // --- 渲染读法差异项 ---
+        if (currentPolishFilter === "all" || currentPolishFilter === "spokenDiff") {
+          for (const item of uniqueSpokenDiffs) {
             cardsHtml.push(`
-              <div class="polish-card" data-polish-card-type="missing-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
+              <div class="polish-card spoken-diff" data-polish-card-type="spoken-diff" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
                 <div class="polish-card-header">
-                  <span class="polish-badge" style="background:#f97316; color:#fff;">缺读待补</span>
+                  <div class="polish-card-title"><span class="polish-badge spoken-diff">读法差异</span></div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
-                <div class="polish-card-text">${escapeHtml(item.expected || item.text || "缺读")}</div>
+                <div class="polish-card-text">
+                  <div style="color:#e5e7eb; font-weight:500;">口播: <span style="color:#67e8f9;">${escapeHtml(item.spoken || item.text || "口播补充")}</span></div>
+                  ${item.expected ? `<div style="color:var(--muted); font-size:11px;">文案: ${escapeHtml(item.expected)}</div>` : ""}
+                </div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.8)}">▶ 试听</button>
+                  <button class="btn small primary" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入字幕">✓ 并入字幕</button>
+                  <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此段">✂ 切除</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（音画与文稿保持原样）">✕ 忽略</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        // --- 渲染重读/卡壳项 ---
+        if (currentPolishFilter === "all" || currentPolishFilter === "repeat") {
+          for (const item of uniqueRepeats) {
+            cardsHtml.push(`
+              <div class="polish-card repeat-suggest" data-polish-card-type="repeat-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
+                <div class="polish-card-header">
+                  <div class="polish-card-title"><span class="polish-badge repeat">重读卡壳</span></div>
+                  <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
+                </div>
+                <div class="polish-card-text" style="color:#fb923c;">
+                  ${escapeHtml(item.spoken || item.text || "重读废话/卡壳读错")}
+                </div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.5)}">▶ 试听</button>
+                  <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此废话">✂ 立即切除</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（保持原样）">✕ 忽略</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        // --- 渲染缺读待补项 ---
+        if (currentPolishFilter === "all" || currentPolishFilter === "missing") {
+          for (const item of uniqueMissings) {
+            cardsHtml.push(`
+              <div class="polish-card missing-suggest" data-polish-card-type="missing-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
+                <div class="polish-card-header">
+                  <span class="polish-badge missing">缺读待补</span>
+                  <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
+                </div>
+                <div class="polish-card-text" style="color:#f472b6;">
+                  文案缺读: ${escapeHtml(item.expected || item.text || "缺读文本")}
+                </div>
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="2">▶ 试听</button>
-                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || "")}">定位</button>
+                  <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">✕ 忽略</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        // --- 渲染气口停顿项 ---
+        if (currentPolishFilter === "all" || currentPolishFilter === "pause" || currentPolishFilter === "scripture") {
+          for (const gap of gaps) {
+            if (currentPolishFilter === "scripture" && !gap.isScripture) continue;
+
+            const isScripture = gap.isScripture;
+            const isCut = gap.checked && !gap.locked;
+            const cardClass = isScripture ? "polish-card scripture-card" : isCut ? "polish-card cut-suggest" : "polish-card keep-suggest";
+            const badgeClass = isScripture ? "polish-badge scripture" : isCut ? "polish-badge cut" : "polish-badge keep";
+            const badgeLabel = isScripture ? "✝ 经文附近" : isCut ? "过长建议切" : "合理建议留";
+
+            cardsHtml.push(`
+              <div class="${cardClass}" data-polish-card-type="gap" data-gap-id="${escapeHtml(gap.id || "")}" data-start="${Number(gap.start || 0)}">
+                <div class="polish-card-header">
+                  <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+                    <input type="checkbox" data-pause-gap="${escapeHtml(gap.id)}" ${gap.checked ? "checked" : ""} ${gap.locked ? "disabled title='经文保护默认锁定，可勾选上方解锁开关'" : ""} />
+                    <span class="polish-card-title">${Number(gap.duration || 0).toFixed(2)}s</span>
+                    <span class="${badgeClass}">${badgeLabel}</span>
+                  </label>
+                  <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(gap.start || 0))}</span>
+                </div>
+                <div class="polish-card-text">
+                  <span style="color:#d1d5db;">${escapeHtml(gap.leftText || "…")}</span>
+                  <span style="color:var(--blue); margin:0 4px;">→</span>
+                  <span style="color:#d1d5db;">${escapeHtml(gap.rightText || "…")}</span>
+                </div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview-gap" data-gap-id="${escapeHtml(gap.id)}">▶ 试听</button>
+                  <button class="btn small danger" data-polish-action="cut-gap" data-gap-id="${escapeHtml(gap.id)}" ${gap.locked ? "disabled title='受经文保护锁定'" : ""}>✂ 切除</button>
+                  <button class="btn small" data-polish-action="merge-gap" data-gap-id="${escapeHtml(gap.id)}">╎ 合并</button>
+                  <button class="btn small" data-polish-action="toggle-gap-keep" data-gap-id="${escapeHtml(gap.id)}">${gap.checked ? "留" : "切"}</button>
+                  <button class="btn small" data-polish-action="ignore-gap" data-gap-id="${escapeHtml(gap.id)}" title="忽略此气口">✕ 忽略</button>
+                </div>
+              </div>
+            `);
+          }
+        }
+
+        // --- 渲染文案备注项 ---
+        if (currentPolishFilter === "all" || currentPolishFilter === "notes") {
+          for (const item of notes) {
+            cardsHtml.push(`
+              <div class="polish-card" data-polish-card-type="note-issue" data-issue-id="${escapeHtml(item.id || "")}" data-start="${Number(item.start || 0)}">
+                <div class="polish-card-header">
+                  <span class="polish-badge notes">已清备注</span>
+                  <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
+                </div>
+                <div class="polish-card-text" style="color:var(--muted);">
+                  已清理文案提示/备注: ${escapeHtml(item.text || item.spoken || "备注")}
+                </div>
+                <div class="polish-card-actions">
+                  <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="1.5">▶ 试听</button>
+                  <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || "")}">✕ 忽略</button>
                 </div>
               </div>
             `);
@@ -11140,9 +11330,47 @@
         }
 
         if (!cardsHtml.length) {
-          listEl.innerHTML = `<div class="small" style="text-align:center; padding:24px 0; color:var(--muted);">当前筛选分类下无条目</div>`;
+          listEl.innerHTML = `<div class="small" style="text-align:center; padding:32px 0; color:var(--muted);">🎉 当前分类下没有待处理项目</div>`;
         } else {
           listEl.innerHTML = cardsHtml.join("");
+        }
+      }
+
+      function ignoreReviewIssue(issueId) {
+        snapshot();
+        window.__ignoredPolishIds = window.__ignoredPolishIds || new Set();
+        window.__ignoredPolishIds.add(issueId);
+
+        const review = (state.reviewCaptions || []).find((item) => item.id === issueId || item.issueId === issueId);
+        const realIssueId = review?.issueId || review?.id || issueId;
+
+        clearIssueWordFlags(realIssueId);
+        if (review) dismissReviewMark(review);
+        else {
+          state.issues = (state.issues || []).filter((item) => item.id !== realIssueId);
+          state.matchIssues = (state.matchIssues || []).filter((item) => item.id !== realIssueId);
+          state.reviewCaptions = (state.reviewCaptions || []).filter((item) => (item.issueId || item.id) !== realIssueId);
+        }
+
+        renderAll();
+        renderPolishSidebarList();
+        toast("已忽略此项（音画与文稿保持原样）");
+      }
+
+      function ignorePolishItem(type, id) {
+        window.__ignoredPolishIds = window.__ignoredPolishIds || new Set();
+        window.__ignoredPolishIds.add(id);
+
+        if (type === "gap") {
+          const gap = (window.__pauseGapPlan || []).find(g => g.id === id);
+          if (gap) {
+            gap.ignored = true;
+            gap.checked = false;
+          }
+          renderPolishSidebarList();
+          toast("已忽略该气口");
+        } else {
+          ignoreReviewIssue(id);
         }
       }
 
@@ -15050,6 +15278,28 @@
                 gap.userChecked = gap.checked;
                 renderPolishSidebarList();
               }
+              return;
+            }
+            if (action === "ignore-gap") {
+              const gapId = actionBtn.dataset.gapId;
+              ignorePolishItem("gap", gapId);
+              return;
+            }
+            if (action === "ignore-issue") {
+              const issueId = actionBtn.dataset.issueId;
+              ignorePolishItem("issue", issueId);
+              return;
+            }
+            if (action === "accept-issue") {
+              const issueId = actionBtn.dataset.issueId;
+              acceptReviewSegment(issueId);
+              renderPolishSidebarList();
+              return;
+            }
+            if (action === "cut-issue") {
+              const issueId = actionBtn.dataset.issueId;
+              cutReviewSegment(issueId);
+              renderPolishSidebarList();
               return;
             }
             if (action === "locate-issue") {
