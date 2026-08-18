@@ -208,7 +208,20 @@ namespace QuickCutLauncher {
 }
 "@
 $launcherExe = Join-Path $Stage "快剪.exe"
-Add-Type -TypeDefinition $launcherCode -Language CSharp -OutputAssembly $launcherExe -OutputType WindowsApplication -ReferencedAssemblies "System.Windows.Forms.dll"
+$cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if (-not (Test-Path $cscPath)) {
+  $cscPath = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+}
+if (Test-Path $cscPath) {
+  $tempCs = Join-Path $StageRoot "Launcher.cs"
+  Set-Content -Path $tempCs -Value $launcherCode -Encoding UTF8
+  & $cscPath /nologo /target:winexe /out:"$launcherExe" /reference:System.Windows.Forms.dll "$tempCs"
+  Remove-Item -Force $tempCs -ErrorAction SilentlyContinue
+} else {
+  try {
+    Add-Type -TypeDefinition $launcherCode -Language CSharp -OutputAssembly $launcherExe -OutputType WindowsApplication -ReferencedAssemblies "System.Windows.Forms.dll"
+  } catch {}
+}
 
 # Build Inno Setup Installer if compiler is present
 $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
@@ -227,9 +240,11 @@ if ($iscc) {
   $issFile = Join-Path $ProjectRoot "installer.iss"
   & $iscc "/DMyAppVersion=$Version" "/DSourceDir=$Stage" "/O$TargetDir" $issFile
   if ($LASTEXITCODE -eq 0) {
-    $installerPath = Join-Path $TargetDir "快剪-Windows-$Version-安装包.exe"
-    if (Test-Path $installerPath) {
-      $instItem = Get-Item $installerPath
+    $setupExe = Join-Path $TargetDir "QuickCut-Windows-$Version-Setup.exe"
+    $chineseExe = Join-Path $TargetDir "快剪-Windows-$Version-安装包.exe"
+    if (Test-Path $setupExe) {
+      Copy-Item $setupExe $chineseExe -Force
+      $instItem = Get-Item $chineseExe
       Info ("Installer: {0}  ({1:N1} MB)" -f $instItem.FullName, ($instItem.Length / 1MB))
     }
   }

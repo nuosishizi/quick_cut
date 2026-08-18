@@ -97,17 +97,17 @@ foreach ($required in @($Bun, $Ffmpeg, $Ffprobe)) {
 }
 
 Info "Copying Apple Silicon runtime and editor..."
-$EditorDst = Join-Path $Stage "Modules\EditorRuntime\editor-desktop"
-$MediaDst = Join-Path $Stage "Modules\EditorRuntime\media"
-$BunDst = Join-Path $Stage "Modules\EditorRuntime\runtime"
+$EditorDst = Join-Path $Stage "Modules/EditorRuntime/editor-desktop"
+$MediaDst = Join-Path $Stage "Modules/EditorRuntime/media"
+$BunDst = Join-Path $Stage "Modules/EditorRuntime/runtime"
 New-Item -ItemType Directory -Force -Path $EditorDst, $MediaDst, $BunDst | Out-Null
-Copy-Item (Join-Path $RuntimeSrc "editor-desktop\package.json") $EditorDst
-Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop\src") (Join-Path $EditorDst "src")
-Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop\assets") (Join-Path $EditorDst "assets")
+Copy-Item (Join-Path $RuntimeSrc "editor-desktop/package.json") $EditorDst
+Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop/src") (Join-Path $EditorDst "src")
+Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop/assets") (Join-Path $EditorDst "assets")
 Copy-Item $Bun (Join-Path $BunDst "bun-arm64")
 Copy-Item $Ffmpeg (Join-Path $MediaDst "ffmpeg")
 Copy-Item $Ffprobe (Join-Path $MediaDst "ffprobe")
-$Deepfilter = Join-Path $RuntimeSrc "media\deepfilter"
+$Deepfilter = Join-Path $RuntimeSrc "media/deepfilter"
 if (Test-Path $Deepfilter) { Copy-Item $Deepfilter (Join-Path $MediaDst "deepfilter") }
 
 Copy-Item (Join-Path $ProjectRoot "启动快剪.command") (Join-Path $Stage "启动快剪.command")
@@ -179,7 +179,7 @@ if ($xcodebuild -and $hdiutil) {
 
     $runtimeDst = Join-Path $appDst "Contents/Resources/EditorRuntime"
     New-Item -ItemType Directory -Force -Path $runtimeDst | Out-Null
-    Copy-Item -Recurse (Join-Path $Stage "Modules\EditorRuntime\*") $runtimeDst
+    Copy-Item -Recurse (Join-Path $Stage "Modules/EditorRuntime/*") $runtimeDst
 
     # Set execution permissions on macOS
     if (Get-Command chmod -ErrorAction SilentlyContinue) {
