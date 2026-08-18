@@ -12287,19 +12287,22 @@
           if (i.isScripture || i.scripture) return false;
           return i.type === "addition" || i.type === "extra" || i.type === "spokenDiff" || i.action === "insert" || i.action === "accept" || i.type === "mismatch";
         });
-        const uniqueSpokenDiffs = Array.from(new Map(spokenDiffs.map(i => [i.issueId || i.id, i])).values());
+        const uniqueSpokenDiffs = Array.from(new Map(spokenDiffs.map(i => [i.issueId || i.id, i])).values())
+          .sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
 
         // 4. 重读 / 卡壳项
         const repeats = allIssues.filter(i => {
           if (window.__ignoredPolishIds.has(i.id) || window.__ignoredPolishIds.has(i.issueId)) return false;
           return i.type === "repeat" || i.action === "cut" || i.confirmedCut === true;
         });
-        const uniqueRepeats = Array.from(new Map(repeats.map(i => [i.issueId || i.id, i])).values());
+        const uniqueRepeats = Array.from(new Map(repeats.map(i => [i.issueId || i.id, i])).values())
+          .sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
 
         // 5. 缺读待补项
         const missings = (plan.missing || []).concat(allIssues.filter(i => i.type === "missing" || i.action === "missing"))
           .filter(i => !window.__ignoredPolishIds.has(i.id) && !window.__ignoredPolishIds.has(i.issueId));
-        const uniqueMissings = Array.from(new Map(missings.map(i => [i.issueId || i.id, i])).values());
+        const uniqueMissings = Array.from(new Map(missings.map(i => [i.issueId || i.id, i])).values())
+          .sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
 
         // 6. 备注清理项
         const notes = (plan.strippedNotes || []).filter(i => !window.__ignoredPolishIds.has(i.id));
@@ -12371,10 +12374,13 @@
             const expected = item.expected || item.expectedText || "";
             const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, false, item.type);
 
+            const isAiHandled = item.suppressReview === true || item.action === "keep";
+            const aiLabel = isAiHandled ? `<span class="polish-badge ai-handled" style="background:#555;color:#ccc;margin-left:6px;font-size:10px">🤖 AI 已保留</span>` : "";
+
             cardsHtml.push(`
-              <div class="polish-card spoken-diff" data-polish-card-type="spoken-diff" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
+              <div class="polish-card spoken-diff${isAiHandled ? " ai-handled" : ""}" data-polish-card-type="spoken-diff" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}" data-ai-handled="${isAiHandled ? "1" : ""}" style="${isAiHandled ? "opacity:0.6;" : ""}">
                 <div class="polish-card-header">
-                  <div class="polish-card-title"><span class="polish-badge spoken-diff">读法差异</span></div>
+                  <div class="polish-card-title"><span class="polish-badge spoken-diff">读法差异</span>${aiLabel}</div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
                 <div class="diff-diagnosis spoken-diff">${escapeHtml(diagnosis)}</div>
@@ -12408,10 +12414,16 @@
             const expected = item.expected || item.expectedText || "";
             const { spokenHtml, expectedHtml, diagnosis } = computeTextDiffHtml(spoken, expected, false, "repeat");
 
+            const isAiHandled = item.suppressReview === true || item.action === "keep" || item.confirmedCut === true;
+            const aiLabel = isAiHandled
+              ? item.confirmedCut ? `<span class="polish-badge ai-handled" style="background:#555;color:#ccc;margin-left:6px;font-size:10px">🤖 AI 已切除</span>`
+              : `<span class="polish-badge ai-handled" style="background:#555;color:#ccc;margin-left:6px;font-size:10px">🤖 AI 已保留</span>`
+              : "";
+
             cardsHtml.push(`
-              <div class="polish-card repeat-suggest" data-polish-card-type="repeat-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}">
+              <div class="polish-card repeat-suggest${isAiHandled ? " ai-handled" : ""}" data-polish-card-type="repeat-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" data-start="${Number(item.start || 0)}" data-ai-handled="${isAiHandled ? "1" : ""}" style="${isAiHandled ? "opacity:0.6;" : ""}">
                 <div class="polish-card-header">
-                  <div class="polish-card-title"><span class="polish-badge repeat">重读卡壳</span></div>
+                  <div class="polish-card-title"><span class="polish-badge repeat">重读卡壳</span>${aiLabel}</div>
                   <span class="small" style="font-family:monospace; color:var(--muted);">${formatTime(Number(item.start || 0))}</span>
                 </div>
                 <div class="diff-diagnosis repeat">${escapeHtml(diagnosis)}</div>
@@ -12546,10 +12558,19 @@
           }
         }
 
-        if (!cardsHtml.length) {
+        // --- 分组：待人工在上，AI 已处理在下 ---
+        const manualCards = cardsHtml.filter(html => !html.includes('data-ai-handled="1"'));
+        const aiCards = cardsHtml.filter(html => html.includes('data-ai-handled="1"'));
+        let finalHtml = manualCards.join("");
+        if (aiCards.length) {
+          finalHtml += `<div class="ai-handled-separator" style="padding:8px 12px;margin:8px 0 4px;background:rgba(80,80,80,0.25);border-radius:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><span>🤖</span><span>AI 已处理 (${aiCards.length} 项) — 可点击覆盖 AI 决定</span></div>`;
+          finalHtml += aiCards.join("");
+        }
+
+        if (!finalHtml) {
           listEl.innerHTML = `<div class="small" style="text-align:center; padding:32px 0; color:var(--muted);">🎉 当前分类下没有待处理项目</div>`;
         } else {
-          listEl.innerHTML = cardsHtml.join("");
+          listEl.innerHTML = finalHtml;
         }
       }
 
