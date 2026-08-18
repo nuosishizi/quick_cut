@@ -9,15 +9,16 @@ try { chcp 65001 > $null } catch {}
 $Version = "2.7.41"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-macOS-$Version"
-$StageRoot = "D:\QuickCut-mac-pack"
-if (-not (Test-Path "D:\")) { $StageRoot = Join-Path $env:TEMP "QuickCut-mac-pack" }
+$tempBase = [System.IO.Path]::GetTempPath()
+$StageRoot = if (Test-Path "D:\") { "D:\QuickCut-mac-pack" } else { Join-Path $tempBase "QuickCut-mac-pack" }
 $Stage = Join-Path $StageRoot $AppName
-$Desktop = [Environment]::GetFolderPath("Desktop")
-$TargetDir = if ($OutDir -and (Test-Path $OutDir -IsValid)) {
+$desktop = [Environment]::GetFolderPath("Desktop")
+$fallbackDir = if ($desktop -and (Test-Path $desktop)) { $desktop } else { $ProjectRoot }
+$TargetDir = if ($OutDir) {
   if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
   (Resolve-Path $OutDir).Path
 } else {
-  $Desktop
+  $fallbackDir
 }
 $ZipPath = Join-Path $TargetDir "快剪-macOS-$Version-测试包.zip"
 

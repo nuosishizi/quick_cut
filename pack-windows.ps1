@@ -9,16 +9,17 @@ try { chcp 65001 > $null } catch {}
 $Version = "2.7.41"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-Windows-$Version"
-$StageRoot = "D:\QuickCut-win-pack"
-if (-not (Test-Path "D:\")) { $StageRoot = Join-Path $env:TEMP "QuickCut-win-pack" }
+$tempBase = [System.IO.Path]::GetTempPath()
+$StageRoot = if (Test-Path "D:\") { "D:\QuickCut-win-pack" } else { Join-Path $tempBase "QuickCut-win-pack" }
 $Stage = Join-Path $StageRoot $AppName
 $Cache = Join-Path $StageRoot "cache"
-$Desktop = [Environment]::GetFolderPath("Desktop")
-$TargetDir = if ($OutDir -and (Test-Path $OutDir -IsValid)) {
+$desktop = [Environment]::GetFolderPath("Desktop")
+$fallbackDir = if ($desktop -and (Test-Path $desktop)) { $desktop } else { $ProjectRoot }
+$TargetDir = if ($OutDir) {
   if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
   (Resolve-Path $OutDir).Path
 } else {
-  $Desktop
+  $fallbackDir
 }
 $ZipPath = Join-Path $TargetDir "快剪-Windows-$Version-测试包.zip"
 $NodeVersion = "22.18.0"
