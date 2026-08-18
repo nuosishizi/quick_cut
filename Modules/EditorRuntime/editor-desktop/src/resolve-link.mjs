@@ -230,11 +230,57 @@ export function tokenizeWordsFallback(text, start = 0, end = 1) {
   const startSec = Math.max(0, Number(start) || 0);
   const endSec = Math.max(startSec + 0.1, Number(end) || (startSec + 1));
   const duration = endSec - startSec;
-  const regex = /[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]|[\w'’]+|[^\s\w\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]+/gu;
-  const tokens = [];
+  const regex =
+    /\d+:\d+(?:-\d+)?|[\$¥€£]\d+(?:\.\d+)?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?(?:kg|km|m|cm|mm|px|ms|s)|[A-Za-z]\.(?:[A-Za-z]\.)+|[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]|[\w'’\-]+|[^\s\w\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/gu;
+  const rawTokens = [];
   let match;
   while ((match = regex.exec(str)) !== null) {
-    if (match[0].trim()) tokens.push(match[0]);
+    if (match[0].trim()) rawTokens.push(match[0]);
+  }
+  const tokens = [];
+  let prefix = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  const CLOSING_OR_PAUSE_PUNCT = /^["”’」』》〉）】〕〗)\]}。，、；：！？…—～.,!?:;-]$/u;
+  for (const token of rawTokens) {
+    if (/^[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\w]/u.test(token)) {
+      tokens.push(`${prefix}${token}`);
+      prefix = "";
+    } else if (token === '"') {
+      if (inDoubleQuote) {
+        if (tokens.length) tokens[tokens.length - 1] += token;
+        else prefix += token;
+        inDoubleQuote = false;
+      } else {
+        prefix += token;
+        inDoubleQuote = true;
+      }
+    } else if (token === "'") {
+      if (inSingleQuote) {
+        if (tokens.length) tokens[tokens.length - 1] += token;
+        else prefix += token;
+        inSingleQuote = false;
+      } else {
+        prefix += token;
+        inSingleQuote = true;
+      }
+    } else if (/^[“‘「『《〈（【〔〖(\[{]$/u.test(token)) {
+      prefix += token;
+      if (token === "“") inDoubleQuote = true;
+      if (token === "‘") inSingleQuote = true;
+    } else if (CLOSING_OR_PAUSE_PUNCT.test(token)) {
+      if (token === "”") inDoubleQuote = false;
+      if (token === "’") inSingleQuote = false;
+      if (tokens.length) tokens[tokens.length - 1] += token;
+      else prefix += token;
+    } else if (tokens.length) {
+      tokens[tokens.length - 1] += token;
+    } else {
+      prefix += token;
+    }
+  }
+  if (prefix && tokens.length) {
+    tokens[tokens.length - 1] += prefix;
   }
   if (!tokens.length) tokens.push(str);
   const totalChars = tokens.reduce((acc, t) => acc + t.length, 0);

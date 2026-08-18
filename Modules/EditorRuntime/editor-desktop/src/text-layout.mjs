@@ -123,6 +123,85 @@ export function captionSafeBoxWidth(input = {}) {
   return Math.max(80, boxed * 0.94);
 }
 
+export const KINSOKU_LINE_START_PROHIBITED = /^["”’」』》〉）】〕〗)\]}。，、；：！？…—～.,!?:;-]/u;
+export const KINSOKU_LINE_END_PROHIBITED = /["“‘「『《〈（【〔〖(\[{]$/u;
+
+export const SCRIPTURE_BOOK_PATTERN =
+  /^(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|1\s*Samuel|2\s*Samuel|1\s*Kings|2\s*Kings|1\s*Chronicles|2\s*Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song\s*of\s*Solomon|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts|Romans|1\s*Corinthians|2\s*Corinthians|Galatians|Ephesians|Philippians|Colossians|1\s*Thessalonians|2\s*Thessalonians|1\s*Timothy|2\s*Timothy|Titus|Philemon|Hebrews|James|1\s*Peter|2\s*Peter|1\s*John|2\s*John|3\s*John|Jude|Revelation|创世记|出埃及记|利未记|民数记|申命记|约书亚记|士师记|路得记|撒母耳记上|撒母耳记下|列王纪上|列王纪下|历代志上|历代志下|以斯拉记|尼希米记|以斯帖记|约伯记|诗篇|箴言|传道书|雅歌|以赛亚书|耶利米书|耶利米哀歌|以西结书|但以理书|何西阿书|约珥书|阿摩司书|俄巴底亚书|约拿书|弥迦书|那鸿书|哈巴谷书|西番雅书|哈该书|撒迦利亚书|玛拉基书|马太福音|马可福音|路加福音|约翰福音|使徒行传|罗马书|哥林多前书|哥林多后书|加拉太书|以弗所书|腓立比书|歌罗西书|帖撒罗尼迦前书|帖撒罗尼迦后书|提摩太前书|提摩太后书|提多书|腓利门书|希伯来书|雅各书|彼得前书|彼得后书|约翰一书|约翰二书|约翰三书|犹大书|启示录)$/i;
+
+export const CHAPTER_VERSE_PATTERN = /^\d+:\d+(?:-\d+)?$/;
+
+export function normalizeLanguagePunctuation(text) {
+  let str = String(text || "");
+  // Keep digit:digit (scripture e.g. 24:36, clock time e.g. 10:30) compact
+  str = str.replace(/(\d)\s*:\s*(\d)/g, "$1:$2");
+
+  // 1. English context: convert full-width Chinese punctuation adjacent to Latin letters/numbers to half-width
+  str = str.replace(/([a-zA-Z0-9])([，,])(?:\s*)([a-zA-Z0-9])/gu, "$1, $3");
+  str = str.replace(/([a-zA-Z])([：:])(?:\s*)([a-zA-Z0-9])/gu, "$1: $3");
+  str = str.replace(/(\d)([：:])(?:\s*)([a-zA-Z])/gu, "$1: $3");
+  str = str.replace(/([a-zA-Z0-9])([；;])(?:\s*)([a-zA-Z0-9])/gu, "$1; $3");
+  str = str.replace(/([a-zA-Z0-9])，/gu, "$1, ");
+  str = str.replace(/([a-zA-Z0-9])。/gu, "$1. ");
+  str = str.replace(/([a-zA-Z0-9])！/gu, "$1! ");
+  str = str.replace(/([a-zA-Z0-9])？/gu, "$1? ");
+  str = str.replace(/([a-zA-Z])：/gu, "$1: ");
+  str = str.replace(/([a-zA-Z0-9])；/gu, "$1; ");
+
+  // 2. Chinese context: convert half-width punctuation between/after CJK characters to full-width Chinese punctuation
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]),([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])/gu, "$1，$2");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]):([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])/gu, "$1：$2");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]);([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])/gu, "$1；$2");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]),(?!\s*[a-zA-Z0-9])/gu, "$1，");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])!(?!\s*[a-zA-Z0-9])/gu, "$1！");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])\?(?!\s*[a-zA-Z0-9])/gu, "$1？");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF];(?!\s*[a-zA-Z0-9]))/gu, "$1；");
+
+  // Clean redundant spaces before English punctuation
+  str = str.replace(/\s+([.,!?;:])/g, "$1");
+  // Clean redundant spaces around Chinese punctuation
+  str = str.replace(/\s*([，。、！？；：”’」』》〉）】〕〗])\s*/gu, "$1");
+  str = str.replace(/\s*([“‘「『《〈（【〔〖])\s*/gu, "$1");
+
+  return str;
+}
+
+export function formatPanguSpacing(text) {
+  let str = String(text || "");
+  str = str.replace(/([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])([a-zA-Z0-9])/gu, "$1 $2");
+  str = str.replace(/([a-zA-Z0-9])([\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF])/gu, "$1 $2");
+  str = str.replace(/ {2,}/g, " ");
+  return str;
+}
+
+export function stripTrailingCaptionPunctuation(text) {
+  return String(text || "")
+    .replace(/[，,。.]$/u, "")
+    .trim();
+}
+
+export function shouldCohesionStepBack(items, breakPoint, start) {
+  if (breakPoint <= start + 1) return false;
+  const curr = items[breakPoint];
+  const prev = items[breakPoint - 1];
+  const currDisp = typeof curr === "string" ? curr : (curr?.display || "");
+  const prevDisp = typeof prev === "string" ? prev : (prev?.display || "");
+
+  if (KINSOKU_LINE_END_PROHIBITED.test(prevDisp)) return true;
+  if (curr?.word?.keepWithPrevious || curr?.keepWithPrevious) return true;
+  if (/^\d+:$/.test(prevDisp) && /^\d+$/.test(currDisp)) return true;
+  if (/^\d+$/.test(prevDisp) && /^:\d+/.test(currDisp)) return true;
+  if (
+    (/^\d+:/.test(currDisp) || /^:\d+/.test(currDisp) || /^\d+$/.test(currDisp) || CHAPTER_VERSE_PATTERN.test(currDisp.replace(/^[^\d]+|[^\d]+$/g, ""))) &&
+    SCRIPTURE_BOOK_PATTERN.test(prevDisp.replace(/[^\p{L}\p{N}]/gu, ""))
+  ) {
+    return true;
+  }
+  if (KINSOKU_LINE_START_PROHIBITED.test(currDisp)) return true;
+
+  return false;
+}
+
 export function packWordsIntoLines(words = [], style = {}, maxWidth = 860, scale = 1) {
   const items = (words || [])
     .map((word, index) => ({
@@ -143,12 +222,16 @@ export function packWordsIntoLines(words = [], style = {}, maxWidth = 860, scale
       scale,
     );
     if (offset > start && candidate > maxWidth) {
+      let breakPoint = offset;
+      while (breakPoint > start + 1 && shouldCohesionStepBack(items, breakPoint, start)) {
+        breakPoint -= 1;
+      }
       lines.push({
         startIndex: start,
-        endIndex: offset,
-        words: items.slice(start, offset).map((entry) => entry.word),
+        endIndex: breakPoint,
+        words: items.slice(start, breakPoint).map((entry) => entry.word),
       });
-      start = offset;
+      start = breakPoint;
     }
   });
   lines.push({
@@ -173,8 +256,12 @@ export function wrapCaptionWordList(words = [], style = {}, boxWidth = 860, line
     const candidate = estimatedLineWidth(displays.slice(start, index + 1), style, fontSize, scale);
     const lastAllowed = limit > 0 && lines.length >= Math.max(0, limit - 1);
     if (index > start && candidate > maxWidth && !lastAllowed) {
-      lines.push(displays.slice(start, index));
-      start = index;
+      let breakPoint = index;
+      while (breakPoint > start + 1 && shouldCohesionStepBack(displays, breakPoint, start)) {
+        breakPoint -= 1;
+      }
+      lines.push(displays.slice(start, breakPoint));
+      start = breakPoint;
     }
   }
   lines.push(displays.slice(start));
@@ -289,10 +376,11 @@ export function layoutCaptionPaint(input = {}) {
   const limit = captionWrapLineLimit(input.lineMode ?? style.captionLines ?? 2);
   const maxWidth = Math.max(80, Number(input.boxWidth || 860));
   const widths = items.map((item) => measure(item.display));
+  const isZeroGapWord = (item) => /^[:;,.)!?]/.test(typeof item === "string" ? item : item?.display || "");
   const lineWidthOf = (from, to) => {
     let width = 0;
     for (let index = from; index < to; index += 1) {
-      width += widths[index] + (index > from ? gap : 0);
+      width += widths[index] + (index > from && !isZeroGapWord(items[index]) ? gap : 0);
     }
     return width;
   };
@@ -301,8 +389,12 @@ export function layoutCaptionPaint(input = {}) {
   for (let index = 0; index < items.length; index += 1) {
     const lastAllowed = limit > 0 && ranges.length >= Math.max(0, limit - 1);
     if (index > start && lineWidthOf(start, index + 1) > maxWidth && !lastAllowed) {
-      ranges.push([start, index]);
-      start = index;
+      let breakPoint = index;
+      while (breakPoint > start + 1 && shouldCohesionStepBack(items, breakPoint, start)) {
+        breakPoint -= 1;
+      }
+      ranges.push([start, breakPoint]);
+      start = breakPoint;
     }
   }
   ranges.push([start, items.length]);
@@ -331,11 +423,15 @@ export function layoutCaptionPaint(input = {}) {
     let x = padX;
     if (align === "center") x = padX + (contentWidth - line.width) / 2;
     else if (align === "right") x = padX + (contentWidth - line.width);
-    for (const word of line.words) {
+    for (let i = 0; i < line.words.length; i += 1) {
+      const word = line.words[i];
+      if (i > 0 && !isZeroGapWord(word)) {
+        x += gap;
+      }
       word.x = x;
       word.y = line.y;
       word.height = fontSize;
-      x += word.width + gap;
+      x += word.width;
     }
     line.x = line.words[0]?.x ?? padX;
     line.height = lineHeight;

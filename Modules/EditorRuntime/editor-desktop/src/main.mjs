@@ -380,13 +380,21 @@ function startAssetServer() {
         response.setHeader("Content-Type", "text/html; charset=utf-8");
         response.setHeader("Cache-Control", "no-store");
         response.writeHead(200);
-        response.end(embeddedHtml || "<html><body>编辑器正在启动…</body></html>");
+        try {
+          const freshHtml = fs.readFileSync(path.join(currentDir, "ui.html"), "utf8")
+            .replaceAll("__QUICKCUT_ICON__", iconUrl)
+            .replaceAll("__QUICKCUT_FILTER_PREVIEW__", filterPreviewUrl)
+            .replace("</head>", browserTextLayoutScript() + bridgeScript + "</head>");
+          response.end(freshHtml);
+        } catch {
+          response.end(embeddedHtml || "<html><body>编辑器正在启动…</body></html>");
+        }
         return;
       }
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.38" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.39" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1302,7 +1310,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.38",
+    version: "2.7.39",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),

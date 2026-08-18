@@ -712,10 +712,28 @@ test("timeline snapping aligns clip edges to other clips and the playhead", () =
   assert.match(ui, /id="snapGuide"/);
   assert.match(ui, /code === "KeyN" && !command/);
   assert.match(ui, /title="时间线吸附（N）"/);
-  assert.match(ui, /timelineDrag\.mainTrimTime = snapTime\(rawTime, clip\)/);
+  assert.match(ui, /timelineDrag\.mainTrimTime = clamp\(\s*snapTime\(rawTime, clip,/);
+  assert.match(ui, /excludeTimes: \[originTimeline\]/);
+  assert.match(ui, /Math\.min\(0\.15, secondsForPixels\)/);
+  assert.match(ui, /function mainTrimSourceBounds\(/);
   assert.match(ui, /snapGroupDelta\(\s*moving,/);
   assert.match(ui, /time = snapTime\(/);
   assert.match(ui, /靠近片段边缘和播放头会对齐/);
+});
+
+test("unlinked waveform trims use independent source edits instead of fake mute ranges", () => {
+  assert.match(ui, /function baseMainAudioClips\(/);
+  assert.match(ui, /mainAudioRemovals: state\.mainAudioRemovals/);
+  assert.match(ui, /mainAudioManualCuts: state\.mainAudioManualCuts/);
+  assert.match(ui, /prepareIndependentMainAudio\(\)/);
+  assert.match(ui, /state\.mainAudioRemovals = committed\.removals/);
+  assert.match(ui, /state\.mainAudioManualCuts = committed\.manualCuts/);
+  assert.match(ui, /const audioOnly = timelineDrag\.trimType === "audio" && !state\.avLinked/);
+  assert.doesNotMatch(
+    ui,
+    /timelineDrag\.trimType === "audio" && !state\.avLinked\)[\s\S]{0,260}state\.audioMutes\.push/,
+  );
+  assert.match(ui, /if \(mover\.type === "video"\)[\s\S]{0,260}else if \(mover\.type === "audio"\)/);
 });
 
 test("playhead split and blade work without selecting a real clip first", () => {

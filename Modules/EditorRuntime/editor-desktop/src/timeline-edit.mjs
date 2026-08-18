@@ -242,8 +242,14 @@ export function collectOverlayRippleHoles(items) {
     .sort((a, b) => b.start - a.start);
 }
 
-export function snapThresholdSeconds(zoom, minSeconds = 0.04, pixelWindow = 12) {
-  return Math.max(minSeconds, pixelWindow / Math.max(1, Number(zoom) || 1));
+export function snapThresholdSeconds(
+  zoom,
+  pixelWindow = 8,
+  maxSeconds = 0.15,
+  minSeconds = 1 / 120,
+) {
+  const secondsForPixels = pixelWindow / Math.max(1, Number(zoom) || 1);
+  return Math.max(minSeconds, Math.min(maxSeconds, secondsForPixels));
 }
 
 export function collectSnapPoints({ clips = [], extra = [], ignoreIds = new Set() } = {}) {
@@ -476,22 +482,82 @@ export function neighborClips(clip = {}, snapshot = []) {
   return { previous, next: nextAfter };
 }
 
-export function absorbTrimSourceRange(clip = {}, edge = "end", targetSource = 0, snapshot = []) {
-  const { previous, next } = neighborClips(clip, snapshot);
+function adjacentRemoval(removals = [], clip = {}, edge = "end") {
   const srcStart = Number(clip.sourceStart || 0);
   const srcEnd = Number(clip.sourceEnd || srcStart);
-  const target = Number(targetSource || 0);
-  if (edge === "end" && target < srcEnd - 0.002) {
-    const removeEnd = next ? Math.max(srcEnd, Number(next.sourceStart || srcEnd)) : srcEnd;
-    return { start: Math.max(srcStart + 0.04, target), end: removeEnd };
+  const tolerance = 0.01;
+  const candidates = (removals || [])
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => {
+      const start = Number(item?.start);
+      const end = Number(item?.end);
+      if (!(end > start + 0.002)) return false;
+      return edge === "start"
+        ? end >= srcStart - tolerance && start < srcStart - 0.002
+        : start <= srcEnd + tolerance && end > srcEnd + 0.002;
+    })
+    .sort((left, right) => {
+      const leftDistance = edge === "start"
+        ? Math.abs(Number(left.item.end) - srcStart)
+        : Math.abs(Number(left.item.start) - srcEnd);
+      const rightDistance = edge === "start"
+        ? Math.abs(Number(right.item.end) - srcStart)
+        : Math.abs(Number(right.item.start) - srcEnd);
+      return leftDistance - rightDistance;
+    });
+  return candidates[0] || null;
+}
+
+/**
+ * Resolve-style limits for one trim gesture. Outward trimming can consume
+ * only the deleted source handle immediately touching the selected edge. It
+ * can never jump across that handle and absorb a later clip.
+ */
+export function mainTrimSourceBounds({
+  removals = [],
+  clip = {},
+  edge = "end",
+  sourceDuration = 0,
+  snapshot = [],
+  mode = "ripple",
+  speed = 1,
+  minTimelineDuration = 0.04,
+} = {}) {
+  const rate = Math.max(0.05, Number(speed || 1));
+  const srcStart = Math.max(0, Number(clip.sourceStart || 0));
+  const srcEnd = Math.max(srcStart, Number(clip.sourceEnd || srcStart));
+  const sourceLimit = Math.max(srcEnd, Number(sourceDuration || 0));
+  const minSourceDuration = Math.max(0.002, Number(minTimelineDuration || 0.04) * rate);
+  const handle = adjacentRemoval(removals, clip, edge);
+
+  let min = edge === "start"
+    ? Math.max(0, Number(handle?.item?.start ?? srcStart))
+    : Math.min(srcEnd, srcStart + minSourceDuration);
+  let max = edge === "start"
+    ? Math.max(srcStart, srcEnd - minSourceDuration)
+    : Math.min(sourceLimit, Number(handle?.item?.end ?? srcEnd));
+
+  if (mode !== "ripple") {
+    const { previous, next } = neighborClips(clip, snapshot);
+    if (edge === "start" && previous) {
+      const gap = Math.max(0, Number(clip.start || 0) - Number(previous.end || 0));
+      min = Math.max(min, srcStart - gap * rate);
+    }
+    if (edge === "end" && next) {
+      const gap = Math.max(0, Number(next.start || 0) - Number(clip.end || 0));
+      max = Math.min(max, srcEnd + gap * rate);
+    }
   }
-  if (edge === "start" && target > srcStart + 0.002) {
-    const removeStart = previous
-      ? Math.min(srcStart, Number(previous.sourceEnd || srcStart))
-      : srcStart;
-    return { start: removeStart, end: Math.min(srcEnd - 0.04, target) };
-  }
-  return null;
+
+  min = Math.max(0, Math.min(min, srcEnd - minSourceDuration));
+  max = Math.min(sourceLimit, Math.max(max, srcStart + minSourceDuration));
+  return {
+    min,
+    max,
+    handleStart: handle ? Number(handle.item.start) : srcStart,
+    handleEnd: handle ? Number(handle.item.end) : srcEnd,
+    hasHandle: !!handle,
+  };
 }
 
 export function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1) {
@@ -533,13 +599,11 @@ export function collectMainMoveIds({
 }
 
 // ── Ripple-safe outward recovery ──────────────────────────────────
-// In ripple mode, extending a clip must only shrink the single removal
-// that directly borders the clip's source boundary.  applyMainTrimEdge
-// would remove ALL removals and manual cuts in the recovery range,
-// which merges separate clips and creates phantom fragments.
+// Extending a clip only consumes the deleted handle directly touching the
+// selected edge. Recovered frames join that clip; the far edit point survives.
 export function rippleRecoverAdjacentRemoval(removals = [], manualCuts = [], clip = {}, edge = "end", targetSource = 0, sourceDuration = 0) {
   const cleanRemovals = (removals || []).map((r) => ({ ...r }));
-  const cleanCuts = [...(manualCuts || [])];
+  let cleanCuts = [...(manualCuts || [])];
   const srcStart = Number(clip.sourceStart || 0);
   const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
   const maxDur = Math.max(srcEnd, Number(sourceDuration || 0));
@@ -547,43 +611,58 @@ export function rippleRecoverAdjacentRemoval(removals = [], manualCuts = [], cli
   let deltaSource = 0;
 
   if (edge === "end" && target > srcEnd + 0.002) {
-    // Find the removal whose range covers srcEnd (the clip's tail boundary)
-    const idx = cleanRemovals.findIndex((r) =>
-      r.start <= srcEnd + 0.05 && r.end > srcEnd + 0.002,
-    );
+    const idx = adjacentRemoval(cleanRemovals, clip, "end")?.index ?? -1;
     if (idx >= 0) {
       const adj = cleanRemovals[idx];
-      // Only extend into THIS removal — never past its end
-      const actualTarget = Math.min(target, adj.end);
+      const farBoundary = Number(adj.end);
+      const actualTarget = Math.min(target, farBoundary);
       deltaSource = actualTarget - srcEnd;
-      if (actualTarget >= adj.end - 0.002) {
-        cleanRemovals.splice(idx, 1); // fully consumed
+      if (actualTarget >= farBoundary - 0.002) {
+        cleanRemovals.splice(idx, 1);
+        if (farBoundary > 0.002 && farBoundary < maxDur - 0.002)
+          cleanCuts.push(farBoundary);
       } else {
-        adj.start = actualTarget; // partially consumed
+        adj.start = actualTarget;
       }
+      // Remove manual cuts at the old boundary and inside the recovered range
+      // [srcEnd, actualTarget) — but preserve the cut at actualTarget (next clip boundary)
+      cleanCuts = cleanCuts.filter((c) => {
+        const cv = Number(c);
+        return cv < srcEnd - 0.002 || cv >= actualTarget - 0.002;
+      });
     }
     // If no adjacent removal → source is already visible, no delta
   } else if (edge === "start" && target < srcStart - 0.002) {
-    // Find the removal whose range covers srcStart (the clip's head boundary)
-    const idx = cleanRemovals.findIndex((r) =>
-      r.end >= srcStart - 0.05 && r.start < srcStart - 0.002,
-    );
+    const idx = adjacentRemoval(cleanRemovals, clip, "start")?.index ?? -1;
     if (idx >= 0) {
       const adj = cleanRemovals[idx];
-      const actualTarget = Math.max(target, adj.start);
+      const farBoundary = Number(adj.start);
+      const actualTarget = Math.max(target, farBoundary);
       deltaSource = srcStart - actualTarget;
-      if (actualTarget <= adj.start + 0.002) {
+      if (actualTarget <= farBoundary + 0.002) {
         cleanRemovals.splice(idx, 1);
+        if (farBoundary > 0.002 && farBoundary < maxDur - 0.002)
+          cleanCuts.push(farBoundary);
       } else {
         adj.end = actualTarget;
       }
+      // Remove manual cuts at the old boundary and inside (actualTarget, srcStart]
+      cleanCuts = cleanCuts.filter((c) => {
+        const cv = Number(c);
+        return cv <= actualTarget + 0.002 || cv > srcStart + 0.002;
+      });
     }
   }
 
   return {
     removals: normalizeRemovalsList(cleanRemovals),
-    manualCuts: cleanCuts.sort((a, b) => a - b),
+    manualCuts: cleanCuts
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)
+      .filter((cut, index, list) => index === 0 || cut - list[index - 1] > 0.002),
     deltaSource,
+    targetSource: edge === "start" ? srcStart - deltaSource : srcEnd + deltaSource,
   };
 }
 
@@ -599,24 +678,34 @@ export function commitMainEdgeTrim({
   globalOffset = 0,
   speed = 1,
 } = {}) {
-  // Detect whether this is an outward extend (recovering removed material)
   const srcStart = Number(clip.sourceStart || 0);
   const srcEnd = Number(clip.sourceEnd || srcStart + 0.04);
+  const bounds = mainTrimSourceBounds({
+    removals,
+    clip,
+    edge,
+    sourceDuration,
+    snapshot,
+    mode,
+    speed,
+  });
+  const clampedTarget = Math.max(
+    bounds.min,
+    Math.min(bounds.max, Number(targetSource || 0)),
+  );
   const isOutwardExtend =
-    (edge === "end" && Number(targetSource) > srcEnd + 0.002) ||
-    (edge === "start" && Number(targetSource) < srcStart - 0.002);
+    (edge === "end" && clampedTarget > srcEnd + 0.002) ||
+    (edge === "start" && clampedTarget < srcStart - 0.002);
 
-  // In ripple mode, outward extends must use the targeted recovery that
-  // only shrinks the single adjacent removal.  applyMainTrimEdge would
-  // remove ALL removals and manual cuts in the range, merging clips and
-  // creating phantom fragments.
-  const trim = (mode === "ripple" && isOutwardExtend)
+  // Every outward trim uses the adjacent-handle path. The old greedy path
+  // crossed edit points and rebuilt the dragged frames as a separate sliver.
+  const trim = isOutwardExtend
     ? rippleRecoverAdjacentRemoval(
         removals,
         manualCuts,
         clip,
         edge,
-        targetSource,
+        clampedTarget,
         sourceDuration,
       )
     : applyMainTrimEdge(
@@ -624,31 +713,11 @@ export function commitMainEdgeTrim({
         manualCuts,
         clip,
         edge,
-        targetSource,
+        clampedTarget,
         sourceDuration,
       );
-  // In ripple mode the inter-clip gaps must be preserved so downstream
-  // tracks shift by exactly delta.  absorbTrimSourceRange is only needed
-  // in select ("trim") mode where the gap itself should vanish.
-  const absorbed = mode !== "ripple"
-    ? absorbTrimSourceRange(clip, edge, targetSource, snapshot)
-    : null;
   let nextRemovals = trim.removals;
   let nextCuts = trim.manualCuts;
-  if (absorbed && absorbed.end > absorbed.start + 0.002) {
-    // Clamp to clip's own source boundaries – never delete a neighbor's gap
-    const safeStart = Math.max(absorbed.start, Number(clip.sourceStart || 0));
-    const safeEnd = Math.min(absorbed.end, Number(clip.sourceEnd || absorbed.end));
-    if (safeEnd > safeStart + 0.002) {
-      nextRemovals = normalizeRemovalsList([
-        ...nextRemovals,
-        { start: safeStart, end: safeEnd, source: "edge-trim" },
-      ]);
-      nextCuts = (nextCuts || []).filter(
-        (cut) => Number(cut) <= safeStart + 0.002 || Number(cut) >= safeEnd - 0.002,
-      );
-    }
-  }
   let packed = buildPackedMainClips(
     nextRemovals,
     nextCuts,
@@ -660,6 +729,7 @@ export function commitMainEdgeTrim({
   nextRemovals = pruned.removals;
   nextCuts = pruned.manualCuts;
   const deltaTimeline = Number(trim.deltaSource || 0) / Math.max(0.05, Number(speed || 1));
+  const effectiveTargetSource = Number(trim.targetSource ?? clampedTarget);
   const offsets = rebuildClipOffsets({
     snapshot,
     packed,
@@ -667,7 +737,7 @@ export function commitMainEdgeTrim({
     mode,
     editedClip: clip,
     edge,
-    targetSource,
+    targetSource: effectiveTargetSource,
     speed,
     rippleFrom: Number(clip.start || 0),
   });
@@ -683,6 +753,8 @@ export function commitMainEdgeTrim({
     audioOffsets: { ...offsets },
     overlayFrom: window.from,
     overlayDelta: window.delta,
+    targetSource: effectiveTargetSource,
+    sourceBounds: bounds,
   };
 }
 
@@ -713,53 +785,30 @@ export function applyMainTrimEdge(removals = [], manualCuts = [], clip = {}, edg
   const clampedTarget = Math.max(0, Math.min(maxDur, Number(targetSource || 0)));
   let deltaSource = 0;
 
+  if (
+    (edge === "start" && clampedTarget < srcStart - 0.002) ||
+    (edge === "end" && clampedTarget > srcEnd + 0.002)
+  )
+    return rippleRecoverAdjacentRemoval(
+      removals,
+      manualCuts,
+      clip,
+      edge,
+      clampedTarget,
+      sourceDuration,
+    );
+
   if (edge === "start") {
     if (clampedTarget > srcStart + 0.002) {
       // Inward trim (cutting away head)
       cleanRemovals.push({ start: srcStart, end: Math.min(srcEnd - 0.04, clampedTarget), source: "edge-trim" });
       deltaSource = -(Math.min(srcEnd - 0.04, clampedTarget) - srcStart);
-    } else if (clampedTarget < srcStart - 0.002) {
-      // Outward trim (recovering earlier content)
-      const recoverStart = clampedTarget;
-      const recoverEnd = srcStart;
-      deltaSource = +(srcStart - recoverStart);
-      for (let i = cleanRemovals.length - 1; i >= 0; i--) {
-        const r = cleanRemovals[i];
-        if (r.end >= recoverStart && r.start <= recoverEnd) {
-          if (r.start >= recoverStart && r.end <= recoverEnd) {
-            cleanRemovals.splice(i, 1);
-          } else if (r.end > recoverStart && r.start < recoverStart) {
-            r.end = recoverStart;
-          } else if (r.start < recoverEnd && r.end > recoverEnd) {
-            r.start = recoverEnd;
-          }
-        }
-      }
-      cleanCuts = cleanCuts.filter((c) => c < recoverStart + 0.002 || c > recoverEnd - 0.002);
     }
   } else if (edge === "end") {
     if (clampedTarget < srcEnd - 0.002) {
       // Inward trim (cutting away tail)
       cleanRemovals.push({ start: Math.max(srcStart + 0.04, clampedTarget), end: srcEnd, source: "edge-trim" });
       deltaSource = -(srcEnd - Math.max(srcStart + 0.04, clampedTarget));
-    } else if (clampedTarget > srcEnd + 0.002) {
-      // Outward trim (recovering later content)
-      const recoverStart = srcEnd;
-      const recoverEnd = clampedTarget;
-      deltaSource = +(recoverEnd - srcEnd);
-      for (let i = cleanRemovals.length - 1; i >= 0; i--) {
-        const r = cleanRemovals[i];
-        if (r.end >= recoverStart && r.start <= recoverEnd) {
-          if (r.start >= recoverStart && r.end <= recoverEnd) {
-            cleanRemovals.splice(i, 1);
-          } else if (r.start < recoverStart && r.end > recoverStart) {
-            r.end = recoverStart;
-          } else if (r.start < recoverEnd && r.end > recoverEnd) {
-            r.start = recoverEnd;
-          }
-        }
-      }
-      cleanCuts = cleanCuts.filter((c) => c < recoverStart + 0.002 || c > recoverEnd - 0.002);
     }
   }
 
@@ -767,6 +816,7 @@ export function applyMainTrimEdge(removals = [], manualCuts = [], clip = {}, edg
     removals: normalizeRemovalsList(cleanRemovals),
     manualCuts: cleanCuts.sort((a, b) => a - b),
     deltaSource,
+    targetSource: clampedTarget,
   };
 }
 
@@ -831,4 +881,3 @@ export function rippleShiftAllTracks(collections = {}, fromTimelineTime = 0, del
   shiftList(collections.issues);
   return collections;
 }
-

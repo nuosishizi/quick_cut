@@ -33,8 +33,8 @@ import {
   overlayRippleWindow,
   matchClipBySource,
   collectMainMoveIds,
-  absorbTrimSourceRange,
   rippleRecoverAdjacentRemoval,
+  mainTrimSourceBounds,
 } from "../src/timeline-edit.mjs";
 
 test("linked selection only follows the same-source A/V group", () => {
@@ -246,7 +246,9 @@ test("caption split keeps later words on the right half", () => {
 });
 
 test("timeline snap sticks to nearby clip edges and the playhead", () => {
-  assert.ok(snapThresholdSeconds(60) <= 0.25);
+  assert.ok(snapThresholdSeconds(60) <= 8 / 60 + 0.0001);
+  assert.equal(snapThresholdSeconds(1), 0.15, "zoomed-out timelines must not snap across seconds");
+  assert.equal(snapValue(2.16, [2], snapThresholdSeconds(1)).snapped, false);
   const points = collectSnapPoints({
     clips: [
       { id: "keep", start: 2, end: 4 },
@@ -393,10 +395,6 @@ test("ripple tail trim does not leave a sliver clip between neighbors", () => {
     { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
     { id: "v-10.0300-20.0000", sourceStart: 10.03, sourceEnd: 20, start: 10, end: 19.97 },
   ];
-  const absorbed = absorbTrimSourceRange(snapshot[0], "end", 8, snapshot);
-  assert.ok(absorbed);
-  assert.equal(absorbed.start, 8);
-  assert.ok(absorbed.end >= 10.03);
   const result = commitMainEdgeTrim({
     removals: [],
     manualCuts: [10, 10.03],
@@ -416,10 +414,11 @@ test("ripple tail trim does not leave a sliver clip between neighbors", () => {
   assert.ok(Math.abs(laterStart - trimmedEnd) < 0.05);
 });
 
-test("ripple extend tail only shrinks the adjacent removal and never creates phantom fragments", () => {
+test("ripple extend tail removes boundary cut and never creates phantom fragments", () => {
   // Scenario: 3 clips with gaps (removals) between them.
-  // Extending clip A's tail should only eat into removal [10, 15],
-  // NOT touch removal [25, 30] or manual cuts, and NOT create new clips.
+  // The manual cut at source 10 defines the boundary of clip A.
+  // When extending clip A's tail, the cut at 10 must be removed so the
+  // recovered material merges into clip A — NOT appear as a phantom fragment.
   const snapshot = [
     { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
     { id: "v-15.0000-25.0000", sourceStart: 15, sourceEnd: 25, start: 10, end: 20 },
@@ -429,7 +428,8 @@ test("ripple extend tail only shrinks the adjacent removal and never creates pha
     { start: 10, end: 15, source: "pause" },
     { start: 25, end: 30, source: "pause" },
   ];
-  const manualCuts = [15, 30];
+  // Manual cut at 10 = clip A boundary, 15 = clip B start, 30 = clip C start
+  const manualCuts = [10, 15, 30];
 
   // Extend clip A from source 10 to source 18 (into the [10,15] gap)
   const result = commitMainEdgeTrim({
@@ -447,16 +447,26 @@ test("ripple extend tail only shrinks the adjacent removal and never creates pha
   // but rippleRecoverAdjacentRemoval caps at the removal's end, so delta=5
   assert.equal(result.deltaSource, 5, "delta should be capped at removal boundary");
 
+  // The manual cut at 10 (clip boundary) must be REMOVED — this is the
+  // root cause of the phantom fragment bug
+  assert.ok(!result.manualCuts.includes(10),
+    "manual cut at clip boundary (10) must be removed to prevent phantom fragment");
+
   // The second removal [25,30] must survive untouched
   const secondRemoval = result.removals.find((r) => r.start >= 24 && r.end <= 31);
   assert.ok(secondRemoval, "second removal [25,30] must survive");
 
-  // Manual cuts must be preserved
-  assert.ok(result.manualCuts.includes(15) || result.manualCuts.includes(30),
-    "manual cuts must not be deleted by ripple extend");
+  // Downstream manual cut at 30 must survive
+  assert.ok(result.manualCuts.includes(30),
+    "downstream manual cut (30) must be preserved");
 
   // No phantom fragments — clip count should stay at 3
   assert.equal(result.packed.length, 3, "must not create phantom fragments");
+
+  // The first clip should now cover source [0, 15] (fully consumed the gap)
+  const firstClip = result.packed[0];
+  assert.ok(firstClip.sourceStart < 0.01, "first clip starts at source 0");
+  assert.ok(firstClip.sourceEnd > 14.9, "first clip extends to source ~15 (entire gap consumed)");
 
   // The downstream clips must shift forward by delta/speed
   const overlayDelta = result.overlayDelta;
@@ -473,8 +483,108 @@ test("ripple extend tail only shrinks the adjacent removal and never creates pha
     40,
   );
   assert.equal(directResult.deltaSource, 5, "direct call: delta capped at adj removal end");
+  assert.ok(!directResult.manualCuts.includes(10),
+    "direct call: boundary cut at 10 must be removed");
   assert.ok(directResult.removals.some((r) => r.start >= 24),
     "direct call: second removal [25,30] must survive");
+
+  // Verify head-side extend removes boundary cut too
+  const headResult = rippleRecoverAdjacentRemoval(
+    [{ start: 5, end: 15, source: "pause" }],
+    [15],
+    snapshot[1],
+    "start",
+    10,
+    40,
+  );
+  assert.ok(headResult.deltaSource > 4.9, "head extend: recovers ~5s");
+  assert.ok(!headResult.manualCuts.includes(15),
+    "head extend: boundary cut at 15 must be removed");
+});
+
+test("full tail recovery extends the same clip and preserves the untouched next clip", () => {
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-15.0000-25.0000", sourceStart: 15, sourceEnd: 25, start: 10, end: 20 },
+    { id: "v-30.0000-40.0000", sourceStart: 30, sourceEnd: 40, start: 20, end: 30 },
+  ];
+  const removals = [
+    { start: 10, end: 15, source: "pause" },
+    { start: 25, end: 30, source: "pause" },
+  ];
+  const result = commitMainEdgeTrim({
+    removals,
+    manualCuts: [],
+    clip: snapshot[0],
+    edge: "end",
+    targetSource: 50,
+    sourceDuration: 40,
+    mode: "ripple",
+    snapshot,
+  });
+
+  assert.equal(result.targetSource, 15, "the trim stops at the adjacent source handle");
+  assert.equal(result.packed.length, 3, "the next clip must not merge into the edited clip");
+  assert.deepEqual(
+    result.packed.map((clip) => [clip.sourceStart, clip.sourceEnd]),
+    [[0, 15], [15, 25], [30, 40]],
+  );
+  assert.ok(result.manualCuts.some((cut) => Math.abs(cut - 15) < 0.002));
+  assert.ok(result.removals.some((item) => item.start === 25 && item.end === 30));
+});
+
+test("partial recovery deletes the obsolete cut instead of creating a dragged-length sliver", () => {
+  const snapshot = [
+    { id: "v-0.0000-10.0000", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 },
+    { id: "v-15.0000-25.0000", sourceStart: 15, sourceEnd: 25, start: 10, end: 20 },
+  ];
+  const result = commitMainEdgeTrim({
+    removals: [{ start: 10, end: 15, source: "pause" }],
+    manualCuts: [10],
+    clip: snapshot[0],
+    edge: "end",
+    targetSource: 12,
+    sourceDuration: 25,
+    mode: "ripple",
+    snapshot,
+  });
+
+  assert.deepEqual(
+    result.packed.map((clip) => [clip.sourceStart, clip.sourceEnd]),
+    [[0, 12], [15, 25]],
+  );
+  assert.ok(!result.manualCuts.some((cut) => Math.abs(cut - 10) < 0.002));
+});
+
+test("trim source bounds require a real adjacent handle and selection mode also respects the gap", () => {
+  const clip = { id: "a", sourceStart: 0, sourceEnd: 10, start: 0, end: 10 };
+  const next = { id: "b", sourceStart: 15, sourceEnd: 25, start: 13, end: 23 };
+  const ripple = mainTrimSourceBounds({
+    removals: [{ start: 10, end: 15 }],
+    clip,
+    edge: "end",
+    sourceDuration: 25,
+    snapshot: [clip, next],
+    mode: "ripple",
+  });
+  assert.equal(ripple.max, 15);
+  const select = mainTrimSourceBounds({
+    removals: [{ start: 10, end: 15 }],
+    clip,
+    edge: "end",
+    sourceDuration: 25,
+    snapshot: [clip, next],
+    mode: "trim",
+  });
+  assert.equal(select.max, 13, "selection trim cannot overwrite the stationary next clip");
+  const noHandle = mainTrimSourceBounds({
+    removals: [{ start: 20, end: 22 }],
+    clip,
+    edge: "end",
+    sourceDuration: 25,
+    mode: "ripple",
+  });
+  assert.equal(noHandle.max, 10, "a distant deletion is not an extension handle");
 });
 
 test("shift-drag selection moves every selected main clip id", () => {
@@ -568,5 +678,3 @@ test("rippleShiftAllTracks shifts captions, words, issues and overlays seamlessl
   assert.equal(state.issues[0].start, 13.5);
   assert.equal(state.audioMutes[0].start, 13);
 });
-
-

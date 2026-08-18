@@ -3,9 +3,14 @@ import {
   captionSafeBoxWidth,
   captionWrapLineLimit,
   packWordsIntoLines,
+  normalizeLanguagePunctuation,
+  formatPanguSpacing,
+  stripTrailingCaptionPunctuation,
 } from "./text-layout.mjs";
 
-const wordPattern = /[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
+export const ATOMIC_WORD_PATTERN =
+  /[\$¥€£]\d+(?:\.\d+)?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?(?:kg|km|m|cm|mm|px|ms|s)|[A-Za-z]\.(?:[A-Za-z]\.)+|[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
+const wordPattern = ATOMIC_WORD_PATTERN;
 const numberWords = new Map(
   Object.entries({
     zero: "0",
@@ -244,10 +249,18 @@ function comparisonStem(value) {
   return word;
 }
 
-function displayWords(text) {
+const OPENING_PUNCT_PATTERN = /^["“‘「『《〈（【〔〖(\[{]$/u;
+const CLOSING_OR_PAUSE_PUNCT_PATTERN = /^["”’」』》〉）】〕〗)\]}。，、；：！？…—～.,!?:;-]$/u;
+
+export function displayWords(text) {
   const output = [];
   let prefix = "";
-  for (const token of String(text || "").match(wordPattern) || []) {
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  const rawTokens = String(text || "").match(wordPattern) || [];
+
+  for (let i = 0; i < rawTokens.length; i += 1) {
+    const token = rawTokens[i];
     const norm = normalizeWord(token);
     if (norm) {
       const item = { display: `${prefix}${token}`, norm };
@@ -255,8 +268,50 @@ function displayWords(text) {
       if (expansion) item.expansion = expansion;
       output.push(item);
       prefix = "";
-    } else if (/^[\"“‘(\[]$/.test(token)) prefix += token;
-    else if (output.length) output.at(-1).display += token;
+    } else if (token === '"') {
+      if (inDoubleQuote) {
+        if (output.length) {
+          output.at(-1).display += token;
+        } else {
+          prefix += token;
+        }
+        inDoubleQuote = false;
+      } else {
+        prefix += token;
+        inDoubleQuote = true;
+      }
+    } else if (token === "'") {
+      if (inSingleQuote) {
+        if (output.length) {
+          output.at(-1).display += token;
+        } else {
+          prefix += token;
+        }
+        inSingleQuote = false;
+      } else {
+        prefix += token;
+        inSingleQuote = true;
+      }
+    } else if (/^[“‘「『《〈（【〔〖(\[{]$/u.test(token)) {
+      prefix += token;
+      if (token === "“") inDoubleQuote = true;
+      if (token === "‘") inSingleQuote = true;
+    } else if (CLOSING_OR_PAUSE_PUNCT_PATTERN.test(token)) {
+      if (token === "”") inDoubleQuote = false;
+      if (token === "’") inSingleQuote = false;
+      if (output.length) {
+        output.at(-1).display += token;
+      } else {
+        prefix += token;
+      }
+    } else if (output.length) {
+      output.at(-1).display += token;
+    } else {
+      prefix += token;
+    }
+  }
+  if (prefix && output.length) {
+    output.at(-1).display += prefix;
   }
   const merged = [];
   for (let index = 0; index < output.length; index += 1) {
@@ -365,8 +420,8 @@ function markStrictScriptWords(words = []) {
   let inStrictQuote = false;
   let quoteStartedAt = -1;
   const recent = [];
-  const hasOpenQuote = (display) => /[“"]/u.test(String(display || ""));
-  const hasCloseQuote = (display) => /[”]/u.test(String(display || ""));
+  const hasOpenQuote = (display) => /[“"「『《〈（【〔〖(\[{]/u.test(String(display || ""));
+  const hasCloseQuote = (display) => /[”"’」』》〉）】〕〗)\]}]/u.test(String(display || ""));
   const straightQuotes = (display) => (String(display || "").match(/"/g) || []).length;
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index];
@@ -376,21 +431,22 @@ function markStrictScriptWords(words = []) {
     if (word.scriptureReference) pendingScriptureQuote = true;
     const opens = hasOpenQuote(word.display);
     const straight = straightQuotes(word.display);
-    // displayWords attaches a straight closing quote to the next token.  Close
-    // the strict region before that next token is marked.
-    if (inStrictQuote && straight > 0 && index > quoteStartedAt) {
-      inStrictQuote = false; quoteStartedAt = -1;
-    }
     if (!inStrictQuote && (pendingGodQuote || pendingScriptureQuote) && (opens || straight > 0)) {
-      inStrictQuote = true; quoteStartedAt = index; pendingGodQuote = false; pendingScriptureQuote = false;
+      inStrictQuote = true;
+      quoteStartedAt = index;
+      pendingGodQuote = false;
+      pendingScriptureQuote = false;
     }
     if (inStrictQuote) {
       word.strict = true;
       word.scripture = true;
     }
     const closesCurly = hasCloseQuote(word.display);
-    const closesStraight = inStrictQuote && straight >= 2;
-    if (inStrictQuote && (closesCurly || closesStraight)) { inStrictQuote = false; quoteStartedAt = -1; }
+    const closesStraight = inStrictQuote && (index > quoteStartedAt ? straight > 0 : straight >= 2);
+    if (inStrictQuote && (closesCurly || closesStraight)) {
+      inStrictQuote = false;
+      quoteStartedAt = -1;
+    }
     if (pendingGodQuote && recent.length >= 5 && !recent.includes("god")) pendingGodQuote = false;
   }
   return words;
@@ -428,8 +484,8 @@ export function scriptWords(script) {
 
 export function endsCaptionSentence(display) {
   const text = String(display || "").trim();
-  if (!/[.!?…]/.test(text)) return false;
-  return /[.!?…][\"”’')\]]*$/.test(text);
+  if (!/[.!?…\u3002\uff01\uff1f]/.test(text)) return false;
+  return /[.!?…\u3002\uff01\uff1f]["”’」』》〉）】〕〗)\]}'\u201d\u2019]*$/u.test(text);
 }
 
 export function captionLineCharLimit(mode, lineChars = 34) {
@@ -567,13 +623,27 @@ export function regroupProjectCaptions(captions = [], options = {}) {
   return regroupCaptions(words, options);
 }
 
-export function formatDisplayWords(words = []) {
-  return words
-    .map((word) => word?.display || "")
-    .filter(Boolean)
+export function formatDisplayWords(words = [], options = {}) {
+  const displays = words
+    .map((word) => (typeof word === "string" ? word : word?.display || ""))
+    .filter(Boolean);
+  if (!displays.length) return "";
+
+  let text = displays
     .join(" ")
-    .replace(/\s+([.,!?;:])/g, "$1")
+    .replace(/\s+([.,!?;:，。、！？；：”’」』》〉）】〕〗\)\}])/gu, "$1")
+    .replace(/([“‘「『《〈（【〔〖(\[{])\s+/gu, "$1")
+    .replace(/:\s+(?=\d)/g, ":")
     .replace(/([\-–—])\s+(?=\d)/g, "$1");
+
+  text = normalizeLanguagePunctuation(text);
+  text = formatPanguSpacing(text);
+
+  if (options && options.stripTrailingPunctuation) {
+    text = stripTrailingCaptionPunctuation(text);
+  }
+
+  return text;
 }
 
 function characterSimilarity(left, right) {
@@ -1848,10 +1918,8 @@ export function buildCaptions(expectedWords, options = {}) {
     const timingGap = priorWord
       ? Number(word.start || 0) - Number(priorWord.end || 0)
       : 0;
-    const priorEnds = /[.!?][\"'\u201d\u2019)]*$/.test(
-      priorWord?.display || "",
-    );
-    const priorClauseEnds = /[,;:—–-][\"'\u201d\u2019)]*$/.test(
+    const priorEnds = endsCaptionSentence(priorWord?.display || "");
+    const priorClauseEnds = /[,;:—–-，、；：]["'\u201d\u2019」』》〉）】〕〗)]*$/u.test(
       priorWord?.display || "",
     );
     const keepReferenceTogether = !!word.keepWithPrevious;
@@ -1883,15 +1951,15 @@ export function buildCaptions(expectedWords, options = {}) {
       ? Number(caption.start) - Number(previous.end)
       : Infinity;
     const singleton = caption.words[0]?.display || "";
-    const closesSentence = /[.!?][\"'\u201d\u2019)]*$/.test(singleton);
-    const previousClosesSentence = /[.!?][\"'\u201d\u2019)]*$/.test(
+    const closesSentence = endsCaptionSentence(singleton);
+    const previousClosesSentence = endsCaptionSentence(
       previous?.words?.at(-1)?.display || "",
     );
     const joinsNext = /^(?:and|but|or|so|because|for|yet|then|when|while|if|that|which|who)$/i.test(
       singleton.replace(/[^\p{L}]/gu, ""),
     );
     const shortCloser = /^(?:me|you|it|us|him|her|them)[.!?]["'\u201d\u2019)]*$/i.test(
-      singleton.replace(/^[\"“]+/, ""),
+      singleton.replace(/^["“]+/, ""),
     );
     const canMergePrevious =
       previous &&

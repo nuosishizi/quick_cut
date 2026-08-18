@@ -545,7 +545,8 @@ const MERGEABLE_ASIDES = new Set(
   ),
 );
 
-const SPOKEN_WORD_PATTERN = /[\p{L}\p{N}]+(?:[’'][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
+const SPOKEN_WORD_PATTERN =
+  /\d+:\d+(?:-\d+)?|[\$¥€£]\d+(?:\.\d+)?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?(?:kg|km|m|cm|mm|px|ms|s)|[A-Za-z]\.(?:[A-Za-z]\.)+|[\p{L}\p{N}]+(?:[’'\-][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
 
 function cloneCaptions(captions = []) {
   return (captions || []).map((caption) => ({
@@ -775,9 +776,49 @@ export function stripCaptionNotes(captions = [], issues = []) {
 function tokenizeSpokenDisplay(text) {
   const displays = String(text || "").match(SPOKEN_WORD_PATTERN) || [];
   const tokens = [];
-  for (const display of displays) {
-    if (/^[.,!?;:)]$/.test(display) && tokens.length) tokens.at(-1).display += display;
-    else if (!/^["“‘(]$/.test(display)) tokens.push({ display });
+  let prefix = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  const CLOSING_OR_PAUSE_PUNCT = /^["”’」』》〉）】〕〗)\]}。，、；：！？…—～.,!?:;-]$/u;
+  for (const token of displays) {
+    if (/^[\p{L}\p{N}]/u.test(token)) {
+      tokens.push({ display: `${prefix}${token}` });
+      prefix = "";
+    } else if (token === '"') {
+      if (inDoubleQuote) {
+        if (tokens.length) tokens.at(-1).display += token;
+        else prefix += token;
+        inDoubleQuote = false;
+      } else {
+        prefix += token;
+        inDoubleQuote = true;
+      }
+    } else if (token === "'") {
+      if (inSingleQuote) {
+        if (tokens.length) tokens.at(-1).display += token;
+        else prefix += token;
+        inSingleQuote = false;
+      } else {
+        prefix += token;
+        inSingleQuote = true;
+      }
+    } else if (/^[“‘「『《〈（【〔〖(\[{]$/u.test(token)) {
+      prefix += token;
+      if (token === "“") inDoubleQuote = true;
+      if (token === "‘") inSingleQuote = true;
+    } else if (CLOSING_OR_PAUSE_PUNCT.test(token)) {
+      if (token === "”") inDoubleQuote = false;
+      if (token === "’") inSingleQuote = false;
+      if (tokens.length) tokens.at(-1).display += token;
+      else prefix += token;
+    } else if (tokens.length) {
+      tokens.at(-1).display += token;
+    } else {
+      prefix += token;
+    }
+  }
+  if (prefix && tokens.length) {
+    tokens.at(-1).display += prefix;
   }
   return tokens;
 }
