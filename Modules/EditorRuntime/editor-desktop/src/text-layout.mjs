@@ -16,7 +16,7 @@ export function normalizedFontWeight(value) {
 export function wordGap(style, fontSize) {
   const size = Math.max(10, Number(fontSize || 54));
   return Math.max(
-    4,
+    0,
     size * (CAPTION_WORD_SPACE_EM + CAPTION_WORD_MARGIN_EM) + Number(style?.wordSpacing || 0),
   );
 }
@@ -37,7 +37,7 @@ export function estimatedWordWidth(word, style, fontSize, scale = 1) {
     return sum + size * 0.62;
   }, 0);
   return Math.max(
-    size * 0.3,
+    size * 0.15,
     glyphWidth * weightScale + Math.max(0, chars.length - 1) * letterSpacing + stroke * 2,
   );
 }
@@ -56,7 +56,7 @@ export function paintedWordWidth(word, style, fontSize, scale = 1) {
     if (/[A-Z0-9]/.test(ch)) return sum + size * 0.56;
     return sum + size * 0.48;
   }, 0);
-  return Math.max(size * 0.26, glyphWidth * weightScale + Math.max(0, chars.length - 1) * letterSpacing);
+  return Math.max(size * 0.15, glyphWidth * weightScale + Math.max(0, chars.length - 1) * letterSpacing);
 }
 
 export function paintedLineWidth(displays = [], style = {}, fontSize, scale = 1) {

@@ -209,6 +209,39 @@ test("layoutCaptionPaint keeps Jude 1:7 together and never starts line with :7",
   assert.ok(!line2_2.startsWith(":7"), "Line 2 must never start with :7");
 });
 
+test("wordGap and letterSpacing support relaxed ranges and 0px tight contact", async () => {
+  const { wordGap, paintedWordWidth, layoutCaptionPaint } = await import("../src/text-layout.mjs");
+
+  // Negative wordSpacing allows gap to reduce cleanly down to 0px
+  const gap0 = wordGap({ wordSpacing: -60 }, 54);
+  assert.equal(gap0, 0, "Word gap should reach 0px when wordSpacing is dialed down");
+
+  const gapWide = wordGap({ wordSpacing: 100 }, 54);
+  assert.ok(gapWide > 100, "Word gap should expand cleanly when wordSpacing is positive");
+
+  // Negative letterSpacing tightens word width safely
+  const normalWidth = paintedWordWidth("QuickCut", { letterSpacing: 0 }, 54);
+  const compactWidth = paintedWordWidth("QuickCut", { letterSpacing: -10 }, 54);
+  const extremeCompactWidth = paintedWordWidth("QuickCut", { letterSpacing: -30 }, 54);
+
+  assert.ok(compactWidth < normalWidth, "Negative letter spacing must reduce word width");
+  assert.ok(extremeCompactWidth > 0, "Negative letter spacing must remain positive and non-zero");
+
+  // Layout with 0px word gap packs words tightly
+  const layout = layoutCaptionPaint({
+    words: [{ display: "Hello" }, { display: "World" }],
+    style: { fontSize: 54, wordSpacing: -60 },
+    gap: 0,
+    boxWidth: 800,
+  });
+  assert.equal(layout.lines.length, 1);
+  const word1 = layout.lines[0].words[0];
+  const word2 = layout.lines[0].words[1];
+  // With 0 gap, word2 starts immediately at word1.x + word1.width
+  assert.equal(Math.round(word2.x), Math.round(word1.x + word1.width));
+});
+
+
 
 
 

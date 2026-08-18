@@ -3644,13 +3644,13 @@
                     <div class="fieldhead">
                       <span>字间距</span><output id="letterSpacingOut">0px</output>
                     </div>
-                    <input class="range" id="letterSpacing" type="range" min="-10" max="40" step="1" value="0" />
+                    <input class="range" id="letterSpacing" type="range" min="-30" max="100" step="1" value="0" />
                   </div>
                   <div class="field">
                     <div class="fieldhead">
                       <span>词间距</span><output id="wordSpacingOut">0px</output>
                     </div>
-                    <input class="range" id="wordSpacing" type="range" min="-5" max="80" step="1" value="0" />
+                    <input class="range" id="wordSpacing" type="range" min="-60" max="120" step="1" value="0" />
                   </div>
                   <div class="field">
                     <div class="fieldhead">
@@ -8805,7 +8805,7 @@
       }
       function captionCanvasGap(style, fontSize) {
         const space = measureCaptionWord(" ", { ...style, letterSpacing: 0 }, fontSize);
-        return space + fontSize * 0.24 + Number(style?.wordSpacing || 0);
+        return Math.max(0, space + fontSize * 0.12 + Number(style?.wordSpacing || 0));
       }
       function layoutCaptionForCanvas(caption, style, boxWidth, scale = 1) {
         const api = captionTextLayout();
