@@ -62,13 +62,37 @@ Copy-Item -Recurse (Join-Path $EditorSrc "src") (Join-Path $EditorDst "src")
 Copy-Item -Recurse (Join-Path $EditorSrc "assets") (Join-Path $EditorDst "assets")
 
 Info "Copying Windows FFmpeg..."
-if (-not (Test-Path (Join-Path $LocalFfmpegBin "ffmpeg.exe"))) {
-  Fail "Local FFmpeg not found at $LocalFfmpegBin"
+$foundFfmpeg = $false
+if (Test-Path (Join-Path $LocalFfmpegBin "ffmpeg.exe")) {
+  Get-ChildItem $LocalFfmpegBin -File | Where-Object { $_.Name -ne "ffplay.exe" } | ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
+  }
+  $foundFfmpeg = $true
+} else {
+  $cmdFfmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue)?.Source
+  if ($cmdFfmpeg) {
+    $cmdDir = Split-Path $cmdFfmpeg
+    Get-ChildItem $cmdDir -File | Where-Object { $_.Name -match "ffmpeg|ffprobe|.*\.dll" -and $_.Name -ne "ffplay.exe" } | ForEach-Object {
+      Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
+    }
+    $foundFfmpeg = $true
+  }
 }
-Get-ChildItem $LocalFfmpegBin -File | Where-Object {
-  $_.Name -ne "ffplay.exe"
-} | ForEach-Object {
-  Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
+if (-not $foundFfmpeg) {
+  Info "Fetching Gyan Windows FFmpeg essentials build..."
+  $ffmpegZip = Join-Path $Cache "ffmpeg-release-essentials.zip"
+  Download-File "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" $ffmpegZip
+  Expand-Archive -Path $ffmpegZip -DestinationPath $Cache -Force
+  $extractedBin = (Get-ChildItem $Cache -Directory -Filter "ffmpeg-*-essentials_build" | Select-Object -First 1)
+  if ($extractedBin) {
+    Get-ChildItem (Join-Path $extractedBin.FullName "bin") -File | Where-Object { $_.Name -ne "ffplay.exe" } | ForEach-Object {
+      Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
+    }
+    $foundFfmpeg = $true
+  }
+}
+if (-not (Test-Path (Join-Path $MediaDst "ffmpeg.exe"))) {
+  Fail "Could not locate or obtain FFmpeg binaries for Windows."
 }
 $LocalMedia = Join-Path $ProjectRoot "Modules\EditorRuntime\media"
 if (Test-Path $LocalMedia) {

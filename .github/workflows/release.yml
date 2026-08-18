@@ -8,12 +8,13 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            script: .\pack-windows.ps1
+            script: ./pack-windows.ps1
           - os: macos-latest
-            script: .\pack-macos.ps1
+            script: ./pack-macos.ps1
     runs-on: ${{ matrix.os }}
     permissions:
       id-token: write
@@ -29,6 +30,13 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
+      - name: Setup Bun (macOS)
+        if: runner.os == 'macOS'
+        uses: oven-sh/setup-bun@v2
+
       - name: Run Test Suite
         shell: pwsh
         run: |
@@ -39,17 +47,6 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "dist" | Out-Null
-          if ($IsWindows) {
-            $ffmpegPath = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue)?.Source
-            if ($ffmpegPath) {
-              $ffmpegDir = Split-Path $ffmpegPath
-              if (-not (Test-Path "C:\ffmpeg-master-latest-win64-gpl-shared\bin")) {
-                New-Item -ItemType Directory -Force -Path "C:\ffmpeg-master-latest-win64-gpl-shared\bin" | Out-Null
-                Copy-Item (Join-Path $ffmpegDir "ffmpeg.exe") "C:\ffmpeg-master-latest-win64-gpl-shared\bin\" -Force
-                Copy-Item (Join-Path $ffmpegDir "ffprobe.exe") "C:\ffmpeg-master-latest-win64-gpl-shared\bin\" -Force -ErrorAction SilentlyContinue
-              }
-            }
-          }
           pwsh -ExecutionPolicy Bypass -File ${{ matrix.script }} -OutDir dist
 
       - name: Attest Build Provenance

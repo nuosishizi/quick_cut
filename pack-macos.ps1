@@ -27,10 +27,68 @@ function Fail([string]$Message) { Write-Host $Message -ForegroundColor Red; exit
 if (Test-Path $Stage) { Remove-Item -Recurse -Force $Stage }
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 
-$RuntimeSrc = Join-Path $ProjectRoot "Modules\EditorRuntime"
-$Bun = Join-Path $RuntimeSrc "runtime\bun-arm64"
-$Ffmpeg = Join-Path $RuntimeSrc "media\ffmpeg"
-$Ffprobe = Join-Path $RuntimeSrc "media\ffprobe"
+$RuntimeSrc = Join-Path $ProjectRoot "Modules/EditorRuntime"
+$Bun = Join-Path $RuntimeSrc "runtime/bun-arm64"
+$Ffmpeg = Join-Path $RuntimeSrc "media/ffmpeg"
+$Ffprobe = Join-Path $RuntimeSrc "media/ffprobe"
+
+$Cache = Join-Path $StageRoot "cache"
+New-Item -ItemType Directory -Force -Path $Cache | Out-Null
+
+function Download-File([string]$Url, [string]$Destination) {
+  if (Test-Path $Destination) {
+    Info "Using cached $(Split-Path $Destination -Leaf)"
+    return
+  }
+  Info "Downloading $Url"
+  $partial = "$Destination.partial"
+  if (Get-Command curl -ErrorAction SilentlyContinue) {
+    & curl -L --fail --retry 3 --retry-delay 2 -o $partial $Url
+    if ($LASTEXITCODE -ne 0) { Fail "Download failed: $Url" }
+  } elseif (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+    & curl.exe -L --fail --retry 3 --retry-delay 2 -o $partial $Url
+    if ($LASTEXITCODE -ne 0) { Fail "Download failed: $Url" }
+  } else {
+    Invoke-WebRequest -Uri $Url -OutFile $partial -UseBasicParsing
+  }
+  Move-Item -Force $partial $Destination
+}
+
+# 1. Resolve Bun arm64
+if (-not (Test-Path $Bun)) {
+  $cmdBun = (Get-Command bun -ErrorAction SilentlyContinue)?.Source
+  if ($cmdBun) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $Bun) | Out-Null
+    Copy-Item $cmdBun $Bun
+  } else {
+    Info "Fetching bun-darwin-aarch64..."
+    $bunZip = Join-Path $Cache "bun-darwin-aarch64.zip"
+    Download-File "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-aarch64.zip" $bunZip
+    Expand-Archive -Path $bunZip -DestinationPath $Cache -Force
+    $bunExtracted = Join-Path $Cache "bun-darwin-aarch64/bun"
+    if (Test-Path $bunExtracted) {
+      New-Item -ItemType Directory -Force -Path (Split-Path $Bun) | Out-Null
+      Copy-Item $bunExtracted $Bun
+    }
+  }
+}
+
+# 2. Resolve macOS FFmpeg & FFprobe
+if (-not (Test-Path $Ffmpeg)) {
+  $cmdFfmpeg = (Get-Command ffmpeg -ErrorAction SilentlyContinue)?.Source
+  if ($cmdFfmpeg) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $Ffmpeg) | Out-Null
+    Copy-Item $cmdFfmpeg $Ffmpeg
+  }
+}
+if (-not (Test-Path $Ffprobe)) {
+  $cmdFfprobe = (Get-Command ffprobe -ErrorAction SilentlyContinue)?.Source
+  if ($cmdFfprobe) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $Ffprobe) | Out-Null
+    Copy-Item $cmdFfprobe $Ffprobe
+  }
+}
+
 foreach ($required in @($Bun, $Ffmpeg, $Ffprobe)) {
   if (-not (Test-Path $required)) { Fail "Missing Mac runtime: $required" }
 }
