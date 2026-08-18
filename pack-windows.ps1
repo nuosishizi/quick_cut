@@ -61,6 +61,14 @@ Get-ChildItem $LocalFfmpegBin -File | Where-Object {
 } | ForEach-Object {
   Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
 }
+$LocalMedia = Join-Path $ProjectRoot "Modules\EditorRuntime\media"
+if (Test-Path $LocalMedia) {
+  Get-ChildItem $LocalMedia -File | Where-Object {
+    $_.Name -match "deepfilter|deep-filter"
+  } | ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
+  }
+}
 
 Info "Preparing portable Node.js $NodeVersion..."
 $NodeZip = Join-Path $Cache $NodeZipName

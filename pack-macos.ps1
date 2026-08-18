@@ -37,6 +37,8 @@ Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop\assets") (Join-Path $E
 Copy-Item $Bun (Join-Path $BunDst "bun-arm64")
 Copy-Item $Ffmpeg (Join-Path $MediaDst "ffmpeg")
 Copy-Item $Ffprobe (Join-Path $MediaDst "ffprobe")
+$Deepfilter = Join-Path $RuntimeSrc "media\deepfilter"
+if (Test-Path $Deepfilter) { Copy-Item $Deepfilter (Join-Path $MediaDst "deepfilter") }
 
 Copy-Item (Join-Path $ProjectRoot "启动快剪.command") (Join-Path $Stage "启动快剪.command")
 Copy-Item (Join-Path $ProjectRoot "一键生成APP.command") (Join-Path $Stage "一键生成APP.command")

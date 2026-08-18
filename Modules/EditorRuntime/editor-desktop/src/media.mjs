@@ -839,7 +839,7 @@ export async function analyzePauses(inputPath, options = {}) {
   };
 }
 
-function audioDenoiseFilter(mode, strength = 0.7) {
+export function audioDenoiseFilter(mode, strength = 0.8) {
   const amount = Math.max(0, Math.min(1, Number(strength)));
   if (!mode || mode === "off" || amount <= 0.01) return "";
   const reduction = Math.round(8 + amount * 18);
@@ -849,9 +849,32 @@ function audioDenoiseFilter(mode, strength = 0.7) {
     path.resolve(moduleDir, "../../../models/std.rnnn"),
   ].find((candidate) => fs.existsSync(candidate));
   const neural = model
-    ? `aresample=48000,arnndn=m='${model.replace(/\\/g, "/").replace(/'/g, "\\'")}':mix=${(0.35 + amount * 0.65).toFixed(3)}`
+    ? `aresample=48000,arnndn=m='${model.replace(/\\/g, "/").replace(/'/g, "\\'")}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
-  if (mode === "quality")
+  if (mode === "ai-isolation" || mode === "deepfilter") {
+    return [
+      "highpass=f=55",
+      "lowpass=f=17500",
+      neural,
+      `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1`,
+      `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
+      "alimiter=limit=0.96",
+    ]
+      .filter(Boolean)
+      .join(",");
+  }
+  if (mode === "gentle") {
+    return [
+      "highpass=f=50",
+      "lowpass=f=18000",
+      `afftdn=nr=${Math.max(6, Math.round(6 + amount * 10))}:nf=-45:tn=1`,
+      `anlmdn=s=${(0.0004 + amount * 0.0008).toFixed(4)}:p=0.002:r=0.006`,
+      "alimiter=limit=0.98",
+    ]
+      .filter(Boolean)
+      .join(",");
+  }
+  if (mode === "quality") {
     return [
       "highpass=f=60",
       "lowpass=f=16500",
@@ -862,7 +885,8 @@ function audioDenoiseFilter(mode, strength = 0.7) {
     ]
       .filter(Boolean)
       .join(",");
-  if (mode === "strong")
+  }
+  if (mode === "strong") {
     return [
       "highpass=f=65",
       "lowpass=f=15800",
@@ -873,6 +897,7 @@ function audioDenoiseFilter(mode, strength = 0.7) {
     ]
       .filter(Boolean)
       .join(",");
+  }
   return `highpass=f=60,lowpass=f=16000,afftdn=nr=${Math.max(6, Math.round(reduction * 0.7))}:nf=-38:tn=1`;
 }
 
@@ -2669,18 +2694,124 @@ function buildExportGraph(config, info) {
   return { graph: graph.join(";"), videoLabel, audioLabel, width, height, fps };
 }
 
+export function findDeepFilterBinary() {
+  const isWin = process.platform === "win32";
+  const binaryName = isWin ? "deepfilter.exe" : "deepfilter";
+  const altBinaryName = isWin ? "deep-filter.exe" : "deep-filter";
+  const candidates = [
+    process.env.QUICKCUT_DEEPFILTER_BIN,
+    process.env.QUICKCUT_MEDIA_ROOT ? path.join(process.env.QUICKCUT_MEDIA_ROOT, binaryName) : "",
+    process.env.QUICKCUT_MEDIA_ROOT ? path.join(process.env.QUICKCUT_MEDIA_ROOT, altBinaryName) : "",
+    path.resolve(moduleDir, "../../media", binaryName),
+    path.resolve(moduleDir, "../../media", altBinaryName),
+    path.resolve(moduleDir, "../media", binaryName),
+    path.resolve(moduleDir, "../media", altBinaryName),
+    path.resolve(moduleDir, "../runtime/media", binaryName),
+    path.resolve(moduleDir, "../runtime/media", altBinaryName),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "";
+}
+
+export function hasDeepFilterEngine() {
+  return Boolean(findDeepFilterBinary());
+}
+
+export async function renderDeepFilterTrack(inputPath, strength = 0.8, outputPath, options = {}) {
+  const bin = findDeepFilterBinary();
+  if (!bin) throw new Error("未找到 DeepFilterNet 引擎二进制文件");
+  const tempDir = path.join(supportRoot(), "temp", `deepfilter-${crypto.randomUUID()}`);
+  fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  const rawWav = path.join(tempDir, "input_48k.wav");
+
+  const amount = Math.max(0, Math.min(1, Number(strength || 0.8)));
+  const attenDb = Math.round(10 + amount * 90); // 10 dB to 100 dB
+
+  const ffmpegArgs = ["-y", "-hide_banner", "-loglevel", "error"];
+  if (options.time != null && options.duration != null) {
+    ffmpegArgs.push("-ss", String(Math.max(0, Number(options.time))), "-t", String(Math.max(0.1, Number(options.duration))));
+  }
+  ffmpegArgs.push("-i", inputPath, "-vn", "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", rawWav);
+
+  try {
+    await run(mediaBinary("ffmpeg"), ffmpegArgs);
+    if (!fs.existsSync(rawWav) || fs.statSync(rawWav).size < 128) {
+      throw new Error("48kHz 临时音频抽取失败");
+    }
+
+    // Run deepfilter CLI
+    await run(bin, [rawWav, "-o", tempDir, "--atten-lim-db", String(attenDb)]);
+
+    // Locate the cleaned wav in tempDir
+    const files = fs.readdirSync(tempDir);
+    const cleanedWavName =
+      files.find((f) => f.endsWith(".wav") && f !== "input_48k.wav") ||
+      files.find((f) => f.includes("clean") || f.includes("output"));
+    const cleanedWavPath = cleanedWavName ? path.join(tempDir, cleanedWavName) : "";
+    if (!cleanedWavPath || !fs.existsSync(cleanedWavPath)) {
+      throw new Error("DeepFilterNet 输出文件缺失");
+    }
+
+    // Encode to target M4A
+    await run(mediaBinary("ffmpeg"), [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      cleanedWavPath,
+      "-c:a",
+      "aac",
+      "-b:a",
+      "224k",
+      "-ar",
+      "48000",
+      outputPath,
+    ]);
+
+    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size < 256) {
+      throw new Error("AI 降噪音轨编码生成失败");
+    }
+    return outputPath;
+  } finally {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
 export async function renderDenoisePreview(inputPath, time, mode, strength) {
   const directory = path.join(supportRoot(), "previews");
   fs.mkdirSync(directory, { recursive: true });
   const outputPath = path.join(directory, `denoise-${crypto.randomUUID()}.m4a`);
-  const filter = audioDenoiseFilter(mode, strength) || "anull";
+
+  const effectiveMode = String(mode || "ai-isolation").toLowerCase();
+  const startTime = Math.max(0, Number(time || 0) - 2);
+
+  // If AI isolation is selected and DeepFilter binary exists, try deepfilter first
+  if (["ai-isolation", "deepfilter"].includes(effectiveMode) && hasDeepFilterEngine()) {
+    try {
+      return await renderDeepFilterTrack(inputPath, strength, outputPath, {
+        time: startTime,
+        duration: 8,
+      });
+    } catch (err) {
+      console.warn("DeepFilter preview fallback to ffmpeg:", err?.message);
+    }
+  }
+
+  // Graceful fallback / traditional filter graph
+  const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
   await run(mediaBinary("ffmpeg"), [
     "-y",
     "-hide_banner",
     "-loglevel",
     "error",
     "-ss",
-    String(Math.max(0, Number(time || 0) - 2)),
+    String(startTime),
     "-t",
     "8",
     "-i",
@@ -2722,11 +2853,24 @@ export async function renderDenoisedTrack(inputPath, mode, strength, destination
   const outputPath = destination
     ? path.resolve(destination)
     : path.join(directory, `denoised-track-${crypto.randomUUID()}.m4a`);
+
+  const effectiveMode = String(mode || "ai-isolation").toLowerCase();
+
+  // If AI isolation is selected and DeepFilter binary exists, try deepfilter first
+  if (["ai-isolation", "deepfilter"].includes(effectiveMode) && hasDeepFilterEngine()) {
+    try {
+      return await renderDeepFilterTrack(inputPath, strength, outputPath);
+    } catch (err) {
+      console.warn("DeepFilter full track fallback to ffmpeg:", err?.message);
+    }
+  }
+
+  // Graceful fallback / traditional filter graph
   const temporary = path.join(
     directory,
     `.${path.basename(outputPath)}.${crypto.randomUUID()}.partial.m4a`,
   );
-  const filter = audioDenoiseFilter(mode, strength) || "anull";
+  const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
   try {
     await run(mediaBinary("ffmpeg"), [
       "-y",

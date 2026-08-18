@@ -28,6 +28,7 @@ import {
   localFonts,
   customCaptionPresets,
   probeMediaAsync,
+  hasDeepFilterEngine,
   renderDenoisePreview,
   renderDenoisedTrack,
   renderLutPreviewFrame,
@@ -1437,6 +1438,7 @@ nativeMethods = {
   polishCaptions: safe((input = {}) =>
     applyCaptionPolish(input.captions || [], input.keepSpoken || [], input.issues || []),
   ),
+  hasDeepFilterEngine: safe(() => hasDeepFilterEngine()),
   denoisePreview: safe(async (input) =>
     registerAsset(
       await renderDenoisePreview(

@@ -3868,23 +3868,21 @@
                 <div class="switch"><span>片段静音</span><input id="clipMute" type="checkbox" /></div>
               </div>
               <div class="inspectsection">
-                <h3>AI 人声降噪</h3>
+                <h3>AI 语音隔离与降噪</h3>
                 <p class="small">
-                  神经网络优先分离口播与人群、交通、办公室等环境噪音，再进行频谱清理。
+                  基于 48kHz 全频带深度神经网络，对标达芬奇 Studio 级语音隔离，彻底剔除环境杂音、风噪与混响。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="off">关闭</option>
-                    <option value="fast">快速频谱</option>
-                    <option value="strong" selected>
-                      神经网络强力（推荐）
-                    </option>
-                    <option value="quality">神经网络精细</option>
+                    <option value="ai-isolation" selected>AI 语音隔离 (达芬奇级 · 推荐)</option>
+                    <option value="gentle">温和人声去噪 (保留自然环境音)</option>
+                    <option value="strong">强力去噪 (空调/风扇/风噪)</option>
+                    <option value="off">关闭降噪</option>
                   </select>
                 </div>
                 <div class="field">
                   <div class="fieldhead">
-                    <span>降噪强度</span><output id="denoiseOut">70%</output>
+                    <span>降噪强度</span><output id="denoiseOut">80%</output>
                   </div>
                   <input
                     class="range"
@@ -3892,12 +3890,13 @@
                     type="range"
                     min="0"
                     max="100"
-                    value="70"
+                    value="80"
                   />
                 </div>
-                <div class="row">
+                <div class="row" style="flex-wrap: wrap; gap: 6px;">
                   <button class="btn grow" id="previewDenoise">试听当前片段</button>
                   <button class="btn primary grow" id="applyDenoiseTrack">应用整条音轨</button>
+                  <button class="btn danger grow" id="revertDenoisedTrack" style="display:none">还原原始音频</button>
                 </div>
                 <div class="status" id="denoiseApplyState">导出时会自动应用当前降噪参数。</div>
                 <audio
@@ -4648,7 +4647,7 @@
           midtoneDetail: 0,
           vignette: 0,
         },
-        denoise: { mode: "strong", strength: 0.7 },
+        denoise: { mode: "ai-isolation", strength: 0.8 },
         denoiseEnabled: false,
         denoisedAudio: null,
         beauty: {
@@ -5382,7 +5381,7 @@
             midtoneDetail: 0,
             vignette: 0,
           },
-          denoise: { mode: "strong", strength: 0.7 },
+          denoise: { mode: "ai-isolation", strength: 0.8 },
           denoiseEnabled: false,
           denoisedAudio: null,
           beauty: {
@@ -7838,7 +7837,7 @@
           warmth: 0,
           rosy: 0,
         };
-        state.denoise = { mode: "strong", strength: 0.7 };
+        state.denoise = { mode: "ai-isolation", strength: 0.8 };
         state.denoiseEnabled = false;
         state.denoisedAudio = null;
         state.audio = {
@@ -13432,10 +13431,29 @@
         $("audioLowCut").value = state.audio.lowCut || 60;
         $("audioHighCut").value = state.audio.highCut || 16500;
         $("audioChannelMode").value = state.audio.channelMode || "original";
-        $("denoiseMode").value = state.denoise.mode;
-        $("denoiseStrength").value = Math.round(state.denoise.strength * 100);
+        $("denoiseMode").value = state.denoise.mode || "ai-isolation";
+        $("denoiseStrength").value = Math.round(
+          (state.denoise.strength ?? 0.8) * 100,
+        );
         $("denoiseOut").textContent =
-          `${Math.round(state.denoise.strength * 100)}%`;
+          `${Math.round((state.denoise.strength ?? 0.8) * 100)}%`;
+        const hasDenoised = Boolean(state.denoisedAudio);
+        if ($("revertDenoisedTrack")) {
+          $("revertDenoisedTrack").style.display = hasDenoised ? "inline-flex" : "none";
+        }
+        if (hasDenoised) {
+          const modeLabel =
+            state.denoisedAudio.mode === "ai-isolation"
+              ? "达芬奇级 AI 语音隔离"
+              : state.denoisedAudio.mode === "gentle"
+                ? "温和人声去噪"
+                : "强力去噪";
+          $("denoiseApplyState").textContent =
+            `已应用「${modeLabel}」全轨缓存；时间线播放与导出均已生效。`;
+        } else {
+          $("denoiseApplyState").textContent =
+            "导出时会自动应用当前降噪参数。";
+        }
         const clipSettings = audioSettingsFor(
           state.selected.type,
           state.selected.id,
@@ -13482,8 +13500,8 @@
           const result = await nativeCall("denoisePreview", {
             path: state.video.path,
             time: timelineToSource(state.currentTime),
-            mode: state.denoise.mode,
-            strength: state.denoise.strength,
+            mode: state.denoise.mode || "ai-isolation",
+            strength: state.denoise.strength ?? 0.8,
           });
           $("denoiseCompare").src = result.url;
           $("denoiseCompare").style.display = "block";
@@ -13506,25 +13524,25 @@
         const button = $("applyDenoiseTrack");
         button.disabled = true;
         button.textContent = "正在处理整轨…";
-        $("denoiseApplyState").textContent = "正在生成整条音轨的降噪缓存…";
+        $("denoiseApplyState").textContent = "正在通过 AI 深度神经网络生成整条音轨的高清降噪缓存…";
         try {
           const media = await nativeCall("applyDenoiseTrack", {
             projectId: state.projectId,
             path: state.video.path,
-            mode: state.denoise.mode,
-            strength: state.denoise.strength,
+            mode: state.denoise.mode || "ai-isolation",
+            strength: state.denoise.strength ?? 0.8,
           });
           state.denoisedAudio = {
             ...media,
             sourcePath: state.video.path,
-            mode: state.denoise.mode,
-            strength: state.denoise.strength,
+            mode: state.denoise.mode || "ai-isolation",
+            strength: state.denoise.strength ?? 0.8,
           };
           state.denoiseEnabled = true;
-          $("denoiseApplyState").textContent = "已应用到整条主音轨；时间线播放和导出均使用当前降噪。";
+          syncAudioInspectors();
           syncPreviewAudio();
           queueAutosave();
-          toast("降噪已应用到整条音轨");
+          toast("AI 降噪已成功应用到整条音轨");
         } catch (error) {
           $("denoiseApplyState").textContent = error.message;
           toast(error.message);
@@ -13532,6 +13550,15 @@
           button.disabled = false;
           button.textContent = "应用整条音轨";
         }
+      }
+      function revertDenoisedTrack() {
+        if (!state.denoisedAudio) return;
+        state.denoisedAudio = null;
+        state.denoiseEnabled = false;
+        syncAudioInspectors();
+        syncPreviewAudio();
+        queueAutosave();
+        toast("已还原为原始音频");
       }
       function compactWaveform(value, limit = 4000) {
         if (!Array.isArray(value) || !value.length) return [];
@@ -14802,6 +14829,19 @@
       };
       $("previewDenoise").onclick = previewDenoise;
       $("applyDenoiseTrack").onclick = applyDenoiseToTrack;
+      if ($("revertDenoisedTrack")) $("revertDenoisedTrack").onclick = revertDenoisedTrack;
+      $("denoiseMode").onchange = (e) => {
+        state.denoise.mode = e.target.value;
+        queueAutosave();
+      };
+      $("denoiseStrength").oninput = (e) => {
+        const val = Number(e.target.value);
+        state.denoise.strength = val / 100;
+        $("denoiseOut").textContent = `${val}%`;
+      };
+      $("denoiseStrength").onchange = () => {
+        queueAutosave();
+      };
       $("trimLeft").onclick = () => trimAtPlayhead("left");
       $("trimRight").onclick = () => trimAtPlayhead("right");
       $("freezeFrame").onclick = createFreezeFrame;
