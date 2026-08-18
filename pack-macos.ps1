@@ -187,17 +187,29 @@ if ($xcodebuild -and $hdiutil) {
         }
       }
 
-      # Set execution permissions on macOS
+      # Clear attributes and set execution permissions on macOS
       if (Get-Command chmod -ErrorAction SilentlyContinue) {
         & chmod -R +x (Join-Path $appDst "Contents/MacOS")
         if (Test-Path (Join-Path $runtimeDst "runtime/bun-arm64")) { & chmod +x (Join-Path $runtimeDst "runtime/bun-arm64") }
         if (Test-Path (Join-Path $runtimeDst "media/ffmpeg")) { & chmod +x (Join-Path $runtimeDst "media/ffmpeg") }
         if (Test-Path (Join-Path $runtimeDst "media/ffprobe")) { & chmod +x (Join-Path $runtimeDst "media/ffprobe") }
       }
+      if (Get-Command xattr -ErrorAction SilentlyContinue) {
+        & xattr -cr $appDst
+      }
 
-      # Ad-hoc code sign
+      # Standard inside-out code sign for nested binaries
       if (Get-Command codesign -ErrorAction SilentlyContinue) {
-        Info "Code-signing QuickCut.app..."
+        Info "Code-signing embedded binaries and QuickCut.app..."
+        $bunBin = Join-Path $runtimeDst "runtime/bun-arm64"
+        $ffmpegBin = Join-Path $runtimeDst "media/ffmpeg"
+        $ffprobeBin = Join-Path $runtimeDst "media/ffprobe"
+        $mainBin = Join-Path $appDst "Contents/MacOS/QuickCut"
+        
+        if (Test-Path $bunBin) { & codesign --force --sign - $bunBin }
+        if (Test-Path $ffmpegBin) { & codesign --force --sign - $ffmpegBin }
+        if (Test-Path $ffprobeBin) { & codesign --force --sign - $ffprobeBin }
+        if (Test-Path $mainBin) { & codesign --force --sign - $mainBin }
         & codesign --force --deep --sign - $appDst
       }
 
@@ -209,6 +221,43 @@ if ($xcodebuild -and $hdiutil) {
       Copy-Item -Recurse $appDst (Join-Path $dmgStage "快剪.app")
       if (Get-Command ln -ErrorAction SilentlyContinue) {
         & ln -s /Applications (Join-Path $dmgStage "Applications")
+      }
+
+      # Add helper command script for Gatekeeper unquarantine
+      $unquarantineScript = @"
+#!/bin/bash
+echo "============================================="
+echo " 快剪 QuickCut · 首次打开权限修复工具"
+echo "============================================="
+echo ""
+echo "正在解除 macOS Gatekeeper 隔离限制..."
+APP_PATHS=(
+  "/Applications/快剪.app"
+  "/Applications/QuickCut.app"
+  "`$HOME/Desktop/快剪.app"
+  "`$(dirname "`$0")/快剪.app"
+)
+FIXED=0
+for p in "`${APP_PATHS[@]}"; do
+  if [ -d "`$p" ]; then
+    xattr -cr "`$p" 2>/dev/null || true
+    echo "✅ 已成功解除安全隔离: `$p"
+    open "`$p" 2>/dev/null || true
+    FIXED=1
+    break
+  fi
+done
+if [ `$FIXED -eq 0 ]; then
+  echo "提示：请先将「快剪.app」拖入旁边的「Applications（应用程序）」文件夹，再双击本工具即可。"
+fi
+echo ""
+echo "按任意键退出…"
+read -n 1
+"@
+      $unquarantinePath = Join-Path $dmgStage "首次打开如果提示已损坏点我.command"
+      Set-Content -Path $unquarantinePath -Value $unquarantineScript -Encoding UTF8
+      if (Get-Command chmod -ErrorAction SilentlyContinue) {
+        & chmod +x $unquarantinePath
       }
 
       $dmgEnglish = Join-Path $TargetDir "QuickCut-macOS-$Version-Installer.dmg"

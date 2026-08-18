@@ -35,6 +35,12 @@
 | **🪟 Windows (绿色便携版)** | `快剪-Windows-x.x.xx-测试包.zip` | 免安装便携版，解压后双击 `快剪.exe` 或 `启动快剪.bat` 运行 |
 | **🍎 macOS (开发测试版)** | `快剪-macOS-x.x.xx-测试包.zip` | 包含完整 Xcode 工程源码与测试脚本 |
 
+> 🍎 **macOS 首次打开提示「已损坏或不完整」？**
+> 由于本项目为开源免费软件，未购买 Apple 年费商业证书，macOS Gatekeeper 会对从浏览器下载的应用施加安全隔离限制。
+> **解决方法（二选一）：**
+> 1. 打开 DMG 后，双击运行里面的「**首次打开如果提示已损坏点我.command**」一键解除限制；
+> 2. 或在终端运行一行命令解除隔离：`sudo xattr -rd com.apple.quarantine /Applications/快剪.app`。
+
 ---
 
 ## 🛡️ 软件来源与安全验证 (Artifact Attestation)
