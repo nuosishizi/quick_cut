@@ -9784,7 +9784,10 @@
         const inner = type === "caption" || type === "review"
           ? `<span class="clip-sticky">${captionWords}</span>`
           : `<span class="clip-sticky">${captionWords}</span>`;
-        return `<div class="clip ${visualType}${issueClass}${actionClass}${narrow} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}"${reviewHit} title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="${clipGeometryStyle(c, lane, laneCount)}"><i class="trim-handle start" data-trim="start"></i>${inner}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
+        const soloMark = type === "caption" && Array.isArray(c.words) && c.words.some(w => w.userKeptSolo)
+          ? `<span class="solo-kept-mark" style="position:absolute;left:0;top:0;bottom:0;width:2px;background:#4ade80;border-radius:1px;z-index:2"></span>`
+          : "";
+        return `<div class="clip ${visualType}${issueClass}${actionClass}${narrow} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}"${reviewHit} title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="${clipGeometryStyle(c, lane, laneCount)}"><i class="trim-handle start" data-trim="start"></i>${soloMark}${inner}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
       }
       function drawWaveform() {
         const canvas = $("waveform"),
@@ -12352,7 +12355,8 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}" title="跳点试听此段">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="定位并复核">定位</button>
-                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="确认保留">✓ 保留</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="确认保留（并入相邻字幕）">✓ 保留</button>
+                  <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="忽略此项（不做任何改动）">✕ 忽略</button>
                 </div>
               </div>
@@ -12387,7 +12391,8 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.8)}">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
-                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入字幕">✓ 并入字幕</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入相邻字幕">✓ 并入字幕</button>
+                  <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此段">✂ 切除</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（音画与文稿保持原样）">✕ 忽略</button>
                 </div>
@@ -12423,6 +12428,8 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.5)}">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
+                  <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留并合并到相邻字幕">✓ 并入字幕</button>
+                  <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此废话">✂ 立即切除</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="忽略此项（保持原样）">✕ 忽略</button>
                 </div>
@@ -13170,6 +13177,97 @@
         seekTimeline(Math.max(0, stayTime));
         renderAll();
         toast("已接收这段内容，视频和音频都保留");
+      }
+      function keepSoloReviewSegment(id) {
+        const review = state.reviewCaptions.find(
+          (item) => item.id === id || item.issueId === id,
+        );
+        const issue = state.issues.find((item) => item.id === id || item.id === review?.issueId);
+        if (!review && !issue) return;
+        if (review && (review.type === "missing" || review.action === "missing")) {
+          focusScriptDifference(review.issueId || review.id);
+          toast("漏读不能直接接收，需要补录或自行决定是否保留");
+          return;
+        }
+        snapshot();
+        const stayTime = Number(state.currentTime || (review || issue).start || 0);
+        const issueId = review?.issueId || review?.id || id;
+        const source = review || issue;
+        const start = Number(source.start || 0);
+        const end = Math.max(start + 0.04, Number(source.end || start + 0.04));
+        // Prefer manuscript expectedText when available, fall back to spoken ASR text
+        const expectedText = String(source.expectedText || source.expected || "").trim();
+        const spokenText = String(source.spokenText || source.spoken || source.text || "").trim();
+        const displayText = expectedText || spokenText;
+        if (!displayText) {
+          toast("无可保留的文本内容");
+          return;
+        }
+        const tokens = editableCaptionTokens(displayText);
+        if (!tokens.length) {
+          toast("无可保留的文本内容");
+          return;
+        }
+        // Build word objects with evenly distributed timestamps
+        const allWords = tokens.map((display, index) => ({
+          display,
+          start: start + ((end - start) * index) / Math.max(1, tokens.length),
+          end: start + ((end - start) * (index + 1)) / Math.max(1, tokens.length),
+          matchType: "match",
+          issueType: "",
+          expectedDisplay: display,
+          userInserted: true,
+          userKeptSolo: true,
+        }));
+        // Split into multiple captions using buildCaptions-like logic
+        const maxWords = 7;
+        const maxChars = 28 * (Number(state.captionLines) || 2);
+        const SENTENCE_END = /[.!?。！？]["'\u201d\u2019)]*$/u;
+        const CLAUSE_END = /[,;:—–\-，、；：]["'\u201d\u2019)]*$/u;
+        const captions = [];
+        let group = [];
+        const flushGroup = () => {
+          if (!group.length) return;
+          captions.push({
+            id: uid(), start: group[0].start, end: group.at(-1).end,
+            text: joinCaptionWords(group), words: [...group], trackId: "caption",
+          });
+          group = [];
+        };
+        for (const word of allWords) {
+          const priorWord = group.at(-1);
+          const timingGap = priorWord ? Number(word.start) - Number(priorWord.end) : 0;
+          const priorEnds = priorWord && SENTENCE_END.test(priorWord.display);
+          const priorClauseEnds = priorWord && CLAUSE_END.test(priorWord.display);
+          const candidate = [...group, word].map(w => w.display).join(" ");
+          if (
+            group.length &&
+            (timingGap > 0.3 ||
+              group.length >= maxWords ||
+              candidate.length > maxChars ||
+              priorEnds ||
+              (priorClauseEnds && group.length >= 3 && timingGap >= 0.25))
+          ) flushGroup();
+          group.push(word);
+        }
+        flushGroup();
+        // Clear issue word flags + dismiss
+        clearIssueWordFlags(issueId);
+        if (review) dismissReviewMark(review);
+        else {
+          state.issues = state.issues.filter((item) => item.id !== issueId);
+          state.reviewCaptions = state.reviewCaptions.filter(
+            (item) => (item.issueId || item.id) !== issueId,
+          );
+        }
+        // Push solo captions into state
+        state.captions.push(...captions);
+        state.captions.sort((a, b) => Number(a.start) - Number(b.start));
+        state.selected = { type: "video", id: "main" };
+        state.selectedItems = [];
+        seekTimeline(Math.max(0, stayTime));
+        renderAll();
+        toast(`已保留为 ${captions.length} 条独立字幕`);
       }
       function applyRedReviewGesture(e, id) {
         if (e.shiftKey && !(e.ctrlKey || e.metaKey)) {
@@ -16835,6 +16933,12 @@
             if (action === "accept-issue") {
               const issueId = actionBtn.dataset.issueId;
               acceptReviewSegment(issueId);
+              renderPolishSidebarList();
+              return;
+            }
+            if (action === "keep-solo") {
+              const issueId = actionBtn.dataset.issueId;
+              keepSoloReviewSegment(issueId);
               renderPolishSidebarList();
               return;
             }
