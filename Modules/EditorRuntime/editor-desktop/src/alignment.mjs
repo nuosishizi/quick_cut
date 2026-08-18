@@ -1447,6 +1447,72 @@ function sameSentenceMatchCount(operations, index) {
   return count;
 }
 
+function extractFullManuscriptSentence(operations = [], targetOpIndex = 0) {
+  let sStart = targetOpIndex;
+  while (sStart > 0) {
+    const prevOp = operations[sStart - 1];
+    if (prevOp?.expected) {
+      if (/[.!?…]["'”’)]*$/.test(String(prevOp.expected.display || "").trim())) {
+        break;
+      }
+    }
+    sStart -= 1;
+  }
+
+  let sEnd = targetOpIndex;
+  while (sEnd < operations.length) {
+    const currOp = operations[sEnd];
+    if (currOp?.expected) {
+      if (/[.!?…]["'”’)]*$/.test(String(currOp.expected.display || "").trim())) {
+        sEnd += 1;
+        break;
+      }
+    }
+    sEnd += 1;
+  }
+
+  const sentenceWords = operations
+    .slice(sStart, sEnd)
+    .map((op) => op.expected)
+    .filter(Boolean);
+  return formatDisplayWords(sentenceWords);
+}
+
+function findRelevantManuscriptSentence(operations = [], start = 0, cursor = 0, spokenGroup = []) {
+  const spokenNorms = spokenGroup.map((w) => w.norm).filter(Boolean);
+  const spokenSet = new Set(spokenNorms);
+
+  const afterOps = operations.slice(cursor, cursor + 45).filter((op) => op.expected);
+  if (afterOps.length) {
+    const overlap = afterOps.filter((op) => spokenSet.has(op.expected?.norm));
+    if (overlap.length >= 2 || (overlap.length >= 1 && spokenNorms.length <= 2)) {
+      const opIndex = operations.findIndex((op, idx) => idx >= cursor && op.expected === overlap[0].expected);
+      if (opIndex !== -1) {
+        return extractFullManuscriptSentence(operations, opIndex);
+      }
+    }
+  }
+
+  const beforeOps = operations.slice(Math.max(0, start - 30), start).filter((op) => op.expected);
+  if (beforeOps.length) {
+    const overlap = beforeOps.filter((op) => spokenSet.has(op.expected?.norm));
+    if (overlap.length >= 2 || (overlap.length >= 1 && spokenNorms.length <= 2)) {
+      const opIndex = operations.findIndex((op, idx) => idx < start && op.expected === overlap[0].expected);
+      if (opIndex !== -1) {
+        return extractFullManuscriptSentence(operations, opIndex);
+      }
+    }
+  }
+
+  if (afterOps.length) {
+    const opIndex = operations.findIndex((op, idx) => idx >= cursor && op.expected === afterOps[0].expected);
+    if (opIndex !== -1) {
+      return extractFullManuscriptSentence(operations, opIndex);
+    }
+  }
+  return "";
+}
+
 function collectFalseStartGapIssues(operations = []) {
   const issues = [];
   let last = -1;
@@ -1815,12 +1881,16 @@ export function alignScript({ segments, script, duration = 0 }) {
       rangeEnd = nextTime;
     else if (confirmedCut && !repeatKeepLater)
       rangeEnd = Math.max(rangeEnd, rangeStart + 0.08) + 0.06;
+    let expectedDisplay = formatDisplayWords(expectedGroup);
+    if (!expectedDisplay && spokenGroup.length) {
+      expectedDisplay = findRelevantManuscriptSentence(operations, start, cursor, spokenGroup);
+    }
     const issue = {
       id: crypto.randomUUID(),
       type: issueType,
       label: abandonedPrefix ? "没读完又重来" : issueLabel(issueType),
       spokenText: formatDisplayWords(spokenGroup) || "—",
-      expectedText: formatDisplayWords(expectedGroup) || "—",
+      expectedText: expectedDisplay || "—",
       start: rangeStart,
       end: Math.max(rangeStart + 0.04, rangeEnd),
       suggested: ["repeat", "extra", "mismatch"].includes(issueType),

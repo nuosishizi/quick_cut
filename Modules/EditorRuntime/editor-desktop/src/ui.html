@@ -12146,11 +12146,13 @@
         }
 
         if (issueType === "extra" || issueType === "addition" || (s && !e)) {
-          return {
-            spokenHtml: `<span class="diff-add">${escapeHtml(s)}</span>`,
-            expectedHtml: e ? escapeHtml(e) : `<span class="diff-muted">（文案无此句）</span>`,
-            diagnosis: `➕ 口播多读/语气拓展：口播了文案之外的内容`,
-          };
+          if (!e) {
+            return {
+              spokenHtml: `<span class="diff-add">${escapeHtml(s)}</span>`,
+              expectedHtml: `<span class="diff-muted">（文案无此句）</span>`,
+              diagnosis: `➕ 口播多读/语气拓展：口播了文案之外的内容`,
+            };
+          }
         }
 
         if (!s && !e) {
