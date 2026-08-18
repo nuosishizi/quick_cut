@@ -6,6 +6,8 @@ import {
   audioDenoiseFilter,
   findDeepFilterBinary,
   hasDeepFilterEngine,
+  findDemucsBinary,
+  hasDemucsEngine,
   renderDenoisePreview,
   renderDenoisedTrack,
 } from "../src/media.mjs";
@@ -49,10 +51,14 @@ test("audioDenoiseFilter maps all modes and strengths correctly", () => {
   assert.ok(strongFilter.includes("highpass=f=65"));
 });
 
-test("findDeepFilterBinary returns empty string safely when not present", () => {
-  const bin = findDeepFilterBinary();
-  assert.equal(typeof bin, "string");
+test("findDeepFilterBinary and findDemucsBinary return safely when not present", () => {
+  const binDF = findDeepFilterBinary();
+  assert.equal(typeof binDF, "string");
   assert.equal(typeof hasDeepFilterEngine(), "boolean");
+
+  const binDemucs = findDemucsBinary();
+  assert.equal(typeof binDemucs, "string");
+  assert.equal(typeof hasDemucsEngine(), "boolean");
 });
 
 test("renderDenoisePreview and renderDenoisedTrack fallback gracefully with real media", async () => {

@@ -3874,7 +3874,8 @@
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="uvr5-master" selected>✨ UVR5 级 · 录音棚人声母带 (去噪+去回声+音质提升)</option>
+                    <option value="uvr5-master" selected>✨ UVR5 级 · 录音棚人声母带 (去噪+去回声+音质提升 · 推荐)</option>
+                    <option value="demucs">🚀 Meta Demucs 深度时域去噪 (Alexandre Défossez · 高阶可选)</option>
                     <option value="ai-isolation">AI 语音隔离 (达芬奇级 · 强力去杂音)</option>
                     <option value="dereverb">去房间混响 / 空旷回声 (De-Reverb · 贴耳干声)</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
@@ -13494,68 +13495,91 @@
           $("clipMute").checked = !!clipSettings.muted;
         }
       }
+      async function ensureDemucsEngine(callback) {
+        if (state.denoise.mode !== "demucs") {
+          return callback();
+        }
+        const hasDemucs = await nativeCall("hasDemucsEngine").catch(() => false);
+        if (hasDemucs) {
+          return callback();
+        }
+        askConfirm(
+          "未检测到本地 Meta Demucs 独立运行环境。\n\nDemucs 属于高阶独立深度时域模型（Meta AI / Alexandre Défossez）。\n建议直接使用内置免安装的「✨ UVR5 级 · 录音棚人声母带」（已集成 48kHz 全频去噪、去房间回声与人声增强），点击确定即可一键切换并立即处理。",
+          () => {
+            state.denoise.mode = "uvr5-master";
+            $("denoiseMode").value = "uvr5-master";
+            queueAutosave();
+            callback();
+          },
+          "一键切换为 UVR5 模式",
+        );
+      }
       async function previewDenoise() {
         if (!state.video) {
           toast("请先导入视频");
           return;
         }
-        const btn = $("previewDenoise");
-        btn.disabled = true;
-        btn.textContent = "生成中…";
-        try {
-          const result = await nativeCall("denoisePreview", {
-            path: state.video.path,
-            time: timelineToSource(state.currentTime),
-            mode: state.denoise.mode || "ai-isolation",
-            strength: state.denoise.strength ?? 0.8,
-          });
-          $("denoiseCompare").src = result.url;
-          $("denoiseCompare").style.display = "block";
-          $("denoiseCompare").currentTime = 2;
-          $("video").muted = true;
-          $("denoiseCompare").onended = () => syncPreviewAudio();
-          await $("denoiseCompare").play();
-        } catch (e) {
-          toast(e.message);
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "试听当前片段";
-        }
+        ensureDemucsEngine(async () => {
+          const btn = $("previewDenoise");
+          btn.disabled = true;
+          btn.textContent = "生成中…";
+          try {
+            const result = await nativeCall("denoisePreview", {
+              path: state.video.path,
+              time: timelineToSource(state.currentTime),
+              mode: state.denoise.mode || "uvr5-master",
+              strength: state.denoise.strength ?? 0.85,
+            });
+            $("denoiseCompare").src = result.url;
+            $("denoiseCompare").style.display = "block";
+            $("denoiseCompare").currentTime = 2;
+            $("video").muted = true;
+            $("denoiseCompare").onended = () => syncPreviewAudio();
+            await $("denoiseCompare").play();
+          } catch (e) {
+            toast(e.message);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "试听当前片段";
+          }
+        });
       }
       async function applyDenoiseToTrack() {
         if (!state.video) {
           toast("请先导入视频");
           return;
         }
-        const button = $("applyDenoiseTrack");
-        button.disabled = true;
-        button.textContent = "正在处理整轨…";
-        $("denoiseApplyState").textContent = "正在通过 AI 深度神经网络生成整条音轨的高清降噪缓存…";
-        try {
-          const media = await nativeCall("applyDenoiseTrack", {
-            projectId: state.projectId,
-            path: state.video.path,
-            mode: state.denoise.mode || "ai-isolation",
-            strength: state.denoise.strength ?? 0.8,
-          });
-          state.denoisedAudio = {
-            ...media,
-            sourcePath: state.video.path,
-            mode: state.denoise.mode || "ai-isolation",
-            strength: state.denoise.strength ?? 0.8,
-          };
-          state.denoiseEnabled = true;
-          syncAudioInspectors();
-          syncPreviewAudio();
-          queueAutosave();
-          toast("AI 降噪已成功应用到整条音轨");
-        } catch (error) {
-          $("denoiseApplyState").textContent = error.message;
-          toast(error.message);
-        } finally {
-          button.disabled = false;
-          button.textContent = "应用整条音轨";
-        }
+        ensureDemucsEngine(async () => {
+          const button = $("applyDenoiseTrack");
+          button.disabled = true;
+          button.textContent = "正在处理整轨…";
+          $("denoiseApplyState").textContent = "正在通过 AI 深度神经网络生成整条音轨的高清降噪缓存…";
+          try {
+            const media = await nativeCall("applyDenoiseTrack", {
+              projectId: state.projectId,
+              path: state.video.path,
+              mode: state.denoise.mode || "uvr5-master",
+              strength: state.denoise.strength ?? 0.85,
+            });
+            state.denoisedAudio = {
+              ...media,
+              sourcePath: state.video.path,
+              mode: state.denoise.mode || "uvr5-master",
+              strength: state.denoise.strength ?? 0.85,
+            };
+            state.denoiseEnabled = true;
+            syncAudioInspectors();
+            syncPreviewAudio();
+            queueAutosave();
+            toast("AI 降噪已成功应用到整条音轨");
+          } catch (error) {
+            $("denoiseApplyState").textContent = error.message;
+            toast(error.message);
+          } finally {
+            button.disabled = false;
+            button.textContent = "应用整条音轨";
+          }
+        });
       }
       function revertDenoisedTrack() {
         if (!state.denoisedAudio) return;

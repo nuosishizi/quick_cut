@@ -2756,6 +2756,112 @@ export function hasDeepFilterEngine() {
   return Boolean(findDeepFilterBinary());
 }
 
+export function findDemucsBinary() {
+  const isWin = process.platform === "win32";
+  const binaryNames = isWin ? ["demucs.exe", "denoiser.exe"] : ["demucs", "denoiser"];
+  const candidates = [
+    process.env.QUICKCUT_DEMUCS_BIN,
+    ...binaryNames.map((b) => (process.env.QUICKCUT_MEDIA_ROOT ? path.join(process.env.QUICKCUT_MEDIA_ROOT, b) : "")),
+    ...binaryNames.map((b) => path.resolve(moduleDir, "../../media", b)),
+    ...binaryNames.map((b) => path.resolve(moduleDir, "../media", b)),
+    ...binaryNames.map((b) => path.resolve(moduleDir, "../runtime/media", b)),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "";
+}
+
+export function hasDemucsEngine() {
+  return Boolean(findDemucsBinary());
+}
+
+export async function renderDemucsTrack(inputPath, strength = 0.85, outputPath, options = {}) {
+  const bin = findDemucsBinary();
+  if (!bin) throw new Error("未找到 Meta Demucs 引擎二进制文件");
+  const tempDir = path.join(supportRoot(), "temp", `demucs-${crypto.randomUUID()}`);
+  fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  const rawWav = path.join(tempDir, "input_raw.wav");
+
+  const ffmpegArgs = ["-y", "-hide_banner", "-loglevel", "error"];
+  if (options.time != null && options.duration != null) {
+    ffmpegArgs.push("-ss", String(Math.max(0, Number(options.time))), "-t", String(Math.max(0.1, Number(options.duration))));
+  }
+  ffmpegArgs.push("-i", inputPath, "-vn", "-ar", "44100", "-ac", "2", "-c:a", "pcm_s16le", rawWav);
+
+  try {
+    await run(mediaBinary("ffmpeg"), ffmpegArgs);
+    if (!fs.existsSync(rawWav) || fs.statSync(rawWav).size < 128) {
+      throw new Error("Demucs 临时音频抽取失败");
+    }
+
+    // Run demucs CLI (or denoiser)
+    const isDenoiser = path.basename(bin).toLowerCase().includes("denoiser");
+    if (isDenoiser) {
+      await run(bin, ["--model", "dns64", "--out", tempDir, rawWav]);
+    } else {
+      await run(bin, ["--two-stems", "vocals", "-n", "htdemucs", "-o", tempDir, rawWav]);
+    }
+
+    // Locate the output vocal wav in tempDir
+    const findVocalsWav = (dir) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const res = findVocalsWav(fullPath);
+          if (res) return res;
+        } else if (
+          entry.name.endsWith(".wav") &&
+          entry.name !== "input_raw.wav" &&
+          (entry.name.includes("vocals") || entry.name.includes("clean") || entry.name.includes("denoised"))
+        ) {
+          return fullPath;
+        }
+      }
+      return "";
+    };
+
+    const cleanedWavPath =
+      findVocalsWav(tempDir) ||
+      fs
+        .readdirSync(tempDir)
+        .map((f) => path.join(tempDir, f))
+        .find((f) => f.endsWith(".wav") && !f.includes("input_raw"));
+
+    if (!cleanedWavPath || !fs.existsSync(cleanedWavPath)) {
+      throw new Error("Demucs 输出人声音频文件缺失");
+    }
+
+    // Encode back to 48kHz high-quality M4A
+    await run(mediaBinary("ffmpeg"), [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      cleanedWavPath,
+      "-c:a",
+      "aac",
+      "-b:a",
+      "224k",
+      "-ar",
+      "48000",
+      outputPath,
+    ]);
+
+    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size < 256) {
+      throw new Error("Demucs 降噪音轨编码生成失败");
+    }
+    return outputPath;
+  } finally {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
 export async function renderDeepFilterTrack(inputPath, strength = 0.8, outputPath, options = {}) {
   const bin = findDeepFilterBinary();
   if (!bin) throw new Error("未找到 DeepFilterNet 引擎二进制文件");
@@ -2827,6 +2933,18 @@ export async function renderDenoisePreview(inputPath, time, mode, strength) {
   const effectiveMode = String(mode || "ai-isolation").toLowerCase();
   const startTime = Math.max(0, Number(time || 0) - 2);
 
+  // If Demucs is selected and Demucs binary exists, try demucs
+  if (effectiveMode === "demucs" && hasDemucsEngine()) {
+    try {
+      return await renderDemucsTrack(inputPath, strength, outputPath, {
+        time: startTime,
+        duration: 8,
+      });
+    } catch (err) {
+      console.warn("Demucs preview fallback to ffmpeg:", err?.message);
+    }
+  }
+
   // If AI isolation is selected and DeepFilter binary exists, try deepfilter first
   if (["ai-isolation", "deepfilter"].includes(effectiveMode) && hasDeepFilterEngine()) {
     try {
@@ -2890,7 +3008,16 @@ export async function renderDenoisedTrack(inputPath, mode, strength, destination
     ? path.resolve(destination)
     : path.join(directory, `denoised-track-${crypto.randomUUID()}.m4a`);
 
-  const effectiveMode = String(mode || "ai-isolation").toLowerCase();
+  const effectiveMode = String(mode || "uvr5-master").toLowerCase();
+
+  // If Demucs is selected and Demucs binary exists, try demucs
+  if (effectiveMode === "demucs" && hasDemucsEngine()) {
+    try {
+      return await renderDemucsTrack(inputPath, strength, outputPath);
+    } catch (err) {
+      console.warn("Demucs full track fallback to ffmpeg:", err?.message);
+    }
+  }
 
   // If AI isolation is selected and DeepFilter binary exists, try deepfilter first
   if (["ai-isolation", "deepfilter"].includes(effectiveMode) && hasDeepFilterEngine()) {
