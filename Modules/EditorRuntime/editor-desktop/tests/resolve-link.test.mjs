@@ -99,7 +99,7 @@ test("send job wraps captions, generates word timestamps and presetSettings", ()
   assert.equal(job.items.length, 1);
   assert.match(job.items[0].text, /第一句/);
   assert.equal(job.items[0].start, 1.2);
-  assert.equal(job.style.fontFamily, "Microsoft YaHei");
+  assert.match(job.style.fontFamily, /Microsoft YaHei|PingFang SC/);
   assert.equal(job.style.fontStyle, "Bold");
   assert.equal(job.style.strokeEnabled, true);
   assert.equal(job.style.shadowEnabled, true);

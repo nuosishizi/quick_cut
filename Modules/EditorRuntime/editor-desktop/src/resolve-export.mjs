@@ -18,7 +18,12 @@ function xmlName(value, max = 48) {
 }
 
 export function fileUrl(filePath) {
-  const resolved = path.resolve(String(filePath || "")).replace(/\\/g, "/");
+  const raw = String(filePath || "");
+  if (/^[A-Za-z]:[\\/]/.test(raw)) {
+    const norm = raw.replace(/\\/g, "/");
+    return `file://localhost/${encodeURI(norm)}`;
+  }
+  const resolved = path.resolve(raw).replace(/\\/g, "/");
   if (/^[A-Za-z]:/.test(resolved)) return `file://localhost/${encodeURI(resolved)}`;
   const prefixed = resolved.startsWith("/") ? resolved : `/${resolved}`;
   return `file://${encodeURI(prefixed)}`;
