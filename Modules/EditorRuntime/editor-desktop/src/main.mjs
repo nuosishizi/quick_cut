@@ -30,6 +30,9 @@ import {
   probeMediaAsync,
   hasDeepFilterEngine,
   hasDemucsEngine,
+  startDemucsInstall,
+  demucsInstallStatus,
+  cancelDemucsInstall,
   renderDenoisePreview,
   renderDenoisedTrack,
   renderLutPreviewFrame,
@@ -1441,6 +1444,9 @@ nativeMethods = {
   ),
   hasDeepFilterEngine: safe(() => hasDeepFilterEngine()),
   hasDemucsEngine: safe(() => hasDemucsEngine()),
+  startDemucsInstall: safe((input) => startDemucsInstall(input || {})),
+  demucsInstallStatus: safe((jobId) => demucsInstallStatus(jobId)),
+  cancelDemucsInstall: safe((jobId) => cancelDemucsInstall(jobId)),
   denoisePreview: safe(async (input) =>
     registerAsset(
       await renderDenoisePreview(

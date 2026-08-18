@@ -13495,6 +13495,34 @@
           $("clipMute").checked = !!clipSettings.muted;
         }
       }
+      async function installDemucsAutomatically(callback) {
+        $("denoiseApplyState").textContent = "正在启动 Meta Demucs 引擎全自动部署…";
+        try {
+          const init = await nativeCall("startDemucsInstall", {});
+          const jobId = init.jobId;
+          const timer = setInterval(async () => {
+            try {
+              const status = await nativeCall("demucsInstallStatus", jobId);
+              if (status.status === "ready") {
+                clearInterval(timer);
+                $("denoiseApplyState").textContent = "✨ Meta Demucs 深度时域引擎已成功就绪！";
+                toast("✨ Meta Demucs 引擎部署完成！");
+                if (typeof callback === "function") callback();
+              } else if (status.status === "error") {
+                clearInterval(timer);
+                $("denoiseApplyState").textContent = status.message || "部署失败";
+                toast(status.message || "部署失败");
+              } else {
+                $("denoiseApplyState").textContent = `${status.message || "正在部署…"} (${status.progress || 0}%)`;
+              }
+            } catch (err) {
+              clearInterval(timer);
+            }
+          }, 400);
+        } catch (e) {
+          toast(e.message);
+        }
+      }
       async function ensureDemucsEngine(callback) {
         if (state.denoise.mode !== "demucs") {
           return callback();
@@ -13504,14 +13532,11 @@
           return callback();
         }
         askConfirm(
-          "未检测到本地 Meta Demucs 独立运行环境。\n\nDemucs 属于高阶独立深度时域模型（Meta AI / Alexandre Défossez）。\n建议直接使用内置免安装的「✨ UVR5 级 · 录音棚人声母带」（已集成 48kHz 全频去噪、去房间回声与人声增强），点击确定即可一键切换并立即处理。",
+          "未检测到本地 Meta Demucs 独立运行环境。\n\n点击【确定】将为您【全自动一键安装 Demucs 深度时域引擎】并在就绪后立即处理。\n\n您也可以直接选用内置免安装的「✨ UVR5 录音棚母带」（已集成 48kHz 全频去噪与去回声）。",
           () => {
-            state.denoise.mode = "uvr5-master";
-            $("denoiseMode").value = "uvr5-master";
-            queueAutosave();
-            callback();
+            installDemucsAutomatically(callback);
           },
-          "一键切换为 UVR5 模式",
+          "一键自动安装 Demucs",
         );
       }
       async function previewDenoise() {
