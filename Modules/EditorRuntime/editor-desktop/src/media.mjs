@@ -848,8 +848,13 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
     path.resolve(moduleDir, "../../assets/models/std.rnnn"),
     path.resolve(moduleDir, "../../../models/std.rnnn"),
   ].find((candidate) => fs.existsSync(candidate));
+  const escapeFilterPath = (str) =>
+    String(str || "")
+      .replace(/\\/g, "/")
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "\\'");
   const neural = model
-    ? `aresample=48000,arnndn=m='${model.replace(/\\/g, "/").replace(/'/g, "\\'")}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
+    ? `aresample=48000,arnndn=m='${escapeFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
   if (mode === "ai-isolation" || mode === "deepfilter") {
     return [
