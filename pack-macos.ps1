@@ -151,14 +151,7 @@ Set-Content -Path (Join-Path $Stage "使用说明.txt") -Value $Readme -Encoding
 
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 Info "Creating $ZipPath"
-if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
-  Push-Location $StageRoot
-  & tar.exe -a -cf $ZipPath $AppName
-  if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "zip failed." }
-  Pop-Location
-} else {
-  Compress-Archive -Path $Stage -DestinationPath $ZipPath -Force
-}
+Compress-Archive -Path $Stage -DestinationPath $ZipPath -Force
 
 $zip = Get-Item $ZipPath
 Info ""

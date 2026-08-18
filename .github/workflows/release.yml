@@ -30,8 +30,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup FFmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
+      - name: Setup FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
 
       - name: Setup Bun (macOS)
         if: runner.os == 'macOS'
