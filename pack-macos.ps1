@@ -56,7 +56,8 @@ function Download-File([string]$Url, [string]$Destination) {
 
 # 1. Resolve Bun arm64
 if (-not (Test-Path $Bun)) {
-  $cmdBun = (Get-Command bun -ErrorAction SilentlyContinue)?.Source
+  $cmdBunObj = Get-Command bun -ErrorAction SilentlyContinue
+  $cmdBun = if ($cmdBunObj) { $cmdBunObj.Source } else { $null }
   if ($cmdBun) {
     New-Item -ItemType Directory -Force -Path (Split-Path $Bun) | Out-Null
     Copy-Item $cmdBun $Bun
@@ -75,14 +76,16 @@ if (-not (Test-Path $Bun)) {
 
 # 2. Resolve macOS FFmpeg & FFprobe
 if (-not (Test-Path $Ffmpeg)) {
-  $cmdFfmpeg = (Get-Command ffmpeg -ErrorAction SilentlyContinue)?.Source
+  $cmdFfmpegObj = Get-Command ffmpeg -ErrorAction SilentlyContinue
+  $cmdFfmpeg = if ($cmdFfmpegObj) { $cmdFfmpegObj.Source } else { $null }
   if ($cmdFfmpeg) {
     New-Item -ItemType Directory -Force -Path (Split-Path $Ffmpeg) | Out-Null
     Copy-Item $cmdFfmpeg $Ffmpeg
   }
 }
 if (-not (Test-Path $Ffprobe)) {
-  $cmdFfprobe = (Get-Command ffprobe -ErrorAction SilentlyContinue)?.Source
+  $cmdFfprobeObj = Get-Command ffprobe -ErrorAction SilentlyContinue
+  $cmdFfprobe = if ($cmdFfprobeObj) { $cmdFfprobeObj.Source } else { $null }
   if ($cmdFfprobe) {
     New-Item -ItemType Directory -Force -Path (Split-Path $Ffprobe) | Out-Null
     Copy-Item $cmdFfprobe $Ffprobe
@@ -147,7 +150,69 @@ $Readme = @"
 - 本包不含 API Key、工程和素材。
 - 仅供测试，版权归 HX。
 "@
-Set-Content -Path (Join-Path $Stage "使用说明.txt") -Value $Readme -Encoding UTF8
+# Build native macOS App and DMG if Xcode is available
+$xcodeCmd = Get-Command xcodebuild -ErrorAction SilentlyContinue
+$xcodebuild = if ($xcodeCmd) { $xcodeCmd.Source } else { $null }
+$hdiCmd = Get-Command hdiutil -ErrorAction SilentlyContinue
+$hdiutil = if ($hdiCmd) { $hdiCmd.Source } else { $null }
+$DmgPath = Join-Path $TargetDir "快剪-macOS-$Version-安装包.dmg"
+
+if ($xcodebuild -and $hdiutil) {
+  Info "Building native macOS QuickCut.app with xcodebuild..."
+  $derivedData = Join-Path $StageRoot "DerivedData"
+  if (Test-Path $derivedData) { Remove-Item -Recurse -Force $derivedData }
+  $projPath = Join-Path $ProjectRoot "QuickCut.xcodeproj"
+
+  & xcodebuild -project $projPath -scheme QuickCut -configuration Release -derivedDataPath $derivedData ARCHS="arm64" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO clean build
+  
+  $builtApp = Join-Path $derivedData "Build/Products/Release/QuickCut.app"
+  if (-not (Test-Path $builtApp)) {
+    $foundApp = Get-ChildItem -Path $derivedData -Recurse -Filter "QuickCut.app" | Select-Object -First 1
+    $builtApp = if ($foundApp) { $foundApp.FullName } else { $null }
+  }
+
+  if ($builtApp -and (Test-Path $builtApp)) {
+    Info "Embedding runtime into QuickCut.app..."
+    $appDst = Join-Path $Stage "快剪.app"
+    if (Test-Path $appDst) { Remove-Item -Recurse -Force $appDst }
+    Copy-Item -Recurse $builtApp $appDst
+
+    $runtimeDst = Join-Path $appDst "Contents/Resources/EditorRuntime"
+    New-Item -ItemType Directory -Force -Path $runtimeDst | Out-Null
+    Copy-Item -Recurse (Join-Path $Stage "Modules\EditorRuntime\*") $runtimeDst
+
+    # Set execution permissions on macOS
+    if (Get-Command chmod -ErrorAction SilentlyContinue) {
+      & chmod -R +x (Join-Path $appDst "Contents/MacOS")
+      & chmod +x (Join-Path $runtimeDst "runtime/bun-arm64")
+      & chmod +x (Join-Path $runtimeDst "media/ffmpeg")
+      & chmod +x (Join-Path $runtimeDst "media/ffprobe")
+    }
+
+    # Ad-hoc code sign
+    if (Get-Command codesign -ErrorAction SilentlyContinue) {
+      Info "Code-signing QuickCut.app..."
+      & codesign --force --deep --sign - $appDst
+    }
+
+    # Create DMG Installer
+    Info "Creating macOS DMG installer ($DmgPath)..."
+    $dmgStage = Join-Path $StageRoot "dmg-stage"
+    if (Test-Path $dmgStage) { Remove-Item -Recurse -Force $dmgStage }
+    New-Item -ItemType Directory -Force -Path $dmgStage | Out-Null
+    Copy-Item -Recurse $appDst (Join-Path $dmgStage "快剪.app")
+    if (Get-Command ln -ErrorAction SilentlyContinue) {
+      & ln -s /Applications (Join-Path $dmgStage "Applications")
+    }
+
+    if (Test-Path $DmgPath) { Remove-Item -Force $DmgPath }
+    & hdiutil create -volname "快剪 QuickCut" -srcfolder $dmgStage -ov -format UDZO $DmgPath
+    if (Test-Path $DmgPath) {
+      $dmgItem = Get-Item $DmgPath
+      Info ("DMG Installer: {0}  ({1:N1} MB)" -f $dmgItem.FullName, ($dmgItem.Length / 1MB))
+    }
+  }
+}
 
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 Info "Creating $ZipPath"

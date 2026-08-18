@@ -30,6 +30,10 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        run: choco install innosetup -y
+
       - name: Setup FFmpeg (macOS)
         if: runner.os == 'macOS'
         run: brew install ffmpeg

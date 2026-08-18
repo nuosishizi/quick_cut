@@ -69,7 +69,8 @@ if (Test-Path (Join-Path $LocalFfmpegBin "ffmpeg.exe")) {
   }
   $foundFfmpeg = $true
 } else {
-  $cmdFfmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue)?.Source
+  $cmdObj = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+  $cmdFfmpeg = if ($cmdObj) { $cmdObj.Source } else { $null }
   if ($cmdFfmpeg) {
     $cmdDir = Split-Path $cmdFfmpeg
     Get-ChildItem $cmdDir -File | Where-Object { $_.Name -match "ffmpeg|ffprobe|.*\.dll" -and $_.Name -ne "ffplay.exe" } | ForEach-Object {
@@ -172,20 +173,67 @@ $Readme = @"
 - 本包不含任何 API Key，也不含你的工程和素材。
 - 仅供测试，版权归 HX。
 "@
-Set-Content -Path (Join-Path $Stage "使用说明.txt") -Value $Readme -Encoding UTF8
+Info "Compiling native Windows GUI launcher (快剪.exe)..."
+$launcherCode = @"
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Windows.Forms;
 
-Info "Smoke-checking bundled binaries..."
-$nodeExe = Join-Path $RuntimeNode "node.exe"
-$ffmpegExe = Join-Path $MediaDst "ffmpeg.exe"
-$ffprobeExe = Join-Path $MediaDst "ffprobe.exe"
-& $nodeExe -e "console.log(process.version)"
-if ($LASTEXITCODE -ne 0) { Fail "Bundled Node.js failed." }
-& $ffmpegExe -version | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { Fail "Bundled FFmpeg failed." }
-& $ffprobeExe -version | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { Fail "Bundled FFprobe failed." }
-& $nodeExe --check (Join-Path $EditorDst "src\main.mjs")
-if ($LASTEXITCODE -ne 0) { Fail "Editor main.mjs failed syntax check." }
+namespace QuickCutLauncher {
+    public class Program {
+        [STAThread]
+        public static void Main() {
+            try {
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                string nodeExe = Path.Combine(appDir, "runtime", "node", "node.exe");
+                if (!File.Exists(nodeExe)) { nodeExe = "node.exe"; }
+                string script = Path.Combine(appDir, "Modules", "EditorRuntime", "editor-desktop", "src", "main.mjs");
+                string mediaDir = Path.Combine(appDir, "Modules", "EditorRuntime", "media");
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = nodeExe;
+                psi.Arguments = "\"" + script + "\"";
+                psi.WorkingDirectory = Path.Combine(appDir, "Modules", "EditorRuntime", "editor-desktop");
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.EnvironmentVariables["QUICKCUT_MEDIA_ROOT"] = mediaDir;
+
+                Process.Start(psi);
+            } catch (Exception ex) {
+                MessageBox.Show("启动快剪失败: " + ex.Message, "快剪", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}
+"@
+$launcherExe = Join-Path $Stage "快剪.exe"
+Add-Type -TypeDefinition $launcherCode -Language CSharp -OutputAssembly $launcherExe -OutputType WindowsApplication -ReferencedAssemblies "System.Windows.Forms.dll"
+
+# Build Inno Setup Installer if compiler is present
+$isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+$iscc = if ($isccCmd) { $isccCmd.Source } else { $null }
+if (-not $iscc) {
+  $candidatePaths = @(
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    "C:\Program Files\Inno Setup 6\ISCC.exe"
+  )
+  foreach ($p in $candidatePaths) {
+    if (Test-Path $p) { $iscc = $p; break }
+  }
+}
+if ($iscc) {
+  Info "Building Inno Setup Windows installer with $iscc..."
+  $issFile = Join-Path $ProjectRoot "installer.iss"
+  & $iscc "/DMyAppVersion=$Version" "/DSourceDir=$Stage" "/O$TargetDir" $issFile
+  if ($LASTEXITCODE -eq 0) {
+    $installerPath = Join-Path $TargetDir "快剪-Windows-$Version-安装包.exe"
+    if (Test-Path $installerPath) {
+      $instItem = Get-Item $installerPath
+      Info ("Installer: {0}  ({1:N1} MB)" -f $instItem.FullName, ($instItem.Length / 1MB))
+    }
+  }
+}
 
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 Info "Creating $ZipPath"

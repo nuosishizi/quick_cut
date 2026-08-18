@@ -26,27 +26,29 @@
 
 ## 📦 下载与安装
 
-请前往 [Releases 页面](https://github.com/nuosishizi/quick_cut/releases) 下载最新版本：
+请前往 [Releases 页面](https://github.com/nuosishizi/quick_cut/releases) 下载最新安装包：
 
-| 系统平台 | 构建产物 | 运行说明 |
+| 系统平台 | 安装包类型 | 运行说明 |
 | :--- | :--- | :--- |
-| **🪟 Windows (x64)** | `快剪-Windows-x.x.xx-测试包.zip` | 解压后双击 `启动快剪.bat` 即可开箱即用（内置便携 Node.js 22 + FFmpeg 8.0） |
-| **🍎 macOS (Apple Silicon)** | `快剪-macOS-x.x.xx-测试包.zip` | 原生 arm64 架构，解压后双击 `启动快剪.command` 即可运行 |
+| **🪟 Windows (x64)** | `快剪-Windows-x.x.xx-安装包.exe` | **推荐**：一键安装程序，自动生成桌面图标与开始菜单，双击直接运行 |
+| **🍎 macOS (Apple Silicon)** | `快剪-macOS-x.x.xx-安装包.dmg` | **推荐**：macOS 原生 DMG 镜像，双击打开后拖拽 `快剪.app` 到应用程序即可使用 |
+| **🪟 Windows (绿色便携版)** | `快剪-Windows-x.x.xx-测试包.zip` | 免安装便携版，解压后双击 `快剪.exe` 或 `启动快剪.bat` 运行 |
+| **🍎 macOS (开发测试版)** | `快剪-macOS-x.x.xx-测试包.zip` | 包含完整 Xcode 工程源码与测试脚本 |
 
 ---
 
 ## 🛡️ 软件来源与安全验证 (Artifact Attestation)
 
-本软件的所有正式 Release 产物均由官方 GitHub Actions CI 自动化构建，并严格签署加密 **Artifact Attestation (SLSA Provenance)** 凭证。
+本软件的所有正式 Release 安装包均由官方 GitHub Actions CI 自动化构建，并严格签署加密 **Artifact Attestation (SLSA Provenance)** 凭证。
 
-下载安装包后，您可以使用 [GitHub CLI (`gh`)](https://cli.github.com/) 验证构建产物未被任何第三方篡改且确由官方 CI 产出：
+下载安装包后，您可以使用 [GitHub CLI (`gh`)](https://cli.github.com/) 验证安装包未被任何第三方篡改且确由官方 CI 产出：
 
 ```bash
-# 验证 Windows 安装包
-gh attestation verify ./快剪-Windows-2.7.41-测试包.zip --repo nuosishizi/quick_cut
+# 验证 Windows 安装程序
+gh attestation verify ./快剪-Windows-2.7.41-安装包.exe --repo nuosishizi/quick_cut
 
-# 验证 macOS 安装包
-gh attestation verify ./快剪-macOS-2.7.41-测试包.zip --repo nuosishizi/quick_cut
+# 验证 macOS DMG 安装镜像
+gh attestation verify ./快剪-macOS-2.7.41-安装包.dmg --repo nuosishizi/quick_cut
 ```
 
 > ✅ 验证成功即代表该文件 100% 由 GitHub Actions 官方编译机生成，数字签名与源码提交完全吻合。
