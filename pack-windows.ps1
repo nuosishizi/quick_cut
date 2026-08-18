@@ -1,3 +1,6 @@
+param(
+  [string]$OutDir = ""
+)
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
@@ -11,7 +14,13 @@ if (-not (Test-Path "D:\")) { $StageRoot = Join-Path $env:TEMP "QuickCut-win-pac
 $Stage = Join-Path $StageRoot $AppName
 $Cache = Join-Path $StageRoot "cache"
 $Desktop = [Environment]::GetFolderPath("Desktop")
-$ZipPath = Join-Path $Desktop "快剪-Windows-$Version-测试包.zip"
+$TargetDir = if ($OutDir -and (Test-Path $OutDir -IsValid)) {
+  if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
+  (Resolve-Path $OutDir).Path
+} else {
+  $Desktop
+}
+$ZipPath = Join-Path $TargetDir "快剪-Windows-$Version-测试包.zip"
 $NodeVersion = "22.18.0"
 $NodeZipName = "node-v$NodeVersion-win-x64.zip"
 $NodeUrl = "https://nodejs.org/dist/v$NodeVersion/$NodeZipName"

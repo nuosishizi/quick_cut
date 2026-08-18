@@ -239,7 +239,7 @@ test("DaVinci Resolve live send is wired", () => {
 
 test("export ends at visible production material instead of the timeline ruler", () => {
   const dynamicEnd = ui.match(
-    /function dynamicContentEnd\(\) \{([\s\S]*?)\n\s*\}\n\s*function trackIsVisible/,
+    /function dynamicContentEnd\(\) \{([\s\S]*?)\}\s*function trackIsVisible/,
   )?.[1];
   assert.ok(dynamicEnd);
   assert.doesNotMatch(dynamicEnd, /reviewCaptions|state\.issues/);
@@ -289,7 +289,7 @@ test("a 267 minute diagnostic track cannot extend a 178 second export", () => {
 
 test("timeline scrolling keeps clips mounted and redraws only the cached waveform", () => {
   const timelineRenderer = ui.match(
-    /function renderTimeline\(\) \{([\s\S]*?)\n\s*\}\n\s*let timelineRenderFrame/,
+    /function renderTimeline\(\) \{([\s\S]*?)\}\s*let timelineRenderFrame/,
   )?.[1];
   assert.ok(timelineRenderer);
   assert.doesNotMatch(timelineRenderer, /timelineItemVisible/);
@@ -405,7 +405,7 @@ test("export beauty path avoids the former bilateral bottleneck and reports prep
 });
 
 test("preview dragging updates only the selected compositor layer", () => {
-  const drag = ui.match(/function applyObjectDragMove\(clientX, clientY\) \{([\s\S]*?)\n\s*\}\n\s*function scheduleObjectDragMove/)?.[1] || "";
+  const drag = ui.match(/function applyObjectDragMove\(clientX, clientY\) \{([\s\S]*?)\}\s*function scheduleObjectDragMove/)?.[1] || "";
   assert.ok(drag);
   assert.doesNotMatch(drag, /updatePreviewTransformOnly/);
   assert.match(drag, /selectedElement\.style\.transform = transform/);
@@ -754,7 +754,7 @@ test("playhead split and blade work without selecting a real clip first", () => 
 
 test("timeline linking follows DaVinci linked selection, not time overlap", () => {
   const linker = ui.match(
-    /function linkedTimelineObjects\(anchorType, anchorId\) \{([\s\S]*?)\n      \}\n      function includeLinkedSelection/,
+    /function linkedTimelineObjects\(anchorType, anchorId\) \{([\s\S]*?)\}\s*function includeLinkedSelection/,
   )?.[1];
   assert.ok(linker);
   assert.match(linker, /item\.linkGroupId === obj\.linkGroupId/);

@@ -1,3 +1,6 @@
+param(
+  [string]$OutDir = ""
+)
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
@@ -10,7 +13,13 @@ $StageRoot = "D:\QuickCut-mac-pack"
 if (-not (Test-Path "D:\")) { $StageRoot = Join-Path $env:TEMP "QuickCut-mac-pack" }
 $Stage = Join-Path $StageRoot $AppName
 $Desktop = [Environment]::GetFolderPath("Desktop")
-$ZipPath = Join-Path $Desktop "快剪-macOS-$Version-测试包.zip"
+$TargetDir = if ($OutDir -and (Test-Path $OutDir -IsValid)) {
+  if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
+  (Resolve-Path $OutDir).Path
+} else {
+  $Desktop
+}
+$ZipPath = Join-Path $TargetDir "快剪-macOS-$Version-测试包.zip"
 
 function Info([string]$Message) { Write-Host $Message -ForegroundColor Cyan }
 function Fail([string]$Message) { Write-Host $Message -ForegroundColor Red; exit 1 }
