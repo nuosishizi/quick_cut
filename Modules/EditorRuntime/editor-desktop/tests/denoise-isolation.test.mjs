@@ -21,8 +21,9 @@ test("audioDenoiseFilter maps all modes and strengths correctly", () => {
   const uvr5Filter = audioDenoiseFilter("uvr5-master", 0.85);
   assert.ok(uvr5Filter.includes("afftdn=nr="), "UVR5 master includes spectral denoiser");
   assert.ok(uvr5Filter.includes("tn=1:tr=1"), "UVR5 master includes transient de-reverb");
-  assert.ok(uvr5Filter.includes("equalizer=f=180"), "UVR5 master includes low-end warmth");
-  assert.ok(uvr5Filter.includes("equalizer=f=3200"), "UVR5 master includes presence boost");
+  assert.ok(uvr5Filter.includes("equalizer=f=185"), "UVR5 master includes low-end warmth");
+  assert.ok(uvr5Filter.includes("equalizer=f=3300"), "UVR5 master includes presence boost");
+  assert.ok(uvr5Filter.includes("highshelf=f=10500"), "UVR5 master includes highshelf air");
   assert.ok(uvr5Filter.includes("crystalizer"), "UVR5 master includes air crystalizer");
   assert.ok(uvr5Filter.includes("deesser"), "UVR5 master includes de-esser");
   assert.ok(uvr5Filter.includes("alimiter"), "UVR5 master includes limiter");

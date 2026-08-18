@@ -857,19 +857,22 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
     ? `aresample=48000,arnndn=m='${escapeFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
   if (mode === "uvr5-master" || mode === "uvr5") {
-    const warmthGain = (1.5 + amount * 1.8).toFixed(2);
-    const presenceGain = (1.2 + amount * 1.5).toFixed(2);
+    const warmthGain = (1.6 + amount * 1.8).toFixed(2);
+    const presenceGain = (1.2 + amount * 1.6).toFixed(2);
     const crystal = (0.8 + amount * 1.0).toFixed(2);
     return [
-      "highpass=f=55",
-      "lowpass=f=17500",
+      "highpass=f=58:p=2",
+      "lowpass=f=17800",
       neural,
+      "adeclick",
       `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1:tr=1`,
       `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
-      `equalizer=f=180:t=q:w=0.85:g=${warmthGain}`,
-      `equalizer=f=3200:t=q:w=1.05:g=${presenceGain}`,
+      `equalizer=f=185:t=q:w=0.85:g=${warmthGain}`,
+      "equalizer=f=1000:t=q:w=1.2:g=0.5",
+      `equalizer=f=3300:t=q:w=1.05:g=${presenceGain}`,
+      "highshelf=f=10500:g=1.2",
       `crystalizer=i=${crystal}:c=0`,
-      "deesser=i=0.45:m=0.55:f=0.55",
+      "deesser=i=0.42:m=0.55:f=0.55",
       "alimiter=limit=0.96",
     ]
       .filter(Boolean)
