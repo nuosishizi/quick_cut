@@ -155,62 +155,74 @@ $xcodeCmd = Get-Command xcodebuild -ErrorAction SilentlyContinue
 $xcodebuild = if ($xcodeCmd) { $xcodeCmd.Source } else { $null }
 $hdiCmd = Get-Command hdiutil -ErrorAction SilentlyContinue
 $hdiutil = if ($hdiCmd) { $hdiCmd.Source } else { $null }
-$DmgPath = Join-Path $TargetDir "快剪-macOS-$Version-安装包.dmg"
 
 if ($xcodebuild -and $hdiutil) {
-  Info "Building native macOS QuickCut.app with xcodebuild..."
-  $derivedData = Join-Path $StageRoot "DerivedData"
-  if (Test-Path $derivedData) { Remove-Item -Recurse -Force $derivedData }
-  $projPath = Join-Path $ProjectRoot "QuickCut.xcodeproj"
+  try {
+    Info "Building native macOS QuickCut.app with xcodebuild..."
+    $derivedData = Join-Path $StageRoot "DerivedData"
+    if (Test-Path $derivedData) { Remove-Item -Recurse -Force $derivedData }
+    $projPath = Join-Path $ProjectRoot "QuickCut.xcodeproj"
 
-  & xcodebuild -project $projPath -scheme QuickCut -configuration Release -derivedDataPath $derivedData ARCHS="arm64" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO clean build
-  
-  $builtApp = Join-Path $derivedData "Build/Products/Release/QuickCut.app"
-  if (-not (Test-Path $builtApp)) {
-    $foundApp = Get-ChildItem -Path $derivedData -Recurse -Filter "QuickCut.app" | Select-Object -First 1
-    $builtApp = if ($foundApp) { $foundApp.FullName } else { $null }
-  }
-
-  if ($builtApp -and (Test-Path $builtApp)) {
-    Info "Embedding runtime into QuickCut.app..."
-    $appDst = Join-Path $Stage "快剪.app"
-    if (Test-Path $appDst) { Remove-Item -Recurse -Force $appDst }
-    Copy-Item -Recurse $builtApp $appDst
-
-    $runtimeDst = Join-Path $appDst "Contents/Resources/EditorRuntime"
-    New-Item -ItemType Directory -Force -Path $runtimeDst | Out-Null
-    Copy-Item -Recurse (Join-Path $Stage "Modules/EditorRuntime/*") $runtimeDst
-
-    # Set execution permissions on macOS
-    if (Get-Command chmod -ErrorAction SilentlyContinue) {
-      & chmod -R +x (Join-Path $appDst "Contents/MacOS")
-      & chmod +x (Join-Path $runtimeDst "runtime/bun-arm64")
-      & chmod +x (Join-Path $runtimeDst "media/ffmpeg")
-      & chmod +x (Join-Path $runtimeDst "media/ffprobe")
+    & xcodebuild -project $projPath -scheme QuickCut -configuration Release -derivedDataPath $derivedData ARCHS="arm64" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO SWIFT_OPTIMIZATION_LEVEL=-Onone clean build
+    
+    $builtApp = Join-Path $derivedData "Build/Products/Release/QuickCut.app"
+    if (-not (Test-Path $builtApp)) {
+      $foundApp = Get-ChildItem -Path $derivedData -Recurse -Filter "QuickCut.app" | Select-Object -First 1
+      $builtApp = if ($foundApp) { $foundApp.FullName } else { $null }
     }
 
-    # Ad-hoc code sign
-    if (Get-Command codesign -ErrorAction SilentlyContinue) {
-      Info "Code-signing QuickCut.app..."
-      & codesign --force --deep --sign - $appDst
-    }
+    if ($builtApp -and (Test-Path $builtApp)) {
+      Info "Embedding runtime into QuickCut.app..."
+      $appDst = Join-Path $Stage "快剪.app"
+      if (Test-Path $appDst) { Remove-Item -Recurse -Force $appDst }
+      Copy-Item -Recurse $builtApp $appDst
 
-    # Create DMG Installer
-    Info "Creating macOS DMG installer ($DmgPath)..."
-    $dmgStage = Join-Path $StageRoot "dmg-stage"
-    if (Test-Path $dmgStage) { Remove-Item -Recurse -Force $dmgStage }
-    New-Item -ItemType Directory -Force -Path $dmgStage | Out-Null
-    Copy-Item -Recurse $appDst (Join-Path $dmgStage "快剪.app")
-    if (Get-Command ln -ErrorAction SilentlyContinue) {
-      & ln -s /Applications (Join-Path $dmgStage "Applications")
-    }
+      $runtimeDst = Join-Path $appDst "Contents/Resources/EditorRuntime"
+      New-Item -ItemType Directory -Force -Path $runtimeDst | Out-Null
+      $sourceModules = Join-Path $Stage "Modules/EditorRuntime"
+      if (Test-Path $sourceModules) {
+        Get-ChildItem $sourceModules | ForEach-Object {
+          Copy-Item -Recurse $_.FullName (Join-Path $runtimeDst $_.Name) -Force
+        }
+      }
 
-    if (Test-Path $DmgPath) { Remove-Item -Force $DmgPath }
-    & hdiutil create -volname "快剪 QuickCut" -srcfolder $dmgStage -ov -format UDZO $DmgPath
-    if (Test-Path $DmgPath) {
-      $dmgItem = Get-Item $DmgPath
-      Info ("DMG Installer: {0}  ({1:N1} MB)" -f $dmgItem.FullName, ($dmgItem.Length / 1MB))
+      # Set execution permissions on macOS
+      if (Get-Command chmod -ErrorAction SilentlyContinue) {
+        & chmod -R +x (Join-Path $appDst "Contents/MacOS")
+        if (Test-Path (Join-Path $runtimeDst "runtime/bun-arm64")) { & chmod +x (Join-Path $runtimeDst "runtime/bun-arm64") }
+        if (Test-Path (Join-Path $runtimeDst "media/ffmpeg")) { & chmod +x (Join-Path $runtimeDst "media/ffmpeg") }
+        if (Test-Path (Join-Path $runtimeDst "media/ffprobe")) { & chmod +x (Join-Path $runtimeDst "media/ffprobe") }
+      }
+
+      # Ad-hoc code sign
+      if (Get-Command codesign -ErrorAction SilentlyContinue) {
+        Info "Code-signing QuickCut.app..."
+        & codesign --force --deep --sign - $appDst
+      }
+
+      # Create DMG Installer
+      Info "Creating macOS DMG installer..."
+      $dmgStage = Join-Path $StageRoot "dmg-stage"
+      if (Test-Path $dmgStage) { Remove-Item -Recurse -Force $dmgStage }
+      New-Item -ItemType Directory -Force -Path $dmgStage | Out-Null
+      Copy-Item -Recurse $appDst (Join-Path $dmgStage "快剪.app")
+      if (Get-Command ln -ErrorAction SilentlyContinue) {
+        & ln -s /Applications (Join-Path $dmgStage "Applications")
+      }
+
+      $dmgEnglish = Join-Path $TargetDir "QuickCut-macOS-$Version-Installer.dmg"
+      $dmgChinese = Join-Path $TargetDir "快剪-macOS-$Version-安装包.dmg"
+      if (Test-Path $dmgEnglish) { Remove-Item -Force $dmgEnglish }
+      if (Test-Path $dmgChinese) { Remove-Item -Force $dmgChinese }
+      & hdiutil create -volname "QuickCut" -srcfolder $dmgStage -ov -format UDZO $dmgEnglish
+      if (Test-Path $dmgEnglish) {
+        Copy-Item $dmgEnglish $dmgChinese -Force
+        $dmgItem = Get-Item $dmgChinese
+        Info ("DMG Installer: {0}  ({1:N1} MB)" -f $dmgItem.FullName, ($dmgItem.Length / 1MB))
+      }
     }
+  } catch {
+    Write-Host "Warning: DMG creation step note: $_" -ForegroundColor Yellow
   }
 }
 
