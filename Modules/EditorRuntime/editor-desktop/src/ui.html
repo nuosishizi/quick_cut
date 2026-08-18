@@ -3868,21 +3868,23 @@
                 <div class="switch"><span>片段静音</span><input id="clipMute" type="checkbox" /></div>
               </div>
               <div class="inspectsection">
-                <h3>AI 语音隔离与降噪</h3>
+                <h3>AI 语音母带与降噪</h3>
                 <p class="small">
-                  基于 48kHz 全频带深度神经网络，对标达芬奇 Studio 级语音隔离，彻底剔除环境杂音、风噪与混响。
+                  融合 UVR5 架构与 48kHz 深度神经网络，一键完成【深度去噪 + 去房间回声 + 人声磁性通透增强 + 防爆音平稳】。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="ai-isolation" selected>AI 语音隔离 (达芬奇级 · 推荐)</option>
+                    <option value="uvr5-master" selected>✨ UVR5 级 · 录音棚人声母带 (去噪+去回声+音质提升)</option>
+                    <option value="ai-isolation">AI 语音隔离 (达芬奇级 · 强力去杂音)</option>
+                    <option value="dereverb">去房间混响 / 空旷回声 (De-Reverb · 贴耳干声)</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
-                    <option value="strong">强力去噪 (空调/风扇/风噪)</option>
+                    <option value="strong">强力去底噪 (空调/风扇/风噪)</option>
                     <option value="off">关闭降噪</option>
                   </select>
                 </div>
                 <div class="field">
                   <div class="fieldhead">
-                    <span>降噪强度</span><output id="denoiseOut">80%</output>
+                    <span>净化强度</span><output id="denoiseOut">85%</output>
                   </div>
                   <input
                     class="range"
@@ -3890,7 +3892,7 @@
                     type="range"
                     min="0"
                     max="100"
-                    value="80"
+                    value="85"
                   />
                 </div>
                 <div class="row" style="flex-wrap: wrap; gap: 6px;">
@@ -4647,7 +4649,7 @@
           midtoneDetail: 0,
           vignette: 0,
         },
-        denoise: { mode: "ai-isolation", strength: 0.8 },
+        denoise: { mode: "uvr5-master", strength: 0.85 },
         denoiseEnabled: false,
         denoisedAudio: null,
         beauty: {
@@ -5381,7 +5383,7 @@
             midtoneDetail: 0,
             vignette: 0,
           },
-          denoise: { mode: "ai-isolation", strength: 0.8 },
+          denoise: { mode: "uvr5-master", strength: 0.85 },
           denoiseEnabled: false,
           denoisedAudio: null,
           beauty: {
@@ -7837,7 +7839,7 @@
           warmth: 0,
           rosy: 0,
         };
-        state.denoise = { mode: "ai-isolation", strength: 0.8 };
+        state.denoise = { mode: "uvr5-master", strength: 0.85 };
         state.denoiseEnabled = false;
         state.denoisedAudio = null;
         state.audio = {
@@ -13431,23 +13433,27 @@
         $("audioLowCut").value = state.audio.lowCut || 60;
         $("audioHighCut").value = state.audio.highCut || 16500;
         $("audioChannelMode").value = state.audio.channelMode || "original";
-        $("denoiseMode").value = state.denoise.mode || "ai-isolation";
+        $("denoiseMode").value = state.denoise.mode || "uvr5-master";
         $("denoiseStrength").value = Math.round(
-          (state.denoise.strength ?? 0.8) * 100,
+          (state.denoise.strength ?? 0.85) * 100,
         );
         $("denoiseOut").textContent =
-          `${Math.round((state.denoise.strength ?? 0.8) * 100)}%`;
+          `${Math.round((state.denoise.strength ?? 0.85) * 100)}%`;
         const hasDenoised = Boolean(state.denoisedAudio);
         if ($("revertDenoisedTrack")) {
           $("revertDenoisedTrack").style.display = hasDenoised ? "inline-flex" : "none";
         }
         if (hasDenoised) {
           const modeLabel =
-            state.denoisedAudio.mode === "ai-isolation"
-              ? "达芬奇级 AI 语音隔离"
-              : state.denoisedAudio.mode === "gentle"
-                ? "温和人声去噪"
-                : "强力去噪";
+            state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
+              ? "✨ UVR5 级录音棚母带净化"
+              : state.denoisedAudio.mode === "ai-isolation"
+                ? "达芬奇级 AI 语音隔离"
+                : state.denoisedAudio.mode === "dereverb"
+                  ? "去房间回声 De-Reverb"
+                  : state.denoisedAudio.mode === "gentle"
+                    ? "温和人声去噪"
+                    : "强力去底噪";
           $("denoiseApplyState").textContent =
             `已应用「${modeLabel}」全轨缓存；时间线播放与导出均已生效。`;
         } else {

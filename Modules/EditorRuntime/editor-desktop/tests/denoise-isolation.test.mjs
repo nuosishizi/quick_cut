@@ -15,6 +15,21 @@ test("audioDenoiseFilter maps all modes and strengths correctly", () => {
   assert.equal(audioDenoiseFilter("off", 0.8), "");
   assert.equal(audioDenoiseFilter("ai-isolation", 0.005), "");
 
+  // UVR5 Master mode (De-noise + De-reverb + Tone Polish)
+  const uvr5Filter = audioDenoiseFilter("uvr5-master", 0.85);
+  assert.ok(uvr5Filter.includes("afftdn=nr="), "UVR5 master includes spectral denoiser");
+  assert.ok(uvr5Filter.includes("tn=1:tr=1"), "UVR5 master includes transient de-reverb");
+  assert.ok(uvr5Filter.includes("equalizer=f=180"), "UVR5 master includes low-end warmth");
+  assert.ok(uvr5Filter.includes("equalizer=f=3200"), "UVR5 master includes presence boost");
+  assert.ok(uvr5Filter.includes("crystalizer"), "UVR5 master includes air crystalizer");
+  assert.ok(uvr5Filter.includes("deesser"), "UVR5 master includes de-esser");
+  assert.ok(uvr5Filter.includes("alimiter"), "UVR5 master includes limiter");
+
+  // De-Reverb mode
+  const dereverbFilter = audioDenoiseFilter("dereverb", 0.8);
+  assert.ok(dereverbFilter.includes("tn=1:tr=1"), "De-reverb includes reflection suppression");
+  assert.ok(dereverbFilter.includes("equalizer=f=280"), "De-reverb includes mud room frequency dip");
+
   // AI Isolation mode
   const aiFilter = audioDenoiseFilter("ai-isolation", 0.8);
   assert.ok(aiFilter.includes("highpass=f=55"), "AI isolation should include highpass 55Hz");

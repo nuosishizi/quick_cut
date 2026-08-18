@@ -856,6 +856,37 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
   const neural = model
     ? `aresample=48000,arnndn=m='${escapeFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
+  if (mode === "uvr5-master" || mode === "uvr5") {
+    const warmthGain = (1.5 + amount * 1.8).toFixed(2);
+    const presenceGain = (1.2 + amount * 1.5).toFixed(2);
+    const crystal = (0.8 + amount * 1.0).toFixed(2);
+    return [
+      "highpass=f=55",
+      "lowpass=f=17500",
+      neural,
+      `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1:tr=1`,
+      `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
+      `equalizer=f=180:t=q:w=0.85:g=${warmthGain}`,
+      `equalizer=f=3200:t=q:w=1.05:g=${presenceGain}`,
+      `crystalizer=i=${crystal}:c=0`,
+      "deesser=i=0.45:m=0.55:f=0.55",
+      "alimiter=limit=0.96",
+    ]
+      .filter(Boolean)
+      .join(",");
+  }
+  if (mode === "dereverb" || mode === "de-echo") {
+    return [
+      "highpass=f=60",
+      "lowpass=f=17000",
+      `afftdn=nr=${Math.max(6, Math.round(8 + amount * 12))}:nf=-45:tn=1:tr=1`,
+      `equalizer=f=280:t=q:w=1.2:g=-${(1.5 + amount * 2.0).toFixed(2)}`,
+      `equalizer=f=3000:t=q:w=0.9:g=${(1.0 + amount * 1.2).toFixed(2)}`,
+      "alimiter=limit=0.98",
+    ]
+      .filter(Boolean)
+      .join(",");
+  }
   if (mode === "ai-isolation" || mode === "deepfilter") {
     return [
       "highpass=f=55",
