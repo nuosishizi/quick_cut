@@ -13616,6 +13616,8 @@
           $("clipMute").checked = !!clipSettings.muted;
         }
       }
+      const syncAudioInspectors = syncAudioControls;
+      window.syncAudioInspectors = syncAudioControls;
       async function installDemucsAutomatically(callback) {
         $("denoiseApplyState").textContent = "正在启动 Meta Demucs 引擎全自动部署…";
         try {
