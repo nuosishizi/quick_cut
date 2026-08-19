@@ -13714,7 +13714,7 @@
               strength: state.denoise.strength ?? 0.85,
             };
             state.denoiseEnabled = true;
-            syncAudioInspectors();
+            syncAudioControls();
             syncPreviewAudio();
             queueAutosave();
             toast("AI 降噪已成功应用到整条音轨");
@@ -13731,7 +13731,7 @@
         if (!state.denoisedAudio) return;
         state.denoisedAudio = null;
         state.denoiseEnabled = false;
-        syncAudioInspectors();
+        syncAudioControls();
         syncPreviewAudio();
         queueAutosave();
         toast("已还原为原始音频");
