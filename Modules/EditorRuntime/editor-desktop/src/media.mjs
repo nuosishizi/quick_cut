@@ -3259,10 +3259,10 @@ function beginExportJob(config, info, job) {
       "-map", "0:v:0", "-map", "0:a?", "-c", "copy",
       "-map_metadata", "0", "-movflags", "+faststart",
       "-t", String(Math.max(0.04, Number(config.outputDuration || info.duration))),
-      "-stats_period", "0.2", "-progress", "pipe:2", "-nostats", config.outputPath,
+      "-stats_period", "0.2", "-progress", "pipe:1", "-nostats", config.outputPath,
     ];
     const child = spawn(mediaBinary("ffmpeg"), args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     if (child.pid) {
       try { os.setPriority(child.pid, 5); } catch {}
@@ -3322,12 +3322,12 @@ function beginExportJob(config, info, job) {
       "-stats_period",
       "0.2",
       "-progress",
-      "pipe:2",
+      "pipe:1",
       "-nostats",
       config.outputPath,
     ];
     const child = spawn(mediaBinary("ffmpeg"), args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     if (child.pid) {
       try { os.setPriority(child.pid, 5); } catch {}
@@ -3424,7 +3424,7 @@ function beginExportJob(config, info, job) {
       "-stats_period",
       "0.2",
       "-progress",
-      "pipe:2",
+      "pipe:1",
       "-nostats",
       config.outputPath,
     );
@@ -3436,7 +3436,7 @@ function beginExportJob(config, info, job) {
     });
     if (packed.scriptPath) config.filterComplexScriptPath = packed.scriptPath;
     const child = spawn(mediaBinary("ffmpeg"), packed.args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     if (child.pid) {
       try { os.setPriority(child.pid, 5); } catch {}
@@ -3561,6 +3561,37 @@ function exportStageMessage(job) {
   return `正在导出 ${percent}% · ${label} · 已用 ${used}`;
 }
 
+export function cleanFfmpegErrorMessage(rawStderr) {
+  if (!rawStderr || typeof rawStderr !== "string") return "视频导出失败。";
+  const lines = rawStderr
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter(
+      (l) =>
+        !/^(frame|fps|stream_\d+_\d+|bitrate|total_size|out_time(_us|_ms)?|dup_frames|drop_frames|speed|progress)=/i.test(
+          l,
+        ),
+    )
+    .filter(
+      (l) =>
+        !/^ffmpeg version|^built with|^configuration:|^lib(av|sw|postproc)/i.test(
+          l,
+        ),
+    );
+
+  if (!lines.length) return "视频导出失败。";
+
+  const errorLines = lines.filter((l) =>
+    /(\[error\]|\[fatal\]|error|failed|invalid|cannot|unable|no such|denied|broken pipe|exceeded|out of memory|encoder.*error|conversion failed)/i.test(
+      l,
+    ),
+  );
+
+  const selected = errorLines.length ? errorLines : lines.slice(-4);
+  return selected.slice(-4).join("\n");
+}
+
 function monitorExport(child, job, config, info, retry = null) {
   let stderr = "", progressBuffer = "";
   const token = {};
@@ -3604,10 +3635,9 @@ function monitorExport(child, job, config, info, retry = null) {
     }
     clearInterval(stallWatch);
   }, 500);
-  child.stderr?.on("data", (chunk) => {
+  child.stdout?.on("data", (chunk) => {
     if (abandoned()) return;
     const text = chunk.toString();
-    stderr = (stderr + text).slice(-16000);
     progressBuffer = (progressBuffer + text).slice(-8000);
     const parsed = parseFfmpegProgress(progressBuffer, { duration, fps });
     if (parsed.seconds > 0) {
@@ -3624,6 +3654,25 @@ function monitorExport(child, job, config, info, retry = null) {
     refreshExportJob(job);
     const lastNewline = progressBuffer.lastIndexOf("\n");
     if (lastNewline > 0) progressBuffer = progressBuffer.slice(lastNewline + 1);
+  });
+  child.stderr?.on("data", (chunk) => {
+    if (abandoned()) return;
+    const text = chunk.toString();
+    stderr = (stderr + text).slice(-16000);
+    if (!job.frameProgress || /progress=/i.test(text)) {
+      const parsed = parseFfmpegProgress(text, { duration, fps });
+      if (parsed.seconds > 0) {
+        job.frameProgress = true;
+        job.progress = Math.max(
+          job.progress || 0,
+          Math.min(parsed.ended ? 0.99 : 0.98, parsed.seconds / duration),
+        );
+        job.lastProgressAt = Date.now();
+      }
+      if (parsed.speed > 0) job.speed = parsed.speed;
+      if (parsed.ended) job.stage = "muxing";
+      refreshExportJob(job);
+    }
   });
   child.on("error", (error) => {
     if (abandoned()) return;
@@ -3665,7 +3714,7 @@ function monitorExport(child, job, config, info, retry = null) {
       return;
     } else {
       job.state = "failed";
-      job.error = stderr.trim() || "视频导出失败。";
+      job.error = cleanFfmpegErrorMessage(stderr);
       job.message = job.error;
     }
     if (config.captionAssPath)

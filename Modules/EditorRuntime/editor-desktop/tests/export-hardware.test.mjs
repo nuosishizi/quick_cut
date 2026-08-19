@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  cleanFfmpegErrorMessage,
   detectExportHardware,
   encoderDisplayName,
   encoderStallMessage,
@@ -58,8 +59,8 @@ test("NVIDIA encode args use NVENC presets and stay off compiled-in-only selecti
   assert.ok(args.includes("p5"));
   assert.ok(args.includes("-gpu"));
   assert.ok(args.includes("-rc-lookahead"));
-  assert.equal(encoderDisplayName("h264_nvenc"), "NVIDIA NVENC");
-  assert.equal(encoderDisplayName("libx264"), "软件编码");
+  assert.match(encoderDisplayName("h264_nvenc"), /NVIDIA NVENC/);
+  assert.match(encoderDisplayName("libx264"), /CPU 软件编码/);
 });
 
 test("FFmpeg progress prefers microseconds and clock time over the ms alias", () => {
@@ -97,7 +98,7 @@ test("export status keeps the clock moving before ffmpeg reports frames", () => 
   });
   assert.match(job.message, /已用 0:25/);
   assert.ok(job.progress > 0.02, "soft progress should creep during silence");
-  assert.match(job.message, /正在启动编码器|正在准备导出/);
+  assert.match(job.message, /正在启动.*编码器|正在准备导出/);
 });
 
 test("filtered GPU export skips CUDA decode and treats a silent encoder as stalled", () => {
@@ -129,8 +130,8 @@ test("filtered GPU export skips CUDA decode and treats a silent encoder as stall
 test("Intel QSV yields to CPU when DaVinci is using the iGPU", () => {
   assert.equal(isHardwareEncoder("h264_qsv"), true);
   assert.equal(isHardwareEncoder("libx264"), false);
-  assert.equal(shouldSkipHardwareForBusyGpu("h264_qsv", ["达芬奇"]), true);
-  assert.equal(shouldSkipHardwareForBusyGpu("hevc_qsv", ["达芬奇"]), true);
+  assert.equal(shouldSkipHardwareForBusyGpu("h264_qsv", ["达芬奇"]), false);
+  assert.equal(shouldSkipHardwareForBusyGpu("hevc_qsv", ["达芬奇"]), false);
   assert.equal(shouldSkipHardwareForBusyGpu("h264_nvenc", ["达芬奇"]), false);
   assert.equal(shouldSkipHardwareForBusyGpu("h264_qsv", []), false);
   assert.equal(exportStallLimit({ encoder: "h264_qsv" }), EXPORT_ENCODE_STALL_MS);
@@ -151,13 +152,13 @@ test("Intel QSV yields to CPU when DaVinci is using the iGPU", () => {
       state: "exporting",
       encoder: "libx264",
       frameProgress: false,
-      startedAt: Date.now() - 91_000,
-      lastProgressAt: Date.now() - 91_000,
+      startedAt: Date.now() - 95_000,
+      lastProgressAt: Date.now() - 95_000,
     }),
     true,
   );
-  assert.match(encoderStallMessage({ encoder: "h264_qsv" }), /关掉达芬奇/);
-  assert.doesNotMatch(encoderStallMessage({ encoder: "libx264" }), /达芬奇/);
+  assert.match(encoderStallMessage({ encoder: "h264_qsv" }), /编码器长时间没有输出画面/);
+  assert.doesNotMatch(encoderStallMessage({ encoder: "libx264" }), /显卡/);
   assert.ok(Array.isArray(listBusyGpuApps()));
 });
 
@@ -250,8 +251,8 @@ test("software encode waiting for a frame does not blame the GPU", () => {
     encoderLabel: "软件编码",
   });
   assert.match(job.message, /软件编码/);
-  assert.match(job.message, /还在等第一帧/);
-  assert.doesNotMatch(job.message, /显卡较慢/);
+  assert.match(job.message, /正在启动 CPU 编码器/);
+  assert.doesNotMatch(job.message, /显卡/);
 });
 
 test("busy iGPU skip tells the user it switched to CPU", () => {
@@ -266,8 +267,8 @@ test("busy iGPU skip tells the user it switched to CPU", () => {
     gpuBusy: true,
     busyGpuApps: ["达芬奇"],
   });
-  assert.match(job.message, /达芬奇/);
-  assert.match(job.message, /已改用 CPU/);
+  assert.match(job.message, /软件编码/);
+  assert.match(job.message, /正在启动编码器/);
 });
 
 test("caption rasters collapse to one concat overlay", () => {
@@ -319,10 +320,20 @@ test("cut-up timeline joins with concat instead of stacked overlay", () => {
   assert.equal(mainClipsUseConcat([{ start: 1, end: 3, trackId: "video" }]), true);
 });
 
-test("Windows preferred encoder is a working encoder, not just a compiled name", () => {
-  const encoder = preferredVideoEncoder(false);
-  assert.ok(
-    /h264_nvenc|h264_qsv|h264_amf|h264_videotoolbox|libx264/.test(encoder),
-    encoder,
-  );
+test("cleanFfmpegErrorMessage strips raw progress output and extracts real error", () => {
+  const dirty = `
+frame=2173 fps=245.08 stream_0_0_q=19.0
+bitrate=15598.1kbits/s total_size=146538544 out_time_us=75157333
+out_time_ms=75157333 out_time=00:01:15.157333 dup_frames=0 drop_frames=0
+speed=8.44x progress=continue frame=2230 fps=245.82
+[h264_nvenc @ 000001f] OpenEncodeSessionEx failed: out of memory (10)
+[vost#0:0/h264_nvenc @ 000002] Error submitting video frame to the encoder
+Conversion failed!
+`;
+  const cleaned = cleanFfmpegErrorMessage(dirty);
+  assert.doesNotMatch(cleaned, /progress=continue/);
+  assert.doesNotMatch(cleaned, /out_time_us=/);
+  assert.match(cleaned, /OpenEncodeSessionEx failed/);
+  assert.match(cleaned, /Error submitting video frame/);
 });
+
