@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "专页变量管理" [ref=e3] [cursor=pointer]:
+      - /url: /pages/tenant-select
+    - navigation
+  - main [ref=e4]:
+    - generic [ref=e5]:
+      - heading "登录" [level=1] [ref=e7]
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: 账号
+          - textbox "账号" [ref=e11]
+        - generic [ref=e12]:
+          - generic [ref=e13]: 密码
+          - textbox "密码" [ref=e14]
+        - generic [ref=e15]:
+          - checkbox "记住登录（7天）" [ref=e16]
+          - text: 记住登录（7天）
+        - button "登录" [ref=e18] [cursor=pointer]
+        - paragraph [ref=e19]: 连续失败 5 次将锁定 15 分钟，请保护好账号密码。

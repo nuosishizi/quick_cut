@@ -1,0 +1,1704 @@
+- generic [ref=f7e1]:
+  - banner [ref=f7e2]:
+    - link "专页变量管理" [ref=f7e3] [cursor=pointer]:
+      - /url: /pages/list
+    - navigation [ref=f7e4]:
+      - link "🌐 北美英文" [ref=f7e5] [cursor=pointer]:
+        - /url: /pages/tenant-select
+      - link "表格编辑" [ref=f7e6] [cursor=pointer]:
+        - /url: /pages/list
+      - link "📊 订阅统计" [ref=f7e7] [cursor=pointer]:
+        - /url: /pages/subscribe-stats
+      - link "删除历史恢复" [ref=f7e8] [cursor=pointer]:
+        - /url: /pages/deleted-history
+      - link "变量显示" [ref=f7e9] [cursor=pointer]:
+        - /url: /pages/my-variables
+      - link "变量总控" [ref=f7e10] [cursor=pointer]:
+        - /url: /pages/variables
+      - link "区域配置" [ref=f7e11] [cursor=pointer]:
+        - /url: /pages/system-settings
+      - link "用户管理 1在线" [ref=f7e12] [cursor=pointer]:
+        - /url: /pages/accounts
+      - link "洲/语系管理" [ref=f7e13] [cursor=pointer]:
+        - /url: /pages/tenant-management
+      - generic "界面主题" [ref=f7e14]:
+        - button "切换夜间模式" [ref=f7e15] [cursor=pointer]: 🌙 夜间
+      - generic "表格行密度" [ref=f7e16]:
+        - button "舒适" [ref=f7e17] [cursor=pointer]
+        - button "紧凑" [ref=f7e18] [cursor=pointer]
+      - button "👤 超级管理员" [ref=f7e19] [cursor=pointer]
+      - button "退出" [ref=f7e21] [cursor=pointer]
+  - main [ref=f7e22]:
+    - generic [ref=f7e23]:
+      - generic [ref=f7e24]:
+        - button "保存" [ref=f7e25] [cursor=pointer]
+        - button "更新变量" [ref=f7e26] [cursor=pointer]
+        - button "精简模式" [ref=f7e27] [cursor=pointer]
+        - button "导出 Excel" [ref=f7e28] [cursor=pointer]
+        - button "导入 Excel" [ref=f7e29] [cursor=pointer]
+        - button "更新专页清单" [ref=f7e30] [cursor=pointer]
+        - button "新增专页" [ref=f7e31] [cursor=pointer]
+        - button "批量过滤" [ref=f7e32] [cursor=pointer]
+        - link "📊 订阅统计" [ref=f7e33] [cursor=pointer]:
+          - /url: /pages/subscribe-stats
+        - generic [ref=f7e34]: 自动保存
+        - generic [ref=f7e35]: Ctrl+C 复制
+        - generic [ref=f7e36]: Ctrl+V 粘贴
+        - generic [ref=f7e37]: Ctrl+S 保存
+        - generic [ref=f7e38]: 已加载 40 行，已全部加载，双击编辑
+        - generic [ref=f7e39]: "已加载专页: 20 个 / 匹配 20 个"
+        - generic "自动保存状态" [ref=f7e40]: 已保存
+      - generic [ref=f7e44]:
+        - generic [ref=f7e45]:
+          - generic [ref=f7e46]:
+            - generic [ref=f7e47]:
+              - generic [ref=f7e48]: 📂
+              - heading "文件夹" [level=3] [ref=f7e49]
+            - button "‹" [ref=f7e50] [cursor=pointer]
+            - button "+ 新建" [ref=f7e51] [cursor=pointer]
+          - generic [ref=f7e52]:
+            - generic "所有专页（总 9238）" [ref=f7e53] [cursor=pointer]:
+              - generic "所有专页（总 9238）" [ref=f7e54]: 全部
+              - generic [ref=f7e55]:
+                - generic [ref=f7e56]: 所有专页
+                - generic "总 / 不开 / 开" [ref=f7e58]:
+                  - generic [ref=f7e59]: 总：9238
+                  - generic [ref=f7e60]: 不开：6832
+                  - generic [ref=f7e61]: 开：2406
+            - generic "测试（总 20）" [ref=f7e64]:
+              - generic "测试（总 20）" [ref=f7e65]: 测
+              - generic [ref=f7e66]:
+                - generic [ref=f7e67]: 测试
+                - generic "总 / 不开 / 开" [ref=f7e69]:
+                  - generic [ref=f7e70]: 总：20
+                  - generic [ref=f7e71]: 不开：17
+                  - generic [ref=f7e72]: 开：3
+              - button "⋮" [ref=f7e73] [cursor=pointer]
+        - generic [ref=f7e74]:
+          - generic [ref=f7e166]: 当前文件夹：测试
+          - generic [ref=f7e75]:
+            - generic [ref=f7e76]:
+              - generic [ref=f7e77]: 队伍
+              - generic [ref=f7e78]:
+                - combobox "队伍":
+                  - option "全部队伍" [selected]
+                  - option "1队3组"
+                  - option "IG1队1组"
+                  - option "IG1队2组"
+                  - option "IG1队3组"
+                  - option "IG2队1组"
+                  - option "IG2队2组"
+                  - option "IG2队3组"
+                  - option "五队"
+                  - option "小墨"
+                  - option "开地区1队1组"
+                  - option "开地区1队2组"
+                  - option "开地区1队3组"
+                  - option "开地区2队"
+                  - option "开地区2队1组"
+                  - option "开地区2队2组"
+                  - option "开地区2队3组"
+                  - option "新人队"
+                  - option "欧洲1队"
+                  - option "欧洲1队1组"
+                  - option "欧洲2队"
+                  - option "欧洲2队1组"
+                  - option "欧洲3队"
+                  - option "欧洲3队1组"
+                  - option "欧洲4队"
+                  - option "欧洲4队1组"
+                  - option "法语"
+                  - option "澳新1队"
+                  - option "澳新1队1组"
+                  - option "澳新1队2组"
+                  - option "澳新2队"
+                  - option "澳新2队1组"
+                  - option "澳新2队2组"
+                  - option "澳新3队"
+                  - option "澳新3队1组"
+                  - option "澳新3队2组"
+                  - option "美加1队"
+                  - option "美加1队1组"
+                  - option "美加1队2组"
+                  - option "美加1队3组"
+                  - option "美加2队"
+                  - option "美加2队1组"
+                  - option "美加2队2组"
+                  - option "美加2队3组"
+                  - option "美加3队"
+                  - option "美加3队1组"
+                  - option "美加3队2组"
+                  - option "美加4队"
+                  - option "美加4队1组"
+                  - option "美加4队2组"
+                  - option "美加5队"
+                  - option "美加5队1组"
+                - generic [ref=f7e79]:
+                  - textbox "队伍（可搜索）" [ref=f7e80]:
+                    - /placeholder: 全部队伍
+                  - button "▼" [ref=f7e81] [cursor=pointer]
+            - generic [ref=f7e82]:
+              - generic [ref=f7e83]: 管理员
+              - generic [ref=f7e84]:
+                - combobox "管理员":
+                  - option "全部管理员" [selected]
+                  - option "1051466571377038"
+                  - option "2队引流组"
+                  - option "3队引流组"
+                  - option "AI李伟"
+                  - option "Ashley Acoff"
+                  - option "AU 小草"
+                  - option "AU刘洋"
+                  - option "AU小草"
+                  - option "AU谦寻"
+                  - option "Blessed in Christ"
+                  - option "cade"
+                  - option "CA乐乐"
+                  - option "CA慕诚"
+                  - option "Daniela Monomta"
+                  - option "EE苏醒"
+                  - option "ES安娜"
+                  - option "ES小树"
+                  - option "ES苏醒"
+                  - option "God Is My Refuge"
+                  - option "House of Prayer"
+                  - option "Kayla Ragins"
+                  - option "Kelsey Mitchell"
+                  - option "KH许诺"
+                  - option "NL乔一"
+                  - option "NZ乐乐"
+                  - option "NZ乔一"
+                  - option "NZ刘洋"
+                  - option "NZ安娜"
+                  - option "NZ蓬勃"
+                  - option "NZ许诺"
+                  - option "PT林欣"
+                  - option "Tracy Ann Johnson"
+                  - option "US小草"
+                  - option "US慕寻"
+                  - option "US慕诚"
+                  - option "US李伟"
+                  - option "US许诺"
+                  - option "US谦寻"
+                  - option "VD小树"
+                  - option "VD海洋"
+                  - option "一 一"
+                  - option "一一"
+                  - option "一纯"
+                  - option "七七"
+                  - option "义纯"
+                  - option "乐乐"
+                  - option "乐天"
+                  - option "乔一"
+                  - option "乔乐"
+                  - option "井唯"
+                  - option "交心"
+                  - option "亮亮"
+                  - option "付担"
+                  - option "以沫"
+                  - option "以沫y"
+                  - option "任宣"
+                  - option "伊婉"
+                  - option "伊尘"
+                  - option "佐义"
+                  - option "体悟"
+                  - option "何佳"
+                  - option "佳佳"
+                  - option "倩倩"
+                  - option "凌薇"
+                  - option "凡思"
+                  - option "凯凯"
+                  - option "刘依"
+                  - option "刘倩"
+                  - option "刘正"
+                  - option "刘海洋"
+                  - option "刘鑫"
+                  - option "刘雪"
+                  - option "加惜"
+                  - option "千寻"
+                  - option "只只"
+                  - option "叶子"
+                  - option "叶知秋"
+                  - option "向上"
+                  - option "向明"
+                  - option "启航"
+                  - option "吴凡"
+                  - option "吴浩"
+                  - option "吴献"
+                  - option "周芳"
+                  - option "周青"
+                  - option "和善"
+                  - option "圆圆"
+                  - option "圓圓"
+                  - option "坚强"
+                  - option "坦然"
+                  - option "夏依诺"
+                  - option "夏宁"
+                  - option "奋力"
+                  - option "奕纯"
+                  - option "姚惜-新人"
+                  - option "子寻"
+                  - option "子沫"
+                  - option "宁欣"
+                  - option "宇乐"
+                  - option "宇扬"
+                  - option "守诺"
+                  - option "安一"
+                  - option "安分"
+                  - option "安娜"
+                  - option "安心"
+                  - option "安然"
+                  - option "宋佳音"
+                  - option "宋琳"
+                  - option "宋知意"
+                  - option "寻见"
+                  - option "寻进"
+                  - option "小七"
+                  - option "小义"
+                  - option "小伊"
+                  - option "小修"
+                  - option "小凡"
+                  - option "小刚"
+                  - option "小墨"
+                  - option "小夏"
+                  - option "小尘"
+                  - option "小微"
+                  - option "小志"
+                  - option "小恩"
+                  - option "小明"
+                  - option "小月"
+                  - option "小杨阳"
+                  - option "小树"
+                  - option "小海"
+                  - option "小涛"
+                  - option "小然"
+                  - option "小玮"
+                  - option "小玮-聆听"
+                  - option "小玲"
+                  - option "小白"
+                  - option "小良"
+                  - option "小薇"
+                  - option "小诺"
+                  - option "小超"
+                  - option "小进"
+                  - option "小顾"
+                  - option "岳梦"
+                  - option "帅帅"
+                  - option "年成"
+                  - option "廖凡"
+                  - option "张三"
+                  - option "张阳"
+                  - option "张鹏鹏"
+                  - option "徐晴"
+                  - option "徐曼"
+                  - option "御灵"
+                  - option "心畅"
+                  - option "心静"
+                  - option "志伟"
+                  - option "快快"
+                  - option "思原"
+                  - option "思绪"
+                  - option "悔新"
+                  - option "慕寻LA"
+                  - option "慕珍"
+                  - option "慕诚"
+                  - option "承诺"
+                  - option "拂黎"
+                  - option "拾光"
+                  - option "敬远"
+                  - option "文文"
+                  - option "文栩"
+                  - option "新华"
+                  - option "方磊"
+                  - option "方茹"
+                  - option "方长"
+                  - option "无怨"
+                  - option "时心"
+                  - option "明里"
+                  - option "明锐"
+                  - option "晓婷"
+                  - option "晓晓"
+                  - option "晨露"
+                  - option "有心"
+                  - option "有路"
+                  - option "朝蒙希"
+                  - option "李乐"
+                  - option "李伟"
+                  - option "李佳"
+                  - option "李冉"
+                  - option "李凯"
+                  - option "李刚"
+                  - option "李刚-27"
+                  - option "李敏"
+                  - option "李炎"
+                  - option "李璐"
+                  - option "李诺"
+                  - option "杨依"
+                  - option "杨婷"
+                  - option "杨思"
+                  - option "杨敬"
+                  - option "杨曦"
+                  - option "杨硕"
+                  - option "杨颖"
+                  - option "林依"
+                  - option "林叶"
+                  - option "林夕"
+                  - option "林婷"
+                  - option "林安"
+                  - option "林希"
+                  - option "林慕慕"
+                  - option "林欣"
+                  - option "果敢"
+                  - option "柏庶"
+                  - option "橙子"
+                  - option "欣恩"
+                  - option "欣然"
+                  - option "歆程"
+                  - option "歌手"
+                  - option "歌颂"
+                  - option "歌颂-快追"
+                  - option "正寻"
+                  - option "求真"
+                  - option "江漓"
+                  - option "沉思"
+                  - option "沐沐"
+                  - option "活出"
+                  - option "流水"
+                  - option "海洋"
+                  - option "清南"
+                  - option "清心"
+                  - option "清新"
+                  - option "温馨"
+                  - option "渴心"
+                  - option "牧尘"
+                  - option "献上"
+                  - option "王亚东"
+                  - option "王恒"
+                  - option "王悦"
+                  - option "王月"
+                  - option "王玥"
+                  - option "王璐"
+                  - option "王硕"
+                  - option "王磊"
+                  - option "王芳"
+                  - option "王轲"
+                  - option "珍惜"
+                  - option "珍珍"
+                  - option "理性"
+                  - option "理静"
+                  - option "琳琳"
+                  - option "瑞霖"
+                  - option "璐璐"
+                  - option "畅畅"
+                  - option "白妮"
+                  - option "白浩"
+                  - option "百合"
+                  - option "目标"
+                  - option "相依"
+                  - option "真真"
+                  - option "知凡"
+                  - option "知微"
+                  - option "石甄"
+                  - option "石草"
+                  - option "程琳"
+                  - option "稳瑾"
+                  - option "立志"
+                  - option "立清"
+                  - option "童桐"
+                  - option "笑笑"
+                  - option "米兰"
+                  - option "米菲"
+                  - option "纯意"
+                  - option "罗依"
+                  - option "罗毅"
+                  - option "美加2队引流组"
+                  - option "美洁"
+                  - option "自知"
+                  - option "良慧"
+                  - option "艳艳"
+                  - option "艾克"
+                  - option "艾拉"
+                  - option "苏尘羽"
+                  - option "苏念"
+                  - option "苏晗"
+                  - option "苏末"
+                  - option "苏禾"
+                  - option "苏舟"
+                  - option "苏芮"
+                  - option "茗涵"
+                  - option "莉莎"
+                  - option "莫扬"
+                  - option "莫文"
+                  - option "蓝硕"
+                  - option "蓬勃"
+                  - option "薛玉"
+                  - option "虔心"
+                  - option "虫虫"
+                  - option "警醒"
+                  - option "许心"
+                  - option "诗苒"
+                  - option "诚实"
+                  - option "诚意"
+                  - option "诺言"
+                  - option "诺诺"
+                  - option "谢全恩"
+                  - option "谦和"
+                  - option "贝拉"
+                  - option "贞欣"
+                  - option "贺一"
+                  - option "赵俊"
+                  - option "赵薇"
+                  - option "路瑶"
+                  - option "路远"
+                  - option "辛有"
+                  - option "辛然"
+                  - option "辰阳"
+                  - option "迎难"
+                  - option "还报"
+                  - option "追随"
+                  - option "郑叶"
+                  - option "郑浩然"
+                  - option "郝学"
+                  - option "郝温暖"
+                  - option "钟静"
+                  - option "闻芯"
+                  - option "阿明"
+                  - option "阿星"
+                  - option "阿绍"
+                  - option "陆鑫"
+                  - option "陈依"
+                  - option "陈峰"
+                  - option "陈强"
+                  - option "陈彬"
+                  - option "陈林"
+                  - option "陈真"
+                  - option "陈莱"
+                  - option "陈言"
+                  - option "陈辉"
+                  - option "雨晴"
+                  - option "雨轩"
+                  - option "静思"
+                  - option "韦羽"
+                  - option "韩愈"
+                  - option "韩洋"
+                  - option "韩钰"
+                  - option "顾爽"
+                  - option "高烨"
+                  - option "默默"
+                - generic [ref=f7e85]:
+                  - textbox "管理员（可搜索）" [ref=f7e86]:
+                    - /placeholder: 全部管理员
+                  - button "▼" [ref=f7e87] [cursor=pointer]
+            - generic [ref=f7e88]:
+              - generic [ref=f7e89]: 发帖人员
+              - generic [ref=f7e90]:
+                - combobox "发帖人员":
+                  - option "全部发帖人员" [selected]
+                  - option "101115909273945"
+                  - option "101587772826907"
+                  - option "1026193403921745"
+                  - option "1036533356209014"
+                  - option "106670782311890"
+                  - option "1068201496372453"
+                  - option "1073518519184792"
+                  - option "1076544615545681"
+                  - option "1085206941351265"
+                  - option "1093480980523230"
+                  - option "1093660360485827"
+                  - option "1096997040157520"
+                  - option "1110880078782718"
+                  - option "1116573441542912"
+                  - option "1116844284845243"
+                  - option "112261968566067"
+                  - option "1137775276086137"
+                  - option "1142688902266752"
+                  - option "1142833598913009"
+                  - option "1145811805285386"
+                  - option "1157702490766191"
+                  - option "1158048734054240"
+                  - option "1179087241949112"
+                  - option "1203761852800924"
+                  - option "1207336442456624"
+                  - option "1249877934871046"
+                  - option "1262937410229392"
+                  - option "1283012554893270"
+                  - option "1293219860533697"
+                  - option "271537276040574"
+                  - option "298498586680928"
+                  - option "313717831814447"
+                  - option "404077649457445"
+                  - option "411668018699840"
+                  - option "472390299300876"
+                  - option "529200583612669"
+                  - option "739590122561130"
+                  - option "746507961872445"
+                  - option "918539478000034"
+                  - option "962235160300722"
+                  - option "969263062935548"
+                  - option "977070642164261"
+                  - option "977971768741081"
+                  - option "993338920533251"
+                  - option "995846640289120"
+                  - option "Anne"
+                  - option "Arlene Felix"
+                  - option "CA乐乐"
+                  - option "EE苏醒"
+                  - option "https://m.me/61576075324258"
+                  - option "https://m.me/61580062643962"
+                  - option "https://messenger.com/t/61580795266491"
+                  - option "IG专页"
+                  - option "NZ乐乐"
+                  - option "NZ乔一"
+                  - option "NZ安娜"
+                  - option "NZ许诺"
+                  - option "Sarah"
+                  - option "US小草"
+                  - option "US慕寻"
+                  - option "US李伟"
+                  - option "US许诺"
+                  - option "US许诺-陈晓"
+                  - option "US许诺/CA珍惜"
+                  - option "VD小树"
+                  - option "VD海洋"
+                  - option "一心"
+                  - option "上心"
+                  - option "乐乐"
+                  - option "乔一"
+                  - option "交心"
+                  - option "以沫"
+                  - option "任宣"
+                  - option "伊婉"
+                  - option "佐义"
+                  - option "何佳"
+                  - option "佩珍"
+                  - option "佳佳"
+                  - option "刘伟"
+                  - option "刘依/雅尼"
+                  - option "刘依/高赞"
+                  - option "刘正"
+                  - option "刘海洋"
+                  - option "刘鑫"
+                  - option "刘雪"
+                  - option "加惜"
+                  - option "向上"
+                  - option "向明"
+                  - option "向舟"
+                  - option "向阳"
+                  - option "吴浩"
+                  - option "吴献"
+                  - option "周青"
+                  - option "和善"
+                  - option "坚强"
+                  - option "坦然"
+                  - option "夏依诺"
+                  - option "夏宁"
+                  - option "宇扬"
+                  - option "守诺"
+                  - option "安一"
+                  - option "安娜"
+                  - option "安心"
+                  - option "宋知意"
+                  - option "小七"
+                  - option "小义"
+                  - option "小伊"
+                  - option "小墨"
+                  - option "小孩专页"
+                  - option "小微"
+                  - option "小志"
+                  - option "小明"
+                  - option "小月"
+                  - option "小杨阳"
+                  - option "小杰"
+                  - option "小海"
+                  - option "小海/配合"
+                  - option "小白"
+                  - option "小良"
+                  - option "小诺"
+                  - option "小超"
+                  - option "小顾"
+                  - option "廖凡"
+                  - option "张阳"
+                  - option "张鹏鹏"
+                  - option "徐晴"
+                  - option "心安"
+                  - option "心畅"
+                  - option "快快"
+                  - option "思原"
+                  - option "思原-通行"
+                  - option "思原/通行"
+                  - option "思绪"
+                  - option "总品牌"
+                  - option "慕寻"
+                  - option "慕灵"
+                  - option "慕灵-井唯"
+                  - option "承诺"
+                  - option "拂黎"
+                  - option "拾光"
+                  - option "效力"
+                  - option "敬远"
+                  - option "文文"
+                  - option "新华"
+                  - option "方磊"
+                  - option "方茹"
+                  - option "方长"
+                  - option "无怨"
+                  - option "明辨"
+                  - option "晓婷"
+                  - option "智恩"
+                  - option "有路"
+                  - option "李乐"
+                  - option "李伟"
+                  - option "李佳"
+                  - option "李凯"
+                  - option "李敏"
+                  - option "李炎"
+                  - option "李诺"
+                  - option "李雪"
+                  - option "杨婷"
+                  - option "杨思"
+                  - option "杨曦"
+                  - option "杨硕"
+                  - option "林叶"
+                  - option "林希"
+                  - option "林希/小庄"
+                  - option "果敢"
+                  - option "柏庶"
+                  - option "欣恩"
+                  - option "欣然"
+                  - option "欧阳"
+                  - option "歌颂"
+                  - option "歌颂-快追"
+                  - option "求真"
+                  - option "浅浅"
+                  - option "清新"
+                  - option "温馨"
+                  - option "牧尘"
+                  - option "王亚东"
+                  - option "王弟兄"
+                  - option "王恒"
+                  - option "王玥"
+                  - option "王璐"
+                  - option "王磊"
+                  - option "王芳"
+                  - option "王轲"
+                  - option "珍惜"
+                  - option "珍珍"
+                  - option "理性"
+                  - option "理静"
+                  - option "瑞霖"
+                  - option "璐璐"
+                  - option "田晓 白雪"
+                  - option "白浩"
+                  - option "白雪"
+                  - option "百合"
+                  - option "目标"
+                  - option "石甄"
+                  - option "程琳"
+                  - option "稳瑾"
+                  - option "立清"
+                  - option "笑笑"
+                  - option "米菲"
+                  - option "纯意"
+                  - option "罗毅"
+                  - option "舒琦"
+                  - option "艾克"
+                  - option "芳夏"
+                  - option "苏子晗"
+                  - option "苏晗"
+                  - option "苏末"
+                  - option "苏芮"
+                  - option "苏醒"
+                  - option "莫扬"
+                  - option "薛玉"
+                  - option "许诺"
+                  - option "贝拉"
+                  - option "贺一"
+                  - option "赵俊"
+                  - option "赵薇"
+                  - option "赶上"
+                  - option "辛有"
+                  - option "辛然"
+                  - option "辰阳"
+                  - option "迎难"
+                  - option "还报"
+                  - option "追求"
+                  - option "追随"
+                  - option "通行"
+                  - option "郁听"
+                  - option "郑浩然"
+                  - option "郑谨"
+                  - option "郝学"
+                  - option "郝温暖"
+                  - option "配合"
+                  - option "鑫锐"
+                  - option "阿明"
+                  - option "阿绍"
+                  - option "陆鑫"
+                  - option "陈依"
+                  - option "陈彬"
+                  - option "陈晓"
+                  - option "陈林"
+                  - option "陈言"
+                  - option "陈辉"
+                  - option "雅尼"
+                  - option "韦羽"
+                  - option "韩愈"
+                  - option "韩洋"
+                  - option "马站立"
+                  - option "高烨"
+                  - option "麦子"
+                  - option "默默"
+                - generic [ref=f7e91]:
+                  - textbox "发帖人员（可搜索）" [ref=f7e92]:
+                    - /placeholder: 全部发帖人员
+                  - button "▼" [ref=f7e93] [cursor=pointer]
+            - generic [ref=f7e94]:
+              - generic [ref=f7e95]: 接线员
+              - generic [ref=f7e96]:
+                - combobox "接线员":
+                  - option "全部接线员" [selected]
+                  - option "106445779167400"
+                  - option "107197864867806"
+                  - option "1093815553809937"
+                  - option "110104288421799"
+                  - option "1198672839994478"
+                  - option "1201039296419706"
+                  - option "1209863235542675"
+                  - option "209204848948719"
+                  - option "3队"
+                  - option "534080249792386"
+                  - option "61572334017071"
+                  - option "916451111561769"
+                  - option "AU还报"
+                  - option "AbaBPG-WWcbGiqN8"
+                  - option "Anna LI"
+                  - option "Benida Angeline B"
+                  - option "Cindy M Meng"
+                  - option "Emily Ching"
+                  - option "Kayra Chen"
+                  - option "Lidia Lidiy"
+                  - option "Rosa S Marshall"
+                  - option "Sara Jose"
+                  - option "https:"
+                  - option "j"
+                  - option "m.me"
+                  - option "messenger.com"
+                  - option "t"
+                  - option "text"
+                  - option "一然"
+                  - option "乔木"
+                  - option "于敬"
+                  - option "云婷"
+                  - option "佳琪"
+                  - option "冰心许忱"
+                  - option "刘琪"
+                  - option "刘畅"
+                  - option "刘真"
+                  - option "加配"
+                  - option "勇杰"
+                  - option "卢毅"
+                  - option "周正"
+                  - option "回转"
+                  - option "天亮"
+                  - option "奋力"
+                  - option "子琪"
+                  - option "孟媛"
+                  - option "孟贺"
+                  - option "实意"
+                  - option "小哈"
+                  - option "小张"
+                  - option "小李"
+                  - option "小柯"
+                  - option "小雪"
+                  - option "张晓"
+                  - option "徐晴"
+                  - option "心念"
+                  - option "志刚"
+                  - option "思音"
+                  - option "悔改"
+                  - option "悔过"
+                  - option "慕渴"
+                  - option "成长"
+                  - option "承诺"
+                  - option "新新"
+                  - option "新洁"
+                  - option "新生"
+                  - option "方夏"
+                  - option "方璐"
+                  - option "无闻"
+                  - option "昕薇"
+                  - option "李媛"
+                  - option "杨玉"
+                  - option "杨磊"
+                  - option "林一诺"
+                  - option "林心"
+                  - option "林梦"
+                  - option "林真心"
+                  - option "欣冉"
+                  - option "正义"
+                  - option "沈安"
+                  - option "沉稳"
+                  - option "沉责"
+                  - option "潇潇"
+                  - option "王琪"
+                  - option "瑞信"
+                  - option "白宁"
+                  - option "真实"
+                  - option "程心"
+                  - option "稳重"
+                  - option "童心"
+                  - option "要神"
+                  - option "认真"
+                  - option "诚诚"
+                  - option "谢全恩"
+                  - option "谨慎"
+                  - option "赵静"
+                  - option "邢真"
+                  - option "陈尘"
+                  - option "陈笑"
+                  - option "陈静"
+                  - option "靠神"
+                  - option "顺新"
+                  - option "默闻"
+                - generic [ref=f7e97]:
+                  - textbox "接线员（可搜索）" [ref=f7e98]:
+                    - /placeholder: 全部接线员
+                  - button "▼" [ref=f7e99] [cursor=pointer]
+            - generic [ref=f7e100]:
+              - generic [ref=f7e101]: 开放地区
+              - combobox "开放地区" [ref=f7e102]:
+                - option "全部" [selected]
+                - option "是"
+                - option "否/空"
+            - generic [ref=f7e103]:
+              - generic [ref=f7e104]: 更新状态
+              - combobox "更新状态" [ref=f7e105]:
+                - option "全部状态" [selected]
+                - option "待更新/失败"
+                - option "待更新"
+                - option "失败"
+                - option "部分成功"
+                - option "成功"
+            - generic [ref=f7e106]:
+              - generic [ref=f7e107]: 搜索
+              - textbox "搜索" [ref=f7e108]:
+                - /placeholder: 专页ID、变量名、链接、人员
+            - button "清空" [ref=f7e110] [cursor=pointer]
+          - table "专页变量表格" [ref=f7e112]:
+            - rowgroup [ref=f7e130]:
+              - row [ref=f7e131]:
+                - columnheader [ref=f7e132]:
+                  - checkbox [ref=f7e133]
+                - columnheader "# 拖拽调整列宽" [ref=f7e134] [cursor=pointer]:
+                  - text: "#"
+                  - generic "拖拽调整列宽" [ref=f7e135]
+                - columnheader "头像 拖拽调整列宽" [ref=f7e136]:
+                  - text: 头像
+                  - generic "拖拽调整列宽" [ref=f7e137]
+                - columnheader "队名称 拖拽调整列宽" [ref=f7e138] [cursor=pointer]:
+                  - text: 队名称
+                  - generic "拖拽调整列宽" [ref=f7e139]
+                - columnheader "开放地区 拖拽调整列宽" [ref=f7e140] [cursor=pointer]:
+                  - text: 开放地区
+                  - generic "拖拽调整列宽" [ref=f7e141]
+                - columnheader "专页ID 拖拽调整列宽" [ref=f7e142] [cursor=pointer]:
+                  - text: 专页ID
+                  - generic "拖拽调整列宽" [ref=f7e143]
+                - columnheader "专页名字 拖拽调整列宽" [ref=f7e144] [cursor=pointer]:
+                  - text: 专页名字
+                  - generic "拖拽调整列宽" [ref=f7e145]
+                - columnheader "管理员 拖拽调整列宽" [ref=f7e146] [cursor=pointer]:
+                  - text: 管理员
+                  - generic "拖拽调整列宽" [ref=f7e147]
+                - columnheader "发帖人员 拖拽调整列宽" [ref=f7e148] [cursor=pointer]:
+                  - text: 发帖人员
+                  - generic "拖拽调整列宽" [ref=f7e149]
+                - columnheader "变量名 拖拽调整列宽" [ref=f7e150] [cursor=pointer]:
+                  - text: 变量名
+                  - generic "拖拽调整列宽" [ref=f7e151]
+                - columnheader "正在使用的变量 拖拽调整列宽" [ref=f7e152] [cursor=pointer]:
+                  - text: 正在使用的变量
+                  - generic "拖拽调整列宽" [ref=f7e153]
+                - columnheader "要改为的变量 拖拽调整列宽" [ref=f7e154]:
+                  - text: 要改为的变量
+                  - generic "拖拽调整列宽" [ref=f7e155]
+                - columnheader "接线人员 拖拽调整列宽" [ref=f7e156] [cursor=pointer]:
+                  - text: 接线人员
+                  - generic "拖拽调整列宽" [ref=f7e157]
+                - columnheader "更新状态 拖拽调整列宽" [ref=f7e158] [cursor=pointer]:
+                  - text: 更新状态
+                  - generic "拖拽调整列宽" [ref=f7e159]
+                - columnheader "目前变量人员 拖拽调整列宽" [ref=f7e160] [cursor=pointer]:
+                  - text: 目前变量人员
+                  - generic "拖拽调整列宽" [ref=f7e161]
+                - columnheader "更新时间 拖拽调整列宽" [ref=f7e162] [cursor=pointer]:
+                  - text: 更新时间
+                  - generic "拖拽调整列宽" [ref=f7e163]
+            - rowgroup [ref=f7e168]:
+              - row "1 澳新2队2组 开 1040320059162919 澳欧1队-陈真-Grace Light#7911-FB 陈真 set_url https://m.me/61585922420845 https://messenger.com/t/61570422636908 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e169]:
+                - cell [ref=f7e170]:
+                  - checkbox [ref=f7e171]
+                - cell "1" [ref=f7e172] [cursor=pointer]
+                - cell [ref=f7e173]
+                - cell "澳新2队2组" [ref=f7e175]
+                - cell "开" [ref=f7e176]
+                - cell "1040320059162919" [ref=f7e178]
+                - cell "澳欧1队-陈真-Grace Light#7911-FB" [ref=f7e179]
+                - cell "陈真" [ref=f7e180]
+                - cell [ref=f7e181]
+                - cell "set_url" [ref=f7e182]
+                - cell "https://m.me/61585922420845" [ref=f7e183]
+                - cell "https://messenger.com/t/61570422636908" [ref=f7e184]
+                - cell "靠神" [ref=f7e185]
+                - cell "待更新" [ref=f7e186]
+                - cell "要神" [ref=f7e188]
+                - cell "07月17日 12:32:42" [ref=f7e189]
+              - row "2 澳新2队2组 开 1040320059162919 澳欧1队-陈真-Grace Light#7911-FB 陈真 set_name Emily Faithll Joyce Palteng 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e190]:
+                - cell [ref=f7e191]:
+                  - checkbox [ref=f7e192]
+                - cell "2" [ref=f7e193] [cursor=pointer]
+                - cell [ref=f7e194]
+                - cell "澳新2队2组" [ref=f7e196]
+                - cell "开" [ref=f7e197]
+                - cell "1040320059162919" [ref=f7e199]
+                - cell "澳欧1队-陈真-Grace Light#7911-FB" [ref=f7e200]
+                - cell "陈真" [ref=f7e201]
+                - cell [ref=f7e202]
+                - cell "set_name" [ref=f7e203]
+                - cell "Emily Faithll" [ref=f7e204]
+                - cell "Joyce Palteng" [ref=f7e205]
+                - cell "靠神" [ref=f7e206]
+                - cell "待更新" [ref=f7e207]
+                - cell "要神" [ref=f7e209]
+                - cell "07月17日 12:32:42" [ref=f7e210]
+              - row "3 澳新2队2组 不开 1109494745588836 澳新2队-陈真-Evelyn Foster#00576-FB 陈真 set_url https://messenger.com/t/61579734755984 https://messenger.com/t/61579734755984 靠神 成功 沈安 08月19日 06:51:26" [ref=f7e211]:
+                - cell [ref=f7e212]:
+                  - checkbox [ref=f7e213]
+                - cell "3" [ref=f7e214] [cursor=pointer]
+                - cell [ref=f7e215]
+                - cell "澳新2队2组" [ref=f7e217]
+                - cell "不开" [ref=f7e218]
+                - cell "1109494745588836" [ref=f7e220]
+                - cell "澳新2队-陈真-Evelyn Foster#00576-FB" [ref=f7e221]
+                - cell "陈真" [ref=f7e222]
+                - cell [ref=f7e223]
+                - cell "set_url" [ref=f7e224]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e225]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e226]
+                - cell "靠神" [ref=f7e227]
+                - cell "成功" [ref=f7e228]
+                - cell "沈安" [ref=f7e230]
+                - cell "08月19日 06:51:26" [ref=f7e231]
+              - row "4 澳新2队2组 不开 1109494745588836 澳新2队-陈真-Evelyn Foster#00576-FB 陈真 set_name Chloe Allen Chloe Allen 靠神 成功 沈安 08月19日 06:51:26" [ref=f7e232]:
+                - cell [ref=f7e233]:
+                  - checkbox [ref=f7e234]
+                - cell "4" [ref=f7e235] [cursor=pointer]
+                - cell [ref=f7e236]
+                - cell "澳新2队2组" [ref=f7e238]
+                - cell "不开" [ref=f7e239]
+                - cell "1109494745588836" [ref=f7e241]
+                - cell "澳新2队-陈真-Evelyn Foster#00576-FB" [ref=f7e242]
+                - cell "陈真" [ref=f7e243]
+                - cell [ref=f7e244]
+                - cell "set_name" [ref=f7e245]
+                - cell "Chloe Allen" [ref=f7e246]
+                - cell "Chloe Allen" [ref=f7e247]
+                - cell "靠神" [ref=f7e248]
+                - cell "成功" [ref=f7e249]
+                - cell "沈安" [ref=f7e251]
+                - cell "08月19日 06:51:26" [ref=f7e252]
+              - row "5 澳新2队2组 不开 1134417919763046 澳新2队-陈真-Daily Prayer Circle#00714-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 靠神 成功 一然 08月19日 10:03:11" [ref=f7e253]:
+                - cell [ref=f7e254]:
+                  - checkbox [ref=f7e255]
+                - cell "5" [ref=f7e256] [cursor=pointer]
+                - cell [ref=f7e257]
+                - cell "澳新2队2组" [ref=f7e259]
+                - cell "不开" [ref=f7e260]
+                - cell "1134417919763046" [ref=f7e262]
+                - cell "澳新2队-陈真-Daily Prayer Circle#00714-FB" [ref=f7e263]
+                - cell "陈真" [ref=f7e264]
+                - cell [ref=f7e265]
+                - cell "set_url" [ref=f7e266]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e267]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e268]
+                - cell "靠神" [ref=f7e269]
+                - cell "成功" [ref=f7e270]
+                - cell "一然" [ref=f7e272]
+                - cell "08月19日 10:03:11" [ref=f7e273]
+              - row "6 澳新2队2组 不开 1134417919763046 澳新2队-陈真-Daily Prayer Circle#00714-FB 陈真 set_name Cathy Cathy 靠神 成功 一然 08月19日 10:03:11" [ref=f7e274]:
+                - cell [ref=f7e275]:
+                  - checkbox [ref=f7e276]
+                - cell "6" [ref=f7e277] [cursor=pointer]
+                - cell [ref=f7e278]
+                - cell "澳新2队2组" [ref=f7e280]
+                - cell "不开" [ref=f7e281]
+                - cell "1134417919763046" [ref=f7e283]
+                - cell "澳新2队-陈真-Daily Prayer Circle#00714-FB" [ref=f7e284]
+                - cell "陈真" [ref=f7e285]
+                - cell [ref=f7e286]
+                - cell "set_name" [ref=f7e287]
+                - cell "Cathy" [ref=f7e288]
+                - cell "Cathy" [ref=f7e289]
+                - cell "靠神" [ref=f7e290]
+                - cell "成功" [ref=f7e291]
+                - cell "一然" [ref=f7e293]
+                - cell "08月19日 10:03:11" [ref=f7e294]
+              - row "7 澳新2队2组 不开 1134831446382956 澳新2队-陈真-Abundant Grace Worship Center#00435-FB 陈真 set_url https://messenger.com/t/61573891121803 https://messenger.com/t/61573891121803 靠神 成功 要神 07月30日 03:48:51" [ref=f7e295]:
+                - cell [ref=f7e296]:
+                  - checkbox [ref=f7e297]
+                - cell "7" [ref=f7e298] [cursor=pointer]
+                - cell [ref=f7e299]
+                - cell "澳新2队2组" [ref=f7e301]
+                - cell "不开" [ref=f7e302]
+                - cell "1134831446382956" [ref=f7e304]
+                - cell "澳新2队-陈真-Abundant Grace Worship Center#00435-FB" [ref=f7e305]
+                - cell "陈真" [ref=f7e306]
+                - cell [ref=f7e307]
+                - cell "set_url" [ref=f7e308]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e309]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e310]
+                - cell "靠神" [ref=f7e311]
+                - cell "成功" [ref=f7e312]
+                - cell "要神" [ref=f7e314]
+                - cell "07月30日 03:48:51" [ref=f7e315]
+              - row "8 澳新2队2组 不开 1134831446382956 澳新2队-陈真-Abundant Grace Worship Center#00435-FB 陈真 set_name Glenda Harris Glenda Harris 靠神 成功 要神 07月30日 03:48:51" [ref=f7e316]:
+                - cell [ref=f7e317]:
+                  - checkbox [ref=f7e318]
+                - cell "8" [ref=f7e319] [cursor=pointer]
+                - cell [ref=f7e320]
+                - cell "澳新2队2组" [ref=f7e322]
+                - cell "不开" [ref=f7e323]
+                - cell "1134831446382956" [ref=f7e325]
+                - cell "澳新2队-陈真-Abundant Grace Worship Center#00435-FB" [ref=f7e326]
+                - cell "陈真" [ref=f7e327]
+                - cell [ref=f7e328]
+                - cell "set_name" [ref=f7e329]
+                - cell "Glenda Harris" [ref=f7e330]
+                - cell "Glenda Harris" [ref=f7e331]
+                - cell "靠神" [ref=f7e332]
+                - cell "成功" [ref=f7e333]
+                - cell "要神" [ref=f7e335]
+                - cell "07月30日 03:48:51" [ref=f7e336]
+              - row "9 澳新2队2组 不开 1173999552461313 澳欧1队-陈真-Barbara Collins#9070-FB 陈真 set_url https://messenger.com/t/61573891121803 https://messenger.com/t/61573891121803 靠神 成功 要神 07月30日 03:48:51" [ref=f7e337]:
+                - cell [ref=f7e338]:
+                  - checkbox [ref=f7e339]
+                - cell "9" [ref=f7e340] [cursor=pointer]
+                - cell [ref=f7e341]
+                - cell "澳新2队2组" [ref=f7e343]
+                - cell "不开" [ref=f7e344]
+                - cell "1173999552461313" [ref=f7e346]
+                - cell "澳欧1队-陈真-Barbara Collins#9070-FB" [ref=f7e347]
+                - cell "陈真" [ref=f7e348]
+                - cell [ref=f7e349]
+                - cell "set_url" [ref=f7e350]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e351]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e352]
+                - cell "靠神" [ref=f7e353]
+                - cell "成功" [ref=f7e354]
+                - cell "要神" [ref=f7e356]
+                - cell "07月30日 03:48:51" [ref=f7e357]
+              - row "10 澳新2队2组 不开 1173999552461313 澳欧1队-陈真-Barbara Collins#9070-FB 陈真 set_name Glenda Harris Glenda Harris 靠神 成功 要神 07月30日 03:48:51" [ref=f7e358]:
+                - cell [ref=f7e359]:
+                  - checkbox [ref=f7e360]
+                - cell "10" [ref=f7e361] [cursor=pointer]
+                - cell [ref=f7e362]
+                - cell "澳新2队2组" [ref=f7e364]
+                - cell "不开" [ref=f7e365]
+                - cell "1173999552461313" [ref=f7e367]
+                - cell "澳欧1队-陈真-Barbara Collins#9070-FB" [ref=f7e368]
+                - cell "陈真" [ref=f7e369]
+                - cell [ref=f7e370]
+                - cell "set_name" [ref=f7e371]
+                - cell "Glenda Harris" [ref=f7e372]
+                - cell "Glenda Harris" [ref=f7e373]
+                - cell "靠神" [ref=f7e374]
+                - cell "成功" [ref=f7e375]
+                - cell "要神" [ref=f7e377]
+                - cell "07月30日 03:48:51" [ref=f7e378]
+              - row "11 澳新2队2组 不开 1177669018764938 澳新2队-陈真-Grace Daily#00889-FB 陈真 set_url https://m.me/61571816609010 https://m.me/61571816609010 靠神 成功 沈安 08月05日 00:29:59" [ref=f7e379]:
+                - cell [ref=f7e380]:
+                  - checkbox [ref=f7e381]
+                - cell "11" [ref=f7e382] [cursor=pointer]
+                - cell [ref=f7e383]
+                - cell "澳新2队2组" [ref=f7e385]
+                - cell "不开" [ref=f7e386]
+                - cell "1177669018764938" [ref=f7e388]
+                - cell "澳新2队-陈真-Grace Daily#00889-FB" [ref=f7e389]
+                - cell "陈真" [ref=f7e390]
+                - cell [ref=f7e391]
+                - cell "set_url" [ref=f7e392]
+                - cell "https://m.me/61571816609010" [ref=f7e393]
+                - cell "https://m.me/61571816609010" [ref=f7e394]
+                - cell "靠神" [ref=f7e395]
+                - cell "成功" [ref=f7e396]
+                - cell "沈安" [ref=f7e398]
+                - cell "08月05日 00:29:59" [ref=f7e399]
+              - row "12 澳新2队2组 不开 1177669018764938 澳新2队-陈真-Grace Daily#00889-FB 陈真 set_name Cindy M Meng Cindy M Meng 靠神 成功 沈安 08月05日 00:29:59" [ref=f7e400]:
+                - cell [ref=f7e401]:
+                  - checkbox [ref=f7e402]
+                - cell "12" [ref=f7e403] [cursor=pointer]
+                - cell [ref=f7e404]
+                - cell "澳新2队2组" [ref=f7e406]
+                - cell "不开" [ref=f7e407]
+                - cell "1177669018764938" [ref=f7e409]
+                - cell "澳新2队-陈真-Grace Daily#00889-FB" [ref=f7e410]
+                - cell "陈真" [ref=f7e411]
+                - cell [ref=f7e412]
+                - cell "set_name" [ref=f7e413]
+                - cell "Cindy M Meng" [ref=f7e414]
+                - cell "Cindy M Meng" [ref=f7e415]
+                - cell "靠神" [ref=f7e416]
+                - cell "成功" [ref=f7e417]
+                - cell "沈安" [ref=f7e419]
+                - cell "08月05日 00:29:59" [ref=f7e420]
+              - row "13 澳新2队2组 不开 1183399281514379 澳欧1队-陈真-Caroline Brooks#9050-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 靠神 成功 一然 08月19日 10:03:11" [ref=f7e421]:
+                - cell [ref=f7e422]:
+                  - checkbox [ref=f7e423]
+                - cell "13" [ref=f7e424] [cursor=pointer]
+                - cell [ref=f7e425]
+                - cell "澳新2队2组" [ref=f7e427]
+                - cell "不开" [ref=f7e428]
+                - cell "1183399281514379" [ref=f7e430]
+                - cell "澳欧1队-陈真-Caroline Brooks#9050-FB" [ref=f7e431]
+                - cell "陈真" [ref=f7e432]
+                - cell [ref=f7e433]
+                - cell "set_url" [ref=f7e434]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e435]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e436]
+                - cell "靠神" [ref=f7e437]
+                - cell "成功" [ref=f7e438]
+                - cell "一然" [ref=f7e440]
+                - cell "08月19日 10:03:11" [ref=f7e441]
+              - row "14 澳新2队2组 不开 1183399281514379 澳欧1队-陈真-Caroline Brooks#9050-FB 陈真 set_name Cathy Cathy 靠神 成功 一然 08月19日 10:03:11" [ref=f7e442]:
+                - cell [ref=f7e443]:
+                  - checkbox [ref=f7e444]
+                - cell "14" [ref=f7e445] [cursor=pointer]
+                - cell [ref=f7e446]
+                - cell "澳新2队2组" [ref=f7e448]
+                - cell "不开" [ref=f7e449]
+                - cell "1183399281514379" [ref=f7e451]
+                - cell "澳欧1队-陈真-Caroline Brooks#9050-FB" [ref=f7e452]
+                - cell "陈真" [ref=f7e453]
+                - cell [ref=f7e454]
+                - cell "set_name" [ref=f7e455]
+                - cell "Cathy" [ref=f7e456]
+                - cell "Cathy" [ref=f7e457]
+                - cell "靠神" [ref=f7e458]
+                - cell "成功" [ref=f7e459]
+                - cell "一然" [ref=f7e461]
+                - cell "08月19日 10:03:11" [ref=f7e462]
+              - row "15 澳新2队2组 不开 1223761680818098 澳新2队-陈真-The Prayer Table#01116-FB 陈真 set_url https://messenger.com/t/61573891121803 https://messenger.com/t/61573891121803 靠神 成功 要神 07月30日 03:48:51" [ref=f7e463]:
+                - cell [ref=f7e464]:
+                  - checkbox [ref=f7e465]
+                - cell "15" [ref=f7e466] [cursor=pointer]
+                - cell [ref=f7e467]
+                - cell "澳新2队2组" [ref=f7e469]
+                - cell "不开" [ref=f7e470]
+                - cell "1223761680818098" [ref=f7e472]
+                - cell "澳新2队-陈真-The Prayer Table#01116-FB" [ref=f7e473]
+                - cell "陈真" [ref=f7e474]
+                - cell [ref=f7e475]
+                - cell "set_url" [ref=f7e476]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e477]
+                - cell "https://messenger.com/t/61573891121803" [ref=f7e478]
+                - cell "靠神" [ref=f7e479]
+                - cell "成功" [ref=f7e480]
+                - cell "要神" [ref=f7e482]
+                - cell "07月30日 03:48:51" [ref=f7e483]
+              - row "16 澳新2队2组 不开 1223761680818098 澳新2队-陈真-The Prayer Table#01116-FB 陈真 set_name Glenda Harris Glenda Harris 靠神 成功 要神 07月30日 03:48:51" [ref=f7e484]:
+                - cell [ref=f7e485]:
+                  - checkbox [ref=f7e486]
+                - cell "16" [ref=f7e487] [cursor=pointer]
+                - cell [ref=f7e488]
+                - cell "澳新2队2组" [ref=f7e490]
+                - cell "不开" [ref=f7e491]
+                - cell "1223761680818098" [ref=f7e493]
+                - cell "澳新2队-陈真-The Prayer Table#01116-FB" [ref=f7e494]
+                - cell "陈真" [ref=f7e495]
+                - cell [ref=f7e496]
+                - cell "set_name" [ref=f7e497]
+                - cell "Glenda Harris" [ref=f7e498]
+                - cell "Glenda Harris" [ref=f7e499]
+                - cell "靠神" [ref=f7e500]
+                - cell "成功" [ref=f7e501]
+                - cell "要神" [ref=f7e503]
+                - cell "07月30日 03:48:51" [ref=f7e504]
+              - row "17 澳新2队2组 不开 1239971155857755 澳新2队-陈真-Paisley Roberts#00754-FB 陈真 set_url https://messenger.com/t/61579734755984 https://messenger.com/t/61579734755984 靠神 成功 沈安 08月19日 06:51:26" [ref=f7e505]:
+                - cell [ref=f7e506]:
+                  - checkbox [ref=f7e507]
+                - cell "17" [ref=f7e508] [cursor=pointer]
+                - cell [ref=f7e509]
+                - cell "澳新2队2组" [ref=f7e511]
+                - cell "不开" [ref=f7e512]
+                - cell "1239971155857755" [ref=f7e514]
+                - cell "澳新2队-陈真-Paisley Roberts#00754-FB" [ref=f7e515]
+                - cell "陈真" [ref=f7e516]
+                - cell [ref=f7e517]
+                - cell "set_url" [ref=f7e518]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e519]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e520]
+                - cell "靠神" [ref=f7e521]
+                - cell "成功" [ref=f7e522]
+                - cell "沈安" [ref=f7e524]
+                - cell "08月19日 06:51:26" [ref=f7e525]
+              - row "18 澳新2队2组 不开 1239971155857755 澳新2队-陈真-Paisley Roberts#00754-FB 陈真 set_name Chloe Allen Chloe Allen 靠神 成功 沈安 08月19日 06:51:26" [ref=f7e526]:
+                - cell [ref=f7e527]:
+                  - checkbox [ref=f7e528]
+                - cell "18" [ref=f7e529] [cursor=pointer]
+                - cell [ref=f7e530]
+                - cell "澳新2队2组" [ref=f7e532]
+                - cell "不开" [ref=f7e533]
+                - cell "1239971155857755" [ref=f7e535]
+                - cell "澳新2队-陈真-Paisley Roberts#00754-FB" [ref=f7e536]
+                - cell "陈真" [ref=f7e537]
+                - cell [ref=f7e538]
+                - cell "set_name" [ref=f7e539]
+                - cell "Chloe Allen" [ref=f7e540]
+                - cell "Chloe Allen" [ref=f7e541]
+                - cell "靠神" [ref=f7e542]
+                - cell "成功" [ref=f7e543]
+                - cell "沈安" [ref=f7e545]
+                - cell "08月19日 06:51:26" [ref=f7e546]
+              - row "19 澳新2队2组 开 916655858204791 澳欧1队-陈真-Daily Hope in God#6150-FB 陈真 set_url https://m.me/61585922420845 https://messenger.com/t/61570422636908 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e547]:
+                - cell [ref=f7e548]:
+                  - checkbox [ref=f7e549]
+                - cell "19" [ref=f7e550] [cursor=pointer]
+                - cell [ref=f7e551]
+                - cell "澳新2队2组" [ref=f7e553]
+                - cell "开" [ref=f7e554]
+                - cell "916655858204791" [ref=f7e556]
+                - cell "澳欧1队-陈真-Daily Hope in God#6150-FB" [ref=f7e557]
+                - cell "陈真" [ref=f7e558]
+                - cell [ref=f7e559]
+                - cell "set_url" [ref=f7e560]
+                - cell "https://m.me/61585922420845" [ref=f7e561]
+                - cell "https://messenger.com/t/61570422636908" [ref=f7e562]
+                - cell "靠神" [ref=f7e563]
+                - cell "待更新" [ref=f7e564]
+                - cell "要神" [ref=f7e566]
+                - cell "07月17日 12:32:42" [ref=f7e567]
+              - row "20 澳新2队2组 开 916655858204791 澳欧1队-陈真-Daily Hope in God#6150-FB 陈真 set_name Emily Faithll Joyce Palteng 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e568]:
+                - cell [ref=f7e569]:
+                  - checkbox [ref=f7e570]
+                - cell "20" [ref=f7e571] [cursor=pointer]
+                - cell [ref=f7e572]
+                - cell "澳新2队2组" [ref=f7e574]
+                - cell "开" [ref=f7e575]
+                - cell "916655858204791" [ref=f7e577]
+                - cell "澳欧1队-陈真-Daily Hope in God#6150-FB" [ref=f7e578]
+                - cell "陈真" [ref=f7e579]
+                - cell [ref=f7e580]
+                - cell "set_name" [ref=f7e581]
+                - cell "Emily Faithll" [ref=f7e582]
+                - cell "Joyce Palteng" [ref=f7e583]
+                - cell "靠神" [ref=f7e584]
+                - cell "待更新" [ref=f7e585]
+                - cell "要神" [ref=f7e587]
+                - cell "07月17日 12:32:42" [ref=f7e588]
+              - row "21 澳新2队2组 不开 921397561063327 澳欧1队-陈真-Ava Williams#5788-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 靠神 成功 一然 08月19日 10:03:11" [ref=f7e589]:
+                - cell [ref=f7e590]:
+                  - checkbox [ref=f7e591]
+                - cell "21" [ref=f7e592] [cursor=pointer]
+                - cell [ref=f7e593]
+                - cell "澳新2队2组" [ref=f7e595]
+                - cell "不开" [ref=f7e596]
+                - cell "921397561063327" [ref=f7e598]
+                - cell "澳欧1队-陈真-Ava Williams#5788-FB" [ref=f7e599]
+                - cell "陈真" [ref=f7e600]
+                - cell [ref=f7e601]
+                - cell "set_url" [ref=f7e602]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e603]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e604]
+                - cell "靠神" [ref=f7e605]
+                - cell "成功" [ref=f7e606]
+                - cell "一然" [ref=f7e608]
+                - cell "08月19日 10:03:11" [ref=f7e609]
+              - row "22 澳新2队2组 不开 921397561063327 澳欧1队-陈真-Ava Williams#5788-FB 陈真 set_name Cathy Cathy 靠神 成功 一然 08月19日 10:03:11" [ref=f7e610]:
+                - cell [ref=f7e611]:
+                  - checkbox [ref=f7e612]
+                - cell "22" [ref=f7e613] [cursor=pointer]
+                - cell [ref=f7e614]
+                - cell "澳新2队2组" [ref=f7e616]
+                - cell "不开" [ref=f7e617]
+                - cell "921397561063327" [ref=f7e619]
+                - cell "澳欧1队-陈真-Ava Williams#5788-FB" [ref=f7e620]
+                - cell "陈真" [ref=f7e621]
+                - cell [ref=f7e622]
+                - cell "set_name" [ref=f7e623]
+                - cell "Cathy" [ref=f7e624]
+                - cell "Cathy" [ref=f7e625]
+                - cell "靠神" [ref=f7e626]
+                - cell "成功" [ref=f7e627]
+                - cell "一然" [ref=f7e629]
+                - cell "08月19日 10:03:11" [ref=f7e630]
+              - row "23 澳新2队2组 开 997524530101877 澳欧1队-陈真-Olivia Smith#6379-FB 陈真 set_url https://m.me/61585922420845 https://messenger.com/t/61570422636908 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e631]:
+                - cell [ref=f7e632]:
+                  - checkbox [ref=f7e633]
+                - cell "23" [ref=f7e634] [cursor=pointer]
+                - cell [ref=f7e635]
+                - cell "澳新2队2组" [ref=f7e637]
+                - cell "开" [ref=f7e638]
+                - cell "997524530101877" [ref=f7e640]
+                - cell "澳欧1队-陈真-Olivia Smith#6379-FB" [ref=f7e641]
+                - cell "陈真" [ref=f7e642]
+                - cell [ref=f7e643]
+                - cell "set_url" [ref=f7e644]
+                - cell "https://m.me/61585922420845" [ref=f7e645]
+                - cell "https://messenger.com/t/61570422636908" [ref=f7e646]
+                - cell "靠神" [ref=f7e647]
+                - cell "待更新" [ref=f7e648]
+                - cell "要神" [ref=f7e650]
+                - cell "07月17日 12:32:42" [ref=f7e651]
+              - row "24 澳新2队2组 开 997524530101877 澳欧1队-陈真-Olivia Smith#6379-FB 陈真 set_name Emily Faithll Joyce Palteng 靠神 待更新 要神 07月17日 12:32:42" [ref=f7e652]:
+                - cell [ref=f7e653]:
+                  - checkbox [ref=f7e654]
+                - cell "24" [ref=f7e655] [cursor=pointer]
+                - cell [ref=f7e656]
+                - cell "澳新2队2组" [ref=f7e658]
+                - cell "开" [ref=f7e659]
+                - cell "997524530101877" [ref=f7e661]
+                - cell "澳欧1队-陈真-Olivia Smith#6379-FB" [ref=f7e662]
+                - cell "陈真" [ref=f7e663]
+                - cell [ref=f7e664]
+                - cell "set_name" [ref=f7e665]
+                - cell "Emily Faithll" [ref=f7e666]
+                - cell "Joyce Palteng" [ref=f7e667]
+                - cell "靠神" [ref=f7e668]
+                - cell "待更新" [ref=f7e669]
+                - cell "要神" [ref=f7e671]
+                - cell "07月17日 12:32:42" [ref=f7e672]
+              - row "25 澳新2队2组 不开 1193457520517760 澳新2队-陈真-Faith Light#02218-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e673]:
+                - cell [ref=f7e674]:
+                  - checkbox [ref=f7e675]
+                - cell "25" [ref=f7e676] [cursor=pointer]
+                - cell [ref=f7e677]
+                - cell "澳新2队2组" [ref=f7e679]
+                - cell "不开" [ref=f7e680]
+                - cell "1193457520517760" [ref=f7e682]
+                - cell "澳新2队-陈真-Faith Light#02218-FB" [ref=f7e683]
+                - cell "陈真" [ref=f7e684]
+                - cell [ref=f7e685]
+                - cell "set_url" [ref=f7e686]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e687]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e688]
+                - cell [ref=f7e689]
+                - cell "成功" [ref=f7e690]
+                - cell "一然" [ref=f7e692]
+                - cell "08月19日 10:03:11" [ref=f7e693]
+              - row "26 澳新2队2组 不开 1193457520517760 澳新2队-陈真-Faith Light#02218-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e694]:
+                - cell [ref=f7e695]:
+                  - checkbox [ref=f7e696]
+                - cell "26" [ref=f7e697] [cursor=pointer]
+                - cell [ref=f7e698]
+                - cell "澳新2队2组" [ref=f7e700]
+                - cell "不开" [ref=f7e701]
+                - cell "1193457520517760" [ref=f7e703]
+                - cell "澳新2队-陈真-Faith Light#02218-FB" [ref=f7e704]
+                - cell "陈真" [ref=f7e705]
+                - cell [ref=f7e706]
+                - cell "set_name" [ref=f7e707]
+                - cell "Cathy" [ref=f7e708]
+                - cell "Cathy" [ref=f7e709]
+                - cell [ref=f7e710]
+                - cell "成功" [ref=f7e711]
+                - cell "一然" [ref=f7e713]
+                - cell "08月19日 10:03:11" [ref=f7e714]
+              - row "27 澳新2队2组 不开 1192160163989391 澳新2队-陈真-Prayer Blessing#02328-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e715]:
+                - cell [ref=f7e716]:
+                  - checkbox [ref=f7e717]
+                - cell "27" [ref=f7e718] [cursor=pointer]
+                - cell [ref=f7e719]
+                - cell "澳新2队2组" [ref=f7e721]
+                - cell "不开" [ref=f7e722]
+                - cell "1192160163989391" [ref=f7e724]
+                - cell "澳新2队-陈真-Prayer Blessing#02328-FB" [ref=f7e725]
+                - cell "陈真" [ref=f7e726]
+                - cell [ref=f7e727]
+                - cell "set_url" [ref=f7e728]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e729]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e730]
+                - cell [ref=f7e731]
+                - cell "成功" [ref=f7e732]
+                - cell "一然" [ref=f7e734]
+                - cell "08月19日 10:03:11" [ref=f7e735]
+              - row "28 澳新2队2组 不开 1192160163989391 澳新2队-陈真-Prayer Blessing#02328-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e736]:
+                - cell [ref=f7e737]:
+                  - checkbox [ref=f7e738]
+                - cell "28" [ref=f7e739] [cursor=pointer]
+                - cell [ref=f7e740]
+                - cell "澳新2队2组" [ref=f7e742]
+                - cell "不开" [ref=f7e743]
+                - cell "1192160163989391" [ref=f7e745]
+                - cell "澳新2队-陈真-Prayer Blessing#02328-FB" [ref=f7e746]
+                - cell "陈真" [ref=f7e747]
+                - cell [ref=f7e748]
+                - cell "set_name" [ref=f7e749]
+                - cell "Cathy" [ref=f7e750]
+                - cell "Cathy" [ref=f7e751]
+                - cell [ref=f7e752]
+                - cell "成功" [ref=f7e753]
+                - cell "一然" [ref=f7e755]
+                - cell "08月19日 10:03:11" [ref=f7e756]
+              - row "29 澳新2队2组 不开 1317805918072021 澳新2队-陈真-Brooks Prayer Circle#02439-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e757]:
+                - cell [ref=f7e758]:
+                  - checkbox [ref=f7e759]
+                - cell "29" [ref=f7e760] [cursor=pointer]
+                - cell [ref=f7e761]
+                - cell "澳新2队2组" [ref=f7e763]
+                - cell "不开" [ref=f7e764]
+                - cell "1317805918072021" [ref=f7e766]
+                - cell "澳新2队-陈真-Brooks Prayer Circle#02439-FB" [ref=f7e767]
+                - cell "陈真" [ref=f7e768]
+                - cell [ref=f7e769]
+                - cell "set_url" [ref=f7e770]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e771]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e772]
+                - cell [ref=f7e773]
+                - cell "成功" [ref=f7e774]
+                - cell "一然" [ref=f7e776]
+                - cell "08月19日 10:03:11" [ref=f7e777]
+              - row "30 澳新2队2组 不开 1317805918072021 澳新2队-陈真-Brooks Prayer Circle#02439-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e778]:
+                - cell [ref=f7e779]:
+                  - checkbox [ref=f7e780]
+                - cell "30" [ref=f7e781] [cursor=pointer]
+                - cell [ref=f7e782]
+                - cell "澳新2队2组" [ref=f7e784]
+                - cell "不开" [ref=f7e785]
+                - cell "1317805918072021" [ref=f7e787]
+                - cell "澳新2队-陈真-Brooks Prayer Circle#02439-FB" [ref=f7e788]
+                - cell "陈真" [ref=f7e789]
+                - cell [ref=f7e790]
+                - cell "set_name" [ref=f7e791]
+                - cell "Cathy" [ref=f7e792]
+                - cell "Cathy" [ref=f7e793]
+                - cell [ref=f7e794]
+                - cell "成功" [ref=f7e795]
+                - cell "一然" [ref=f7e797]
+                - cell "08月19日 10:03:11" [ref=f7e798]
+              - row "31 澳新2队2组 不开 1230656426800204 澳新2队-陈真-God Bless Daily#02946-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e799]:
+                - cell [ref=f7e800]:
+                  - checkbox [ref=f7e801]
+                - cell "31" [ref=f7e802] [cursor=pointer]
+                - cell [ref=f7e803]
+                - cell "澳新2队2组" [ref=f7e805]
+                - cell "不开" [ref=f7e806]
+                - cell "1230656426800204" [ref=f7e808]
+                - cell "澳新2队-陈真-God Bless Daily#02946-FB" [ref=f7e809]
+                - cell "陈真" [ref=f7e810]
+                - cell [ref=f7e811]
+                - cell "set_url" [ref=f7e812]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e813]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e814]
+                - cell [ref=f7e815]
+                - cell "成功" [ref=f7e816]
+                - cell "一然" [ref=f7e818]
+                - cell "08月19日 10:03:11" [ref=f7e819]
+              - row "32 澳新2队2组 不开 1230656426800204 澳新2队-陈真-God Bless Daily#02946-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e820]:
+                - cell [ref=f7e821]:
+                  - checkbox [ref=f7e822]
+                - cell "32" [ref=f7e823] [cursor=pointer]
+                - cell [ref=f7e824]
+                - cell "澳新2队2组" [ref=f7e826]
+                - cell "不开" [ref=f7e827]
+                - cell "1230656426800204" [ref=f7e829]
+                - cell "澳新2队-陈真-God Bless Daily#02946-FB" [ref=f7e830]
+                - cell "陈真" [ref=f7e831]
+                - cell [ref=f7e832]
+                - cell "set_name" [ref=f7e833]
+                - cell "Cathy" [ref=f7e834]
+                - cell "Cathy" [ref=f7e835]
+                - cell [ref=f7e836]
+                - cell "成功" [ref=f7e837]
+                - cell "一然" [ref=f7e839]
+                - cell "08月19日 10:03:11" [ref=f7e840]
+              - row "33 澳新2队2组 不开 1060273997167881 澳新2队-陈真-Hope From Above#03200-FB 陈真 set_url https://messenger.com/t/61579734755984 https://messenger.com/t/61579734755984 成功 沈安 08月19日 06:51:26" [ref=f7e841]:
+                - cell [ref=f7e842]:
+                  - checkbox [ref=f7e843]
+                - cell "33" [ref=f7e844] [cursor=pointer]
+                - cell [ref=f7e845]
+                - cell "澳新2队2组" [ref=f7e847]
+                - cell "不开" [ref=f7e848]
+                - cell "1060273997167881" [ref=f7e850]
+                - cell "澳新2队-陈真-Hope From Above#03200-FB" [ref=f7e851]
+                - cell "陈真" [ref=f7e852]
+                - cell [ref=f7e853]
+                - cell "set_url" [ref=f7e854]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e855]
+                - cell "https://messenger.com/t/61579734755984" [ref=f7e856]
+                - cell [ref=f7e857]
+                - cell "成功" [ref=f7e858]
+                - cell "沈安" [ref=f7e860]
+                - cell "08月19日 06:51:26" [ref=f7e861]
+              - row "34 澳新2队2组 不开 1060273997167881 澳新2队-陈真-Hope From Above#03200-FB 陈真 set_name Chloe Allen Chloe Allen 成功 沈安 08月19日 06:51:26" [ref=f7e862]:
+                - cell [ref=f7e863]:
+                  - checkbox [ref=f7e864]
+                - cell "34" [ref=f7e865] [cursor=pointer]
+                - cell [ref=f7e866]
+                - cell "澳新2队2组" [ref=f7e868]
+                - cell "不开" [ref=f7e869]
+                - cell "1060273997167881" [ref=f7e871]
+                - cell "澳新2队-陈真-Hope From Above#03200-FB" [ref=f7e872]
+                - cell "陈真" [ref=f7e873]
+                - cell [ref=f7e874]
+                - cell "set_name" [ref=f7e875]
+                - cell "Chloe Allen" [ref=f7e876]
+                - cell "Chloe Allen" [ref=f7e877]
+                - cell [ref=f7e878]
+                - cell "成功" [ref=f7e879]
+                - cell "沈安" [ref=f7e881]
+                - cell "08月19日 06:51:26" [ref=f7e882]
+              - row "35 澳新2队2组 不开 1174876032384766 澳新2队-陈真-Brooks Prayer Hope#03264-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e883]:
+                - cell [ref=f7e884]:
+                  - checkbox [ref=f7e885]
+                - cell "35" [ref=f7e886] [cursor=pointer]
+                - cell [ref=f7e887]
+                - cell "澳新2队2组" [ref=f7e889]
+                - cell "不开" [ref=f7e890]
+                - cell "1174876032384766" [ref=f7e892]
+                - cell "澳新2队-陈真-Brooks Prayer Hope#03264-FB" [ref=f7e893]
+                - cell "陈真" [ref=f7e894]
+                - cell [ref=f7e895]
+                - cell "set_url" [ref=f7e896]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e897]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e898]
+                - cell [ref=f7e899]
+                - cell "成功" [ref=f7e900]
+                - cell "一然" [ref=f7e902]
+                - cell "08月19日 10:03:11" [ref=f7e903]
+              - row "36 澳新2队2组 不开 1174876032384766 澳新2队-陈真-Brooks Prayer Hope#03264-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e904]:
+                - cell [ref=f7e905]:
+                  - checkbox [ref=f7e906]
+                - cell "36" [ref=f7e907] [cursor=pointer]
+                - cell [ref=f7e908]
+                - cell "澳新2队2组" [ref=f7e910]
+                - cell "不开" [ref=f7e911]
+                - cell "1174876032384766" [ref=f7e913]
+                - cell "澳新2队-陈真-Brooks Prayer Hope#03264-FB" [ref=f7e914]
+                - cell "陈真" [ref=f7e915]
+                - cell [ref=f7e916]
+                - cell "set_name" [ref=f7e917]
+                - cell "Cathy" [ref=f7e918]
+                - cell "Cathy" [ref=f7e919]
+                - cell [ref=f7e920]
+                - cell "成功" [ref=f7e921]
+                - cell "一然" [ref=f7e923]
+                - cell "08月19日 10:03:11" [ref=f7e924]
+              - row "37 澳新2队2组 不开 1290614757463804 澳新2队-陈真-Blessing for Today#03617-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e925]:
+                - cell [ref=f7e926]:
+                  - checkbox [ref=f7e927]
+                - cell "37" [ref=f7e928] [cursor=pointer]
+                - cell [ref=f7e929]
+                - cell "澳新2队2组" [ref=f7e931]
+                - cell "不开" [ref=f7e932]
+                - cell "1290614757463804" [ref=f7e934]
+                - cell "澳新2队-陈真-Blessing for Today#03617-FB" [ref=f7e935]
+                - cell "陈真" [ref=f7e936]
+                - cell [ref=f7e937]
+                - cell "set_url" [ref=f7e938]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e939]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e940]
+                - cell [ref=f7e941]
+                - cell "成功" [ref=f7e942]
+                - cell "一然" [ref=f7e944]
+                - cell "08月19日 10:03:11" [ref=f7e945]
+              - row "38 澳新2队2组 不开 1290614757463804 澳新2队-陈真-Blessing for Today#03617-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e946]:
+                - cell [ref=f7e947]:
+                  - checkbox [ref=f7e948]
+                - cell "38" [ref=f7e949] [cursor=pointer]
+                - cell [ref=f7e950]
+                - cell "澳新2队2组" [ref=f7e952]
+                - cell "不开" [ref=f7e953]
+                - cell "1290614757463804" [ref=f7e955]
+                - cell "澳新2队-陈真-Blessing for Today#03617-FB" [ref=f7e956]
+                - cell "陈真" [ref=f7e957]
+                - cell [ref=f7e958]
+                - cell "set_name" [ref=f7e959]
+                - cell "Cathy" [ref=f7e960]
+                - cell "Cathy" [ref=f7e961]
+                - cell [ref=f7e962]
+                - cell "成功" [ref=f7e963]
+                - cell "一然" [ref=f7e965]
+                - cell "08月19日 10:03:11" [ref=f7e966]
+              - row "39 澳新2队2组 不开 1170176606181217 澳新2队-陈真-God Hears Prayer#03737-FB 陈真 set_url https://messenger.com/t/100032815729322 https://messenger.com/t/100032815729322 成功 一然 08月19日 10:03:11" [ref=f7e967]:
+                - cell [ref=f7e968]:
+                  - checkbox [ref=f7e969]
+                - cell "39" [ref=f7e970] [cursor=pointer]
+                - cell [ref=f7e971]
+                - cell "澳新2队2组" [ref=f7e973]
+                - cell "不开" [ref=f7e974]
+                - cell "1170176606181217" [ref=f7e976]
+                - cell "澳新2队-陈真-God Hears Prayer#03737-FB" [ref=f7e977]
+                - cell "陈真" [ref=f7e978]
+                - cell [ref=f7e979]
+                - cell "set_url" [ref=f7e980]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e981]
+                - cell "https://messenger.com/t/100032815729322" [ref=f7e982]
+                - cell [ref=f7e983]
+                - cell "成功" [ref=f7e984]
+                - cell "一然" [ref=f7e986]
+                - cell "08月19日 10:03:11" [ref=f7e987]
+              - row "40 澳新2队2组 不开 1170176606181217 澳新2队-陈真-God Hears Prayer#03737-FB 陈真 set_name Cathy Cathy 成功 一然 08月19日 10:03:11" [ref=f7e988]:
+                - cell [ref=f7e989]:
+                  - checkbox [ref=f7e990]
+                - cell "40" [ref=f7e991] [cursor=pointer]
+                - cell [ref=f7e992]
+                - cell "澳新2队2组" [ref=f7e994]
+                - cell "不开" [ref=f7e995]
+                - cell "1170176606181217" [ref=f7e997]
+                - cell "澳新2队-陈真-God Hears Prayer#03737-FB" [ref=f7e998]
+                - cell "陈真" [ref=f7e999]
+                - cell [ref=f7e1000]
+                - cell "set_name" [ref=f7e1001]
+                - cell "Cathy" [ref=f7e1002]
+                - cell "Cathy" [ref=f7e1003]
+                - cell [ref=f7e1004]
+                - cell "成功" [ref=f7e1005]
+                - cell "一然" [ref=f7e1007]
+                - cell "08月19日 10:03:11" [ref=f7e1008]
+          - generic [ref=f7e164]: 已加载 40 条记录，继续下滑自动加载更多
+    - generic [ref=f7e1011]:
+      - heading "确认推送变量" [level=2] [ref=f7e1012]
+      - paragraph [ref=f7e1013]:
+        - text: 将推送 1 条变量到外站。请核对「正在使用」与「即将推送」。
+        - generic [ref=f7e1014]:
+          - generic [ref=f7e1015]:
+            - text: 专页
+            - generic [ref=f7e1016]: "1"
+          - generic [ref=f7e1017]:
+            - text: 变量条
+            - generic [ref=f7e1018]: "1"
+          - generic [ref=f7e1019]:
+            - text: 变更种类
+            - generic [ref=f7e1020]: "1"
+      - generic [ref=f7e1021]:
+        - generic [ref=f7e1022]:
+          - generic [ref=f7e1023]:
+            - text: 👤 指定值班接线人员 (现有账号)
+            - generic [ref=f7e1024]: "*"
+          - generic [ref=f7e1025]: ✅ 已选择账号：AU刘洋
+        - generic [ref=f7e1028]:
+          - textbox "🔍 搜索并选择值班接线人员 (如：AU刘洋、卢毅)..." [active] [ref=f7e1029]: AU刘洋
+          - button "×" [ref=f7e1030] [cursor=pointer]
+          - generic: ▼
+        - generic [ref=f7e1031]: 📌 重要提示：本次推送将把目标专页的值班接线人员指定为此账号，并从当前时间起自动计入该账号的订阅统计。只能从系统现有账号中选择，禁止任意自定义输入。
+      - generic [ref=f7e1033]:
+        - generic [ref=f7e1034]:
+          - generic [ref=f7e1035]: set_url
+          - generic [ref=f7e1036]: 主链接
+          - generic [ref=f7e1037]: 1 专页
+        - generic [ref=f7e1038]:
+          - generic [ref=f7e1039]:
+            - generic [ref=f7e1040]: 正在使用（线上）
+            - generic [ref=f7e1041]: 即将推送
+            - generic [ref=f7e1042]: 专页
+          - generic [ref=f7e1043]:
+            - generic "https://m.me/61585922420845" [ref=f7e1045]
+            - generic [ref=f7e1046]:
+              - generic [ref=f7e1047]: 改
+              - generic [ref=f7e1048]: →
+            - generic "https://messenger.com/t/61570422636908" [ref=f7e1050]
+            - generic [ref=f7e1051]: "1"
+      - generic [ref=f7e1053]:
+        - button "取消" [ref=f7e1054] [cursor=pointer]
+        - button "确认推送" [ref=f7e1055] [cursor=pointer]
+    - text: 夹

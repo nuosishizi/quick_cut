@@ -1,0 +1,548 @@
+- generic [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - link "专页变量管理" [ref=f1e3] [cursor=pointer]:
+      - /url: /pages/list
+    - navigation [ref=f1e4]:
+      - link "🌐 欧洲匈牙利语" [ref=f1e5] [cursor=pointer]:
+        - /url: /pages/tenant-select
+      - link "表格编辑" [ref=f1e6] [cursor=pointer]:
+        - /url: /pages/list
+      - link "📊 订阅统计" [ref=f1e7] [cursor=pointer]:
+        - /url: /pages/subscribe-stats
+      - link "删除历史恢复" [ref=f1e8] [cursor=pointer]:
+        - /url: /pages/deleted-history
+      - link "变量显示" [ref=f1e9] [cursor=pointer]:
+        - /url: /pages/my-variables
+      - link "变量总控" [ref=f1e10] [cursor=pointer]:
+        - /url: /pages/variables
+      - link "区域配置" [ref=f1e11] [cursor=pointer]:
+        - /url: /pages/system-settings
+      - link "用户管理 1在线" [ref=f1e12] [cursor=pointer]:
+        - /url: /pages/accounts
+      - link "洲/语系管理" [ref=f1e13] [cursor=pointer]:
+        - /url: /pages/tenant-management
+      - generic "界面主题" [ref=f1e14]:
+        - button "切换夜间模式" [ref=f1e15] [cursor=pointer]: 🌙 夜间
+      - generic "表格行密度" [ref=f1e16]:
+        - button "舒适" [ref=f1e17] [cursor=pointer]
+        - button "紧凑" [ref=f1e18] [cursor=pointer]
+      - button "👤 超级管理员" [ref=f1e19] [cursor=pointer]
+      - button "退出" [ref=f1e21] [cursor=pointer]
+  - main [ref=f1e22]:
+    - generic [ref=f1e23]:
+      - generic [ref=f1e24]:
+        - generic [ref=f1e25]: ⚠️
+        - generic [ref=f1e26]:
+          - generic [ref=f1e27]: 区域配置未完善警报：当前区域「欧洲匈牙利语」尚未完成必要配置！
+          - generic [ref=f1e28]:
+            - text: 缺少项：
+            - strong [ref=f1e29]: Google 电子表格 URL、Google 授权密钥 (Service Account JSON)、外站推送 Token (Update Token)
+            - text: 。未配置前，系统无法自动从 Google Sheet 拉取专页清单与订阅数据。
+      - link "⚙️ 立即前往配置" [ref=f1e30] [cursor=pointer]:
+        - /url: /pages/system-settings
+    - generic [ref=f1e31]:
+      - generic [ref=f1e32]:
+        - button "保存" [ref=f1e33] [cursor=pointer]
+        - button "更新变量" [disabled] [ref=f1e34]
+        - button "精简模式" [ref=f1e35] [cursor=pointer]
+        - button "导出 Excel" [ref=f1e36] [cursor=pointer]
+        - button "导入 Excel" [ref=f1e37] [cursor=pointer]
+        - button "更新专页清单" [ref=f1e38] [cursor=pointer]
+        - button "新增专页" [ref=f1e39] [cursor=pointer]
+        - button "批量过滤" [ref=f1e40] [cursor=pointer]
+        - link "📊 订阅统计" [ref=f1e41] [cursor=pointer]:
+          - /url: /pages/subscribe-stats
+        - generic [ref=f1e42]: 自动保存
+        - generic [ref=f1e43]: Ctrl+C 复制
+        - generic [ref=f1e44]: Ctrl+V 粘贴
+        - generic [ref=f1e45]: Ctrl+S 保存
+        - generic [ref=f1e46]: 没有符合条件的数据
+        - generic [ref=f1e47]: "已加载专页: 0 个 / 匹配 0 个"
+        - generic "自动保存状态" [ref=f1e48]: 已保存
+      - generic [ref=f1e52]:
+        - generic [ref=f1e53]:
+          - generic [ref=f1e54]:
+            - generic [ref=f1e55]:
+              - generic [ref=f1e56]: 📂
+              - heading "文件夹" [level=3] [ref=f1e57]
+            - button "‹" [ref=f1e58] [cursor=pointer]
+            - button "+ 新建" [ref=f1e59] [cursor=pointer]
+          - generic "所有专页（总 0）" [ref=f1e61] [cursor=pointer]:
+            - generic "所有专页（总 0）" [ref=f1e62]: 全部
+            - generic [ref=f1e63]:
+              - generic [ref=f1e64]: 所有专页
+              - generic "总 / 不开 / 开" [ref=f1e66]:
+                - generic [ref=f1e67]: 总：0
+                - generic [ref=f1e68]: 不开：0
+                - generic [ref=f1e69]: 开：0
+        - generic [ref=f1e71]:
+          - generic [ref=f1e72]:
+            - generic [ref=f1e73]:
+              - generic [ref=f1e74]: 队伍
+              - generic [ref=f1e75]:
+                - combobox "队伍":
+                  - option "全部队伍" [selected]
+                - generic [ref=f1e76]:
+                  - textbox "队伍（可搜索）" [ref=f1e77]:
+                    - /placeholder: 全部队伍
+                  - button "▼" [ref=f1e78] [cursor=pointer]
+            - generic [ref=f1e79]:
+              - generic [ref=f1e80]: 管理员
+              - generic [ref=f1e81]:
+                - combobox "管理员":
+                  - option "全部管理员" [selected]
+                - generic [ref=f1e82]:
+                  - textbox "管理员（可搜索）" [ref=f1e83]:
+                    - /placeholder: 全部管理员
+                  - button "▼" [ref=f1e84] [cursor=pointer]
+            - generic [ref=f1e85]:
+              - generic [ref=f1e86]: 发帖人员
+              - generic [ref=f1e87]:
+                - combobox "发帖人员":
+                  - option "全部发帖人员" [selected]
+                - generic [ref=f1e88]:
+                  - textbox "发帖人员（可搜索）" [ref=f1e89]:
+                    - /placeholder: 全部发帖人员
+                  - button "▼" [ref=f1e90] [cursor=pointer]
+            - generic [ref=f1e91]:
+              - generic [ref=f1e92]: 接线员
+              - generic [ref=f1e93]:
+                - combobox "接线员":
+                  - option "全部接线员" [selected]
+                - generic [ref=f1e94]:
+                  - textbox "接线员（可搜索）" [ref=f1e95]:
+                    - /placeholder: 全部接线员
+                  - button "▼" [ref=f1e96] [cursor=pointer]
+            - generic [ref=f1e97]:
+              - generic [ref=f1e98]: 开放地区
+              - combobox "开放地区" [ref=f1e99]:
+                - option "全部" [selected]
+                - option "是"
+                - option "否/空"
+            - generic [ref=f1e100]:
+              - generic [ref=f1e101]: 更新状态
+              - combobox "更新状态" [ref=f1e102]:
+                - option "全部状态" [selected]
+                - option "待更新/失败"
+                - option "待更新"
+                - option "失败"
+                - option "部分成功"
+                - option "成功"
+            - generic [ref=f1e103]:
+              - generic [ref=f1e104]: 搜索
+              - textbox "搜索" [ref=f1e105]:
+                - /placeholder: 专页ID、变量名、链接、人员
+            - button "清空" [ref=f1e107] [cursor=pointer]
+          - table "专页变量表格" [ref=f1e109]:
+            - rowgroup [ref=f1e127]:
+              - row [ref=f1e128]:
+                - columnheader [ref=f1e129]:
+                  - checkbox [ref=f1e130]
+                - columnheader "# 拖拽调整列宽" [ref=f1e131] [cursor=pointer]:
+                  - text: "#"
+                  - generic "拖拽调整列宽" [ref=f1e132]
+                - columnheader "头像 拖拽调整列宽" [ref=f1e133]:
+                  - text: 头像
+                  - generic "拖拽调整列宽" [ref=f1e134]
+                - columnheader "队名称 拖拽调整列宽" [ref=f1e135] [cursor=pointer]:
+                  - text: 队名称
+                  - generic "拖拽调整列宽" [ref=f1e136]
+                - columnheader "开放地区 拖拽调整列宽" [ref=f1e137] [cursor=pointer]:
+                  - text: 开放地区
+                  - generic "拖拽调整列宽" [ref=f1e138]
+                - columnheader "专页ID 拖拽调整列宽" [ref=f1e139] [cursor=pointer]:
+                  - text: 专页ID
+                  - generic "拖拽调整列宽" [ref=f1e140]
+                - columnheader "专页名字 拖拽调整列宽" [ref=f1e141] [cursor=pointer]:
+                  - text: 专页名字
+                  - generic "拖拽调整列宽" [ref=f1e142]
+                - columnheader "管理员 拖拽调整列宽" [ref=f1e143] [cursor=pointer]:
+                  - text: 管理员
+                  - generic "拖拽调整列宽" [ref=f1e144]
+                - columnheader "发帖人员 拖拽调整列宽" [ref=f1e145] [cursor=pointer]:
+                  - text: 发帖人员
+                  - generic "拖拽调整列宽" [ref=f1e146]
+                - columnheader "变量名 拖拽调整列宽" [ref=f1e147] [cursor=pointer]:
+                  - text: 变量名
+                  - generic "拖拽调整列宽" [ref=f1e148]
+                - columnheader "正在使用的变量 拖拽调整列宽" [ref=f1e149] [cursor=pointer]:
+                  - text: 正在使用的变量
+                  - generic "拖拽调整列宽" [ref=f1e150]
+                - columnheader "要改为的变量 拖拽调整列宽" [ref=f1e151]:
+                  - text: 要改为的变量
+                  - generic "拖拽调整列宽" [ref=f1e152]
+                - columnheader "接线人员 拖拽调整列宽" [ref=f1e153] [cursor=pointer]:
+                  - text: 接线人员
+                  - generic "拖拽调整列宽" [ref=f1e154]
+                - columnheader "更新状态 拖拽调整列宽" [ref=f1e155] [cursor=pointer]:
+                  - text: 更新状态
+                  - generic "拖拽调整列宽" [ref=f1e156]
+                - columnheader "目前变量人员 拖拽调整列宽" [ref=f1e157] [cursor=pointer]:
+                  - text: 目前变量人员
+                  - generic "拖拽调整列宽" [ref=f1e158]
+                - columnheader "更新时间 拖拽调整列宽" [ref=f1e159] [cursor=pointer]:
+                  - text: 更新时间
+                  - generic "拖拽调整列宽" [ref=f1e160]
+            - rowgroup [ref=f1e161]:
+              - row [ref=f1e162]:
+                - cell [ref=f1e163]:
+                  - checkbox [ref=f1e164]
+                - cell "1" [ref=f1e165] [cursor=pointer]
+                - cell [ref=f1e166]
+                - cell [active] [ref=f1e168]
+                - cell "不开" [ref=f1e169]
+                - cell [ref=f1e171]
+                - cell [ref=f1e172]
+                - cell [ref=f1e173]
+                - cell [ref=f1e174]
+                - cell [ref=f1e175]
+                - cell "—" [ref=f1e176]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e177]
+                - cell [ref=f1e178]
+                - cell [ref=f1e179]
+                - cell [ref=f1e180]
+                - cell [ref=f1e181]
+              - row [ref=f1e182]:
+                - cell [ref=f1e183]:
+                  - checkbox [ref=f1e184]
+                - cell "2" [ref=f1e185] [cursor=pointer]
+                - cell [ref=f1e186]
+                - cell [ref=f1e188]
+                - cell "不开" [ref=f1e189]
+                - cell [ref=f1e191]
+                - cell [ref=f1e192]
+                - cell [ref=f1e193]
+                - cell [ref=f1e194]
+                - cell [ref=f1e195]
+                - cell "—" [ref=f1e196]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e197]
+                - cell [ref=f1e198]
+                - cell [ref=f1e199]
+                - cell [ref=f1e200]
+                - cell [ref=f1e201]
+              - row [ref=f1e202]:
+                - cell [ref=f1e203]:
+                  - checkbox [ref=f1e204]
+                - cell "3" [ref=f1e205] [cursor=pointer]
+                - cell [ref=f1e206]
+                - cell [ref=f1e208]
+                - cell "不开" [ref=f1e209]
+                - cell [ref=f1e211]
+                - cell [ref=f1e212]
+                - cell [ref=f1e213]
+                - cell [ref=f1e214]
+                - cell [ref=f1e215]
+                - cell "—" [ref=f1e216]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e217]
+                - cell [ref=f1e218]
+                - cell [ref=f1e219]
+                - cell [ref=f1e220]
+                - cell [ref=f1e221]
+              - row [ref=f1e222]:
+                - cell [ref=f1e223]:
+                  - checkbox [ref=f1e224]
+                - cell "4" [ref=f1e225] [cursor=pointer]
+                - cell [ref=f1e226]
+                - cell [ref=f1e228]
+                - cell "不开" [ref=f1e229]
+                - cell [ref=f1e231]
+                - cell [ref=f1e232]
+                - cell [ref=f1e233]
+                - cell [ref=f1e234]
+                - cell [ref=f1e235]
+                - cell "—" [ref=f1e236]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e237]
+                - cell [ref=f1e238]
+                - cell [ref=f1e239]
+                - cell [ref=f1e240]
+                - cell [ref=f1e241]
+              - row [ref=f1e242]:
+                - cell [ref=f1e243]:
+                  - checkbox [ref=f1e244]
+                - cell "5" [ref=f1e245] [cursor=pointer]
+                - cell [ref=f1e246]
+                - cell [ref=f1e248]
+                - cell "不开" [ref=f1e249]
+                - cell [ref=f1e251]
+                - cell [ref=f1e252]
+                - cell [ref=f1e253]
+                - cell [ref=f1e254]
+                - cell [ref=f1e255]
+                - cell "—" [ref=f1e256]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e257]
+                - cell [ref=f1e258]
+                - cell [ref=f1e259]
+                - cell [ref=f1e260]
+                - cell [ref=f1e261]
+              - row [ref=f1e262]:
+                - cell [ref=f1e263]:
+                  - checkbox [ref=f1e264]
+                - cell "6" [ref=f1e265] [cursor=pointer]
+                - cell [ref=f1e266]
+                - cell [ref=f1e268]
+                - cell "不开" [ref=f1e269]
+                - cell [ref=f1e271]
+                - cell [ref=f1e272]
+                - cell [ref=f1e273]
+                - cell [ref=f1e274]
+                - cell [ref=f1e275]
+                - cell "—" [ref=f1e276]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e277]
+                - cell [ref=f1e278]
+                - cell [ref=f1e279]
+                - cell [ref=f1e280]
+                - cell [ref=f1e281]
+              - row [ref=f1e282]:
+                - cell [ref=f1e283]:
+                  - checkbox [ref=f1e284]
+                - cell "7" [ref=f1e285] [cursor=pointer]
+                - cell [ref=f1e286]
+                - cell [ref=f1e288]
+                - cell "不开" [ref=f1e289]
+                - cell [ref=f1e291]
+                - cell [ref=f1e292]
+                - cell [ref=f1e293]
+                - cell [ref=f1e294]
+                - cell [ref=f1e295]
+                - cell "—" [ref=f1e296]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e297]
+                - cell [ref=f1e298]
+                - cell [ref=f1e299]
+                - cell [ref=f1e300]
+                - cell [ref=f1e301]
+              - row [ref=f1e302]:
+                - cell [ref=f1e303]:
+                  - checkbox [ref=f1e304]
+                - cell "8" [ref=f1e305] [cursor=pointer]
+                - cell [ref=f1e306]
+                - cell [ref=f1e308]
+                - cell "不开" [ref=f1e309]
+                - cell [ref=f1e311]
+                - cell [ref=f1e312]
+                - cell [ref=f1e313]
+                - cell [ref=f1e314]
+                - cell [ref=f1e315]
+                - cell "—" [ref=f1e316]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e317]
+                - cell [ref=f1e318]
+                - cell [ref=f1e319]
+                - cell [ref=f1e320]
+                - cell [ref=f1e321]
+              - row [ref=f1e322]:
+                - cell [ref=f1e323]:
+                  - checkbox [ref=f1e324]
+                - cell "9" [ref=f1e325] [cursor=pointer]
+                - cell [ref=f1e326]
+                - cell [ref=f1e328]
+                - cell "不开" [ref=f1e329]
+                - cell [ref=f1e331]
+                - cell [ref=f1e332]
+                - cell [ref=f1e333]
+                - cell [ref=f1e334]
+                - cell [ref=f1e335]
+                - cell "—" [ref=f1e336]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e337]
+                - cell [ref=f1e338]
+                - cell [ref=f1e339]
+                - cell [ref=f1e340]
+                - cell [ref=f1e341]
+              - row [ref=f1e342]:
+                - cell [ref=f1e343]:
+                  - checkbox [ref=f1e344]
+                - cell "10" [ref=f1e345] [cursor=pointer]
+                - cell [ref=f1e346]
+                - cell [ref=f1e348]
+                - cell "不开" [ref=f1e349]
+                - cell [ref=f1e351]
+                - cell [ref=f1e352]
+                - cell [ref=f1e353]
+                - cell [ref=f1e354]
+                - cell [ref=f1e355]
+                - cell "—" [ref=f1e356]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e357]
+                - cell [ref=f1e358]
+                - cell [ref=f1e359]
+                - cell [ref=f1e360]
+                - cell [ref=f1e361]
+              - row [ref=f1e362]:
+                - cell [ref=f1e363]:
+                  - checkbox [ref=f1e364]
+                - cell "11" [ref=f1e365] [cursor=pointer]
+                - cell [ref=f1e366]
+                - cell [ref=f1e368]
+                - cell "不开" [ref=f1e369]
+                - cell [ref=f1e371]
+                - cell [ref=f1e372]
+                - cell [ref=f1e373]
+                - cell [ref=f1e374]
+                - cell [ref=f1e375]
+                - cell "—" [ref=f1e376]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e377]
+                - cell [ref=f1e378]
+                - cell [ref=f1e379]
+                - cell [ref=f1e380]
+                - cell [ref=f1e381]
+              - row [ref=f1e382]:
+                - cell [ref=f1e383]:
+                  - checkbox [ref=f1e384]
+                - cell "12" [ref=f1e385] [cursor=pointer]
+                - cell [ref=f1e386]
+                - cell [ref=f1e388]
+                - cell "不开" [ref=f1e389]
+                - cell [ref=f1e391]
+                - cell [ref=f1e392]
+                - cell [ref=f1e393]
+                - cell [ref=f1e394]
+                - cell [ref=f1e395]
+                - cell "—" [ref=f1e396]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e397]
+                - cell [ref=f1e398]
+                - cell [ref=f1e399]
+                - cell [ref=f1e400]
+                - cell [ref=f1e401]
+              - row [ref=f1e402]:
+                - cell [ref=f1e403]:
+                  - checkbox [ref=f1e404]
+                - cell "13" [ref=f1e405] [cursor=pointer]
+                - cell [ref=f1e406]
+                - cell [ref=f1e408]
+                - cell "不开" [ref=f1e409]
+                - cell [ref=f1e411]
+                - cell [ref=f1e412]
+                - cell [ref=f1e413]
+                - cell [ref=f1e414]
+                - cell [ref=f1e415]
+                - cell "—" [ref=f1e416]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e417]
+                - cell [ref=f1e418]
+                - cell [ref=f1e419]
+                - cell [ref=f1e420]
+                - cell [ref=f1e421]
+              - row [ref=f1e422]:
+                - cell [ref=f1e423]:
+                  - checkbox [ref=f1e424]
+                - cell "14" [ref=f1e425] [cursor=pointer]
+                - cell [ref=f1e426]
+                - cell [ref=f1e428]
+                - cell "不开" [ref=f1e429]
+                - cell [ref=f1e431]
+                - cell [ref=f1e432]
+                - cell [ref=f1e433]
+                - cell [ref=f1e434]
+                - cell [ref=f1e435]
+                - cell "—" [ref=f1e436]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e437]
+                - cell [ref=f1e438]
+                - cell [ref=f1e439]
+                - cell [ref=f1e440]
+                - cell [ref=f1e441]
+              - row [ref=f1e442]:
+                - cell [ref=f1e443]:
+                  - checkbox [ref=f1e444]
+                - cell "15" [ref=f1e445] [cursor=pointer]
+                - cell [ref=f1e446]
+                - cell [ref=f1e448]
+                - cell "不开" [ref=f1e449]
+                - cell [ref=f1e451]
+                - cell [ref=f1e452]
+                - cell [ref=f1e453]
+                - cell [ref=f1e454]
+                - cell [ref=f1e455]
+                - cell "—" [ref=f1e456]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e457]
+                - cell [ref=f1e458]
+                - cell [ref=f1e459]
+                - cell [ref=f1e460]
+                - cell [ref=f1e461]
+              - row [ref=f1e462]:
+                - cell [ref=f1e463]:
+                  - checkbox [ref=f1e464]
+                - cell "16" [ref=f1e465] [cursor=pointer]
+                - cell [ref=f1e466]
+                - cell [ref=f1e468]
+                - cell "不开" [ref=f1e469]
+                - cell [ref=f1e471]
+                - cell [ref=f1e472]
+                - cell [ref=f1e473]
+                - cell [ref=f1e474]
+                - cell [ref=f1e475]
+                - cell "—" [ref=f1e476]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e477]
+                - cell [ref=f1e478]
+                - cell [ref=f1e479]
+                - cell [ref=f1e480]
+                - cell [ref=f1e481]
+              - row [ref=f1e482]:
+                - cell [ref=f1e483]:
+                  - checkbox [ref=f1e484]
+                - cell "17" [ref=f1e485] [cursor=pointer]
+                - cell [ref=f1e486]
+                - cell [ref=f1e488]
+                - cell "不开" [ref=f1e489]
+                - cell [ref=f1e491]
+                - cell [ref=f1e492]
+                - cell [ref=f1e493]
+                - cell [ref=f1e494]
+                - cell [ref=f1e495]
+                - cell "—" [ref=f1e496]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e497]
+                - cell [ref=f1e498]
+                - cell [ref=f1e499]
+                - cell [ref=f1e500]
+                - cell [ref=f1e501]
+              - row [ref=f1e502]:
+                - cell [ref=f1e503]:
+                  - checkbox [ref=f1e504]
+                - cell "18" [ref=f1e505] [cursor=pointer]
+                - cell [ref=f1e506]
+                - cell [ref=f1e508]
+                - cell "不开" [ref=f1e509]
+                - cell [ref=f1e511]
+                - cell [ref=f1e512]
+                - cell [ref=f1e513]
+                - cell [ref=f1e514]
+                - cell [ref=f1e515]
+                - cell "—" [ref=f1e516]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e517]
+                - cell [ref=f1e518]
+                - cell [ref=f1e519]
+                - cell [ref=f1e520]
+                - cell [ref=f1e521]
+              - row [ref=f1e522]:
+                - cell [ref=f1e523]:
+                  - checkbox [ref=f1e524]
+                - cell "19" [ref=f1e525] [cursor=pointer]
+                - cell [ref=f1e526]
+                - cell [ref=f1e528]
+                - cell "不开" [ref=f1e529]
+                - cell [ref=f1e531]
+                - cell [ref=f1e532]
+                - cell [ref=f1e533]
+                - cell [ref=f1e534]
+                - cell [ref=f1e535]
+                - cell "—" [ref=f1e536]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e537]
+                - cell [ref=f1e538]
+                - cell [ref=f1e539]
+                - cell [ref=f1e540]
+                - cell [ref=f1e541]
+              - row [ref=f1e542]:
+                - cell [ref=f1e543]:
+                  - checkbox [ref=f1e544]
+                - cell "20" [ref=f1e545] [cursor=pointer]
+                - cell [ref=f1e546]
+                - cell [ref=f1e548]
+                - cell "不开" [ref=f1e549]
+                - cell [ref=f1e551]
+                - cell [ref=f1e552]
+                - cell [ref=f1e553]
+                - cell [ref=f1e554]
+                - cell [ref=f1e555]
+                - cell "—" [ref=f1e556]
+                - cell "空：可粘贴/编辑本行草稿（推送前）" [ref=f1e557]
+                - cell [ref=f1e558]
+                - cell [ref=f1e559]
+                - cell [ref=f1e560]
+                - cell [ref=f1e561]
+          - generic [ref=f1e563]: 已加载 0 条记录，继续下滑自动加载更多
+    - text: 夹

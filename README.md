@@ -50,11 +50,11 @@
 下载安装包后，您可以使用 [GitHub CLI (`gh`)](https://cli.github.com/) 验证安装包未被任何第三方篡改且确由官方 CI 产出：
 
 ```bash
-# 验证 Windows 安装程序
-gh attestation verify ./快剪-Windows-2.7.42-安装包.exe --repo nuosishizi/quick_cut
+# Windows
+gh attestation verify ./快剪-Windows-2.7.43-安装包.exe --repo nuosishizi/quick_cut
 
-# 验证 macOS DMG 安装镜像
-gh attestation verify ./快剪-macOS-2.7.42-安装包.dmg --repo nuosishizi/quick_cut
+# macOS
+gh attestation verify ./快剪-macOS-2.7.43-安装包.dmg --repo nuosishizi/quick_cut
 ```
 
 > ✅ 验证成功即代表该文件 100% 由 GitHub Actions 官方编译机生成，数字签名与源码提交完全吻合。

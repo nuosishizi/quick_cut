@@ -1,0 +1,106 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - link "专页变量管理" [ref=f2e3] [cursor=pointer]:
+      - /url: /pages/list
+    - navigation [ref=f2e4]:
+      - link "🌐 欧洲匈牙利语" [ref=f2e5] [cursor=pointer]:
+        - /url: /pages/tenant-select
+      - link "表格编辑" [ref=f2e6] [cursor=pointer]:
+        - /url: /pages/list
+      - link "📊 订阅统计" [ref=f2e7] [cursor=pointer]:
+        - /url: /pages/subscribe-stats
+      - link "删除历史恢复" [ref=f2e8] [cursor=pointer]:
+        - /url: /pages/deleted-history
+      - link "变量显示" [ref=f2e9] [cursor=pointer]:
+        - /url: /pages/my-variables
+      - link "变量总控" [ref=f2e10] [cursor=pointer]:
+        - /url: /pages/variables
+      - link "区域配置" [ref=f2e11] [cursor=pointer]:
+        - /url: /pages/system-settings
+      - link "用户管理 1在线" [ref=f2e12] [cursor=pointer]:
+        - /url: /pages/accounts
+      - link "洲/语系管理" [ref=f2e13] [cursor=pointer]:
+        - /url: /pages/tenant-management
+      - generic "界面主题" [ref=f2e14]:
+        - button "切换夜间模式" [ref=f2e15] [cursor=pointer]: 🌙 夜间
+      - generic "表格行密度" [ref=f2e16]:
+        - button "舒适" [ref=f2e17] [cursor=pointer]
+        - button "紧凑" [ref=f2e18] [cursor=pointer]
+      - button "👤 超级管理员" [ref=f2e19] [cursor=pointer]
+      - button "退出" [ref=f2e21] [cursor=pointer]
+  - main [ref=f2e22]:
+    - generic [ref=f2e23]:
+      - generic [ref=f2e24]:
+        - generic [ref=f2e25]:
+          - generic [ref=f2e26]:
+            - heading "📊 接线人员订阅统计" [level=1] [ref=f2e27]
+            - generic [ref=f2e28]: 区域加载中…
+            - link "切换区域" [ref=f2e29] [cursor=pointer]:
+              - /url: /pages/tenant-select
+          - generic [ref=f2e30]: 统计接线人员对应各位管理员每日各专页的订阅总和（非超管仅查看自身文件夹中的专页）。
+        - generic [ref=f2e31]:
+          - button "🔄 同步最新订阅数据" [ref=f2e32] [cursor=pointer]
+          - button "📥 导出 Excel" [ref=f2e33] [cursor=pointer]
+          - link "返回表格编辑" [ref=f2e34] [cursor=pointer]:
+            - /url: /pages/list
+      - generic [ref=f2e35]:
+        - generic [ref=f2e36]:
+          - generic [ref=f2e37]:
+            - generic [ref=f2e38]:
+              - text: 变量更新与统计时段 (精确到分)
+              - generic [ref=f2e39]:
+                - button "变量更新与统计时段 (精确到分) 昨日 近7天 近30天 本月" [ref=f2e40] [cursor=pointer]: 今日
+                - button "昨日" [ref=f2e41] [cursor=pointer]
+                - button "近7天" [ref=f2e42] [cursor=pointer]
+                - button "近30天" [ref=f2e43] [cursor=pointer]
+                - button "本月" [ref=f2e44] [cursor=pointer]
+            - generic [ref=f2e45]:
+              - textbox [ref=f2e46]: 2026-08-12T00:00
+              - generic [ref=f2e47]: 至
+              - textbox [ref=f2e48]: 2026-08-19T23:59
+          - generic [ref=f2e49]:
+            - generic [ref=f2e50]: 文件夹
+            - generic [ref=f2e51]:
+              - combobox "文件夹":
+                - option "全部文件夹" [selected]
+              - generic [ref=f2e52]:
+                - textbox "全部文件夹 (可输入搜索)" [ref=f2e53]
+                - button "▼" [ref=f2e54] [cursor=pointer]
+          - generic [ref=f2e55]:
+            - generic [ref=f2e56]: 接线人员
+            - generic [ref=f2e57]:
+              - combobox "接线人员":
+                - option "全部接线人员" [selected]
+              - generic [ref=f2e58]:
+                - textbox "全部接线人员 (可输入搜索)" [ref=f2e59]
+                - button "▼" [ref=f2e60] [cursor=pointer]
+          - generic [ref=f2e61]:
+            - generic [ref=f2e62]: 管理员
+            - generic [ref=f2e63]:
+              - combobox "管理员":
+                - option "全部管理员" [selected]
+              - generic [ref=f2e64]:
+                - textbox "全部管理员 (可输入搜索)" [ref=f2e65]
+                - button "▼" [ref=f2e66] [cursor=pointer]
+          - generic [ref=f2e67]:
+            - generic [ref=f2e68]: 所属队伍
+            - generic [ref=f2e69]:
+              - combobox "所属队伍":
+                - option "全部队伍" [selected]
+              - generic [ref=f2e70]:
+                - textbox "全部队伍 (可输入搜索)" [ref=f2e71]
+                - button "▼" [ref=f2e72] [cursor=pointer]
+          - generic [ref=f2e73]:
+            - generic [ref=f2e74]: 搜索关键词
+            - textbox "搜索关键词" [ref=f2e75]:
+              - /placeholder: 搜索专页ID、专页名称、管理员、接线人员...
+        - generic [ref=f2e76]:
+          - button "⏳ 查询中…" [disabled] [ref=f2e77] [cursor=pointer]
+          - button "清空重置" [ref=f2e78] [cursor=pointer]
+      - generic [ref=f2e79]: "🔍 正在查询中… 时段: 2026-08-12T00:00 ~ 2026-08-19T23:59"
+      - generic [ref=f2e80]:
+        - button "📅 每日接线人员×管理员总和表" [ref=f2e81] [cursor=pointer]
+        - button "📊 每日矩阵透视表" [ref=f2e82] [cursor=pointer]
+        - button "👔 管理员周期总计汇总" [ref=f2e83] [cursor=pointer]
+        - button "📋 专页时段记录" [ref=f2e84] [cursor=pointer]
+      - generic [ref=f2e85]: 正在查询数据…

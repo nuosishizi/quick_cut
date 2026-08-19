@@ -1,0 +1,75 @@
+- generic [active] [ref=f3e1]:
+  - banner [ref=f3e2]:
+    - link "专页变量管理" [ref=f3e3] [cursor=pointer]:
+      - /url: /pages/list
+    - navigation [ref=f3e4]:
+      - link "🌐 欧洲匈牙利语" [ref=f3e5] [cursor=pointer]:
+        - /url: /pages/tenant-select
+      - link "表格编辑" [ref=f3e6] [cursor=pointer]:
+        - /url: /pages/list
+      - link "📊 订阅统计" [ref=f3e7] [cursor=pointer]:
+        - /url: /pages/subscribe-stats
+      - link "删除历史恢复" [ref=f3e8] [cursor=pointer]:
+        - /url: /pages/deleted-history
+      - link "变量显示" [ref=f3e9] [cursor=pointer]:
+        - /url: /pages/my-variables
+      - link "变量总控" [ref=f3e10] [cursor=pointer]:
+        - /url: /pages/variables
+      - link "区域配置" [ref=f3e11] [cursor=pointer]:
+        - /url: /pages/system-settings
+      - link "用户管理 1在线" [ref=f3e12] [cursor=pointer]:
+        - /url: /pages/accounts
+      - link "洲/语系管理" [ref=f3e13] [cursor=pointer]:
+        - /url: /pages/tenant-management
+      - generic "界面主题" [ref=f3e14]:
+        - button "切换夜间模式" [ref=f3e15] [cursor=pointer]: 🌙 夜间
+      - generic "表格行密度" [ref=f3e16]:
+        - button "舒适" [ref=f3e17] [cursor=pointer]
+        - button "紧凑" [ref=f3e18] [cursor=pointer]
+      - button "👤 超级管理员" [ref=f3e19] [cursor=pointer]
+      - button "退出" [ref=f3e21] [cursor=pointer]
+  - main [ref=f3e22]:
+    - generic [ref=f3e23]:
+      - generic [ref=f3e24]:
+        - generic [ref=f3e25]: ⚠️
+        - generic [ref=f3e26]:
+          - generic [ref=f3e27]: 区域配置未完善警报：当前区域「欧洲匈牙利语」尚未完成必要配置！
+          - generic [ref=f3e28]:
+            - text: 缺少项：
+            - strong [ref=f3e29]: Google 电子表格 URL、Google 授权密钥 (Service Account JSON)、外站推送 Token (Update Token)
+            - text: 。未配置前，系统无法自动从 Google Sheet 拉取专页清单与订阅数据。
+      - link "⚙️ 立即前往配置" [ref=f3e30] [cursor=pointer]:
+        - /url: /pages/system-settings
+    - generic [ref=f3e31]:
+      - generic [ref=f3e32]:
+        - generic [ref=f3e33]:
+          - heading "选择运营区域 / 语系" [level=1] [ref=f3e34]
+          - generic [ref=f3e35]: 分类同时记录洲/区域和可选语系；例如北美西语、欧洲西语，也支持只有“欧洲”的区域分类。
+        - link "管理洲/语系" [ref=f3e36] [cursor=pointer]:
+          - /url: /pages/tenant-management
+      - generic [ref=f3e37]:
+        - button "欧洲匈牙利语 区域：eu 语系：hu hu" [ref=f3e39] [cursor=pointer]:
+          - strong [ref=f3e40]: 欧洲匈牙利语
+          - generic [ref=f3e41]: 区域：eu
+          - generic [ref=f3e42]: 语系：hu
+          - generic [ref=f3e43]: hu
+        - button "南美西语 区域：sa 语系：es sa-es" [ref=f3e45] [cursor=pointer]:
+          - strong [ref=f3e46]: 南美西语
+          - generic [ref=f3e47]: 区域：sa
+          - generic [ref=f3e48]: 语系：es
+          - generic [ref=f3e49]: sa-es
+        - button "北美英文 区域：us 语系：en na-en" [ref=f3e51] [cursor=pointer]:
+          - strong [ref=f3e52]: 北美英文
+          - generic [ref=f3e53]: 区域：us
+          - generic [ref=f3e54]: 语系：en
+          - generic [ref=f3e55]: na-en
+        - button "南美西语天主教 区域：us 语系：es us-es-t" [ref=f3e57] [cursor=pointer]:
+          - strong [ref=f3e58]: 南美西语天主教
+          - generic [ref=f3e59]: 区域：us
+          - generic [ref=f3e60]: 语系：es
+          - generic [ref=f3e61]: us-es-t
+        - button "南美葡语 区域：us 语系：pt us-pt" [ref=f3e63] [cursor=pointer]:
+          - strong [ref=f3e64]: 南美葡语
+          - generic [ref=f3e65]: 区域：us
+          - generic [ref=f3e66]: 语系：pt
+          - generic [ref=f3e67]: us-pt
