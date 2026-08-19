@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-  Write-Host "Version must follow semantic versioning, e.g. 2.7.41" -ForegroundColor Red
+  Write-Host "Version must follow semantic versioning, e.g. 2.7.42" -ForegroundColor Red
   exit 1
 }
 
