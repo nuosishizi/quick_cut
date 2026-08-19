@@ -14377,6 +14377,44 @@
             console.warn("字幕预览渲染失败，回退 ASS", error);
           }
           $("revealExport").style.display = "none";
+          let mainAudioPath = "";
+          const isDenoiseActive = !!(state.denoiseEnabled && Number(state.denoise?.strength || 0) > 0.01);
+          if (isDenoiseActive && state.video?.path) {
+            const currentMode = state.denoise?.mode || "uvr5-master";
+            const currentStrength = state.denoise?.strength ?? 0.85;
+            const isCacheValid = state.denoisedAudio &&
+              state.denoisedAudio.path &&
+              state.denoisedAudio.sourcePath === state.video.path &&
+              state.denoisedAudio.mode === currentMode &&
+              Math.abs(Number(state.denoisedAudio.strength ?? 0.85) - Number(currentStrength)) < 0.01;
+
+            if (isCacheValid) {
+              mainAudioPath = state.denoisedAudio.path;
+            } else {
+              $("exportStatus").textContent = "正在生成整轨 AI 高清降噪音频…";
+              try {
+                const media = await nativeCall("applyDenoiseTrack", {
+                  projectId: state.projectId,
+                  path: state.video.path,
+                  mode: currentMode,
+                  strength: currentStrength,
+                });
+                state.denoisedAudio = {
+                  ...media,
+                  sourcePath: state.video.path,
+                  mode: currentMode,
+                  strength: currentStrength,
+                };
+                state.denoiseEnabled = true;
+                mainAudioPath = state.denoisedAudio.path;
+                syncAudioControls();
+                syncPreviewAudio();
+                queueAutosave();
+              } catch (err) {
+                console.warn("导出前生成降噪缓存失败，回退常规滤镜降噪", err);
+              }
+            }
+          }
           const exportMainVideoClips = mainClips().map((clip) => ({
             ...clip,
             trackId: state.mainVideoTrackMap?.[clip.id] || "video",
@@ -14395,6 +14433,7 @@
           });
           const config = {
             inputPath: state.video.path,
+            mainAudioPath: mainAudioPath || "",
             outputPath: output,
             format,
             width,

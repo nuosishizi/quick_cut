@@ -2036,7 +2036,7 @@ function appendExternalAudio(
   return "[mixeda]";
 }
 
-function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPrefix = "a") {
+function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPrefix = "a", mainAudioInputIndex = 0) {
   const sortedClips = [...(clips || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
   const audioSegments = [];
   let timelineCursor = 0;
@@ -2067,7 +2067,7 @@ function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPref
       ? `,afade=t=in:st=0:d=${edgeFade.toFixed(5)},afade=t=out:st=${Math.max(0, clipDuration - edgeFade).toFixed(5)}:d=${edgeFade.toFixed(5)}`
       : "";
     graph.push(
-      `[0:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)}${fadeFilters}${clipLabel}`,
+      `[${mainAudioInputIndex}:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)}${fadeFilters}${clipLabel}`,
     );
     audioSegments.push(clipLabel);
     timelineCursor = start + clipDuration;
@@ -2091,10 +2091,11 @@ function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPref
   }
 }
 
-function buildAudioExportGraph(config, info, audioInputOffset = 1) {
+export function buildAudioExportGraph(config, info, audioInputOffset = 1, mainAudioInputIndex = 0) {
   const graph = [];
   let label = null;
-  if (info.audioCodec) {
+  const hasDenoisedMainAudio = !!(config.mainAudioPath && fs.existsSync(config.mainAudioPath));
+  if (info.audioCodec || hasDenoisedMainAudio) {
     const segments = keptSegments(info.duration, config.removals || []);
     if (!segments.length && !(config.audioAssets || []).length)
       throw new Error("所有音频内容都被删除了，无法导出。");
@@ -2119,11 +2120,14 @@ function buildAudioExportGraph(config, info, audioInputOffset = 1) {
       0.04,
       Number(config.outputDuration || cursor || info.duration),
     );
-    buildMainAudioClipsGraph(graph, clips, speed, outputDuration, "a");
+    buildMainAudioClipsGraph(graph, clips, speed, outputDuration, "a", mainAudioInputIndex);
     label = "[joineda]";
+    const effectiveAudioConfig = hasDenoisedMainAudio
+      ? { ...config, denoise: { ...(config.denoise || {}), strength: 0 } }
+      : config;
     const master = label
       ? audioMasterFilter(
-          { ...config, audio: { ...(config.audio || {}), speed: 1, offset: 0 } },
+          { ...effectiveAudioConfig, audio: { ...(config.audio || {}), speed: 1, offset: 0 } },
           info,
         )
       : "";
@@ -2146,7 +2150,7 @@ function buildAudioExportGraph(config, info, audioInputOffset = 1) {
   return { graph: graph.join(";"), audioLabel: label };
 }
 
-function buildExportGraph(config, info) {
+export function buildExportGraph(config, info) {
   const width = Math.max(320, Math.round(config.width || 1080));
   const height = Math.max(320, Math.round(config.height || 1920));
   const fps = Math.max(24, Math.min(60, Number(config.fps || 30)));
@@ -2269,12 +2273,14 @@ function buildExportGraph(config, info) {
     });
     graph.push(`[maincanvas${mainVideoClips.length}]null[joinedv]`);
   }
-  if (info.audioCodec) {
+  const hasDenoisedMainAudio = !!(config.mainAudioPath && fs.existsSync(config.mainAudioPath));
+  const mainAudioInputIndex = hasDenoisedMainAudio ? 1 : 0;
+  if (info.audioCodec || hasDenoisedMainAudio) {
     const audioClips =
       Array.isArray(config.mainAudioClips) && config.mainAudioClips.length
         ? config.mainAudioClips
         : mainVideoClips;
-    buildMainAudioClipsGraph(graph, audioClips, speed, outputDuration, "maina");
+    buildMainAudioClipsGraph(graph, audioClips, speed, outputDuration, "maina", mainAudioInputIndex);
   }
   const mainOffset = 0;
   let sourceVideoLabel = "[joinedv]";
@@ -2416,7 +2422,7 @@ function buildExportGraph(config, info) {
   const x = `(W-w)/2+${Math.round(Number(transform.x || 0))}`;
   const y = `(H-h)/2+${Math.round(Number(transform.y || 0))}`;
   let layer = 0;
-  let inputIndex = 1;
+  let inputIndex = hasDenoisedMainAudio ? 2 : 1;
   const mainTrackIds = [...new Set(mainVideoClips.map((clip) => clip.trackId || "video"))];
   const mainTrackLabels = new Map();
   if (mainTrackIds.length > 1) {
@@ -2697,8 +2703,8 @@ function buildExportGraph(config, info) {
   for (const [trackId, label] of mainTrackLabels)
     if (!consumedMainTracks.has(trackId)) graph.push(`${label}nullsink`);
   let audioLabel =
-    info.audioCodec && config.includeAudio !== false ? "[joineda]" : null;
-  if (info.audioCodec && config.includeAudio === false)
+    (info.audioCodec || hasDenoisedMainAudio) && config.includeAudio !== false ? "[joineda]" : null;
+  if ((info.audioCodec || hasDenoisedMainAudio) && config.includeAudio === false)
     graph.push("[joineda]anullsink");
   if (audioLabel && mainOffset > 0.001) {
     graph.push(
@@ -2706,9 +2712,12 @@ function buildExportGraph(config, info) {
     );
     audioLabel = "[mainoffseta]";
   }
+  const effectiveAudioConfig = hasDenoisedMainAudio
+    ? { ...config, denoise: { ...(config.denoise || {}), strength: 0 } }
+    : config;
   const master = audioLabel
     ? audioMasterFilter(
-        { ...config, audio: { ...(config.audio || {}), speed: 1, offset: 0 } },
+        { ...effectiveAudioConfig, audio: { ...(config.audio || {}), speed: 1, offset: 0 } },
         info,
       )
     : "";
@@ -3300,11 +3309,13 @@ function beginExportJob(config, info, job) {
   const busyGpuApps = listBusyGpuApps();
   job.gpuBusy = busyGpuApps.length > 0;
   job.busyGpuApps = busyGpuApps;
+  const hasDenoisedMainAudio = !!(config.mainAudioPath && fs.existsSync(config.mainAudioPath));
   const extraInputs = [];
   if (format === "mp3") {
     for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
-    const inputs = ["-i", config.inputPath, ...extraInputs];
-    const built = buildAudioExportGraph(config, info, 1);
+    const mainSource = hasDenoisedMainAudio ? config.mainAudioPath : config.inputPath;
+    const inputs = ["-i", mainSource, ...extraInputs];
+    const built = buildAudioExportGraph(config, info, 1, 0);
     const args = [
       "-y",
       "-hide_banner",
@@ -3340,6 +3351,9 @@ function beginExportJob(config, info, job) {
   }
   const preparedInputs = collectExportExtraInputs(config);
   config.captionRastersViaMovie = preparedInputs.captionRastersViaMovie;
+  if (hasDenoisedMainAudio) {
+    extraInputs.push("-i", config.mainAudioPath);
+  }
   extraInputs.push(...preparedInputs.extraInputs);
   let built = buildExportGraph(config, info);
   const colorProfiles = {
