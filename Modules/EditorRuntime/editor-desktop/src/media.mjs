@@ -3430,16 +3430,30 @@ export async function renderDenoisePreview(
 export async function renderLutPreviewFrame(inputPath, time, lutPath) {
   if (!inputPath || !fs.existsSync(inputPath)) throw new Error("请先导入视频。");
   if (!lutPath || !fs.existsSync(lutPath)) throw new Error("LUT 文件不存在。");
-  const directory = path.join(supportRoot(), "previews", "lut");
-  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  // LUT frames are disposable OS-temporary files. Keeping them outside the
+  // project cache prevents an explicit cache-clear from deleting a frame
+  // while FFmpeg is still writing it.
+  const directory = path.join(os.tmpdir(), "QuickCut", "previews", "lut");
   const outputPath = path.join(directory, `lut-${crypto.randomUUID()}.jpg`);
-  await run(mediaBinary("ffmpeg"), [
+  const args = [
     "-y", "-hide_banner", "-loglevel", "error",
     "-ss", String(Math.max(0, Number(time || 0))),
     "-i", inputPath,
     "-vf", `lut3d=file='${escapeFilterPath(lutPath)}':interp=tetrahedral,scale=540:-2:flags=bilinear`,
     "-frames:v", "1", "-q:v", "3", outputPath,
-  ], { lowPriority: true });
+  ];
+  // Cache cleanup may run concurrently with preview generation. Recreate the
+  // directory and retry once if it disappears between mkdir and FFmpeg open.
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  try {
+    await run(mediaBinary("ffmpeg"), args, { lowPriority: true });
+  } catch (error) {
+    await fs.promises.unlink(outputPath).catch(() => {});
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    await run(mediaBinary("ffmpeg"), args, { lowPriority: true }).catch(() => {
+      throw error;
+    });
+  }
   return outputPath;
 }
 
