@@ -21,6 +21,16 @@ test("all embedded UI scripts parse", () => {
   for (const script of scripts) new Function(script[1]);
 });
 
+test("English-primary Chinese auxiliary subtitles are view-only", () => {
+  assert.match(ui, /id="auxSubtitleEditorVisible" checked/);
+  assert.match(ui, /function generateAuxiliarySubtitles/);
+  assert.match(ui, /caption\.auxLocked/);
+  assert.match(ui, /data-caption-aux-edit/);
+  assert.match(ui, /仅供编辑校对查看，不进入视频或达芬奇导出/);
+  assert.doesNotMatch(ui, /auxSubtitleExportVisible|paintAuxiliaryCaptionToFrame|auxiliaryResolveCaptions/);
+  assert.match(main, /translateAuxiliaryCaptions: safe/);
+});
+
 test("sidebar tabs cannot collapse or wrap", () => {
   assert.match(ui, /\.tabs\s*\{[\s\S]*?min-height:\s*39px;[\s\S]*?flex:\s*0 0 39px;/);
   assert.match(ui, /\.tab\s*\{[\s\S]*?white-space:\s*nowrap;/);
@@ -133,6 +143,39 @@ test("red review clips accept with Ctrl and reject with Shift", () => {
     ui,
     /function applyHistoryState\(data\) \{[\s\S]*?state\.zoom = viewZoom/,
   );
+});
+
+test("review text can replace a wrong manuscript with recognized speech", () => {
+  assert.match(ui, /function replaceReviewCaption\(id, sourceMode = "expected"\)/);
+  assert.match(ui, /sourceMode === "spoken" \? spokenText : expectedText/);
+  assert.match(ui, /function replaceReviewWithSpoken\(id\)/);
+  assert.match(ui, /data-polish-action="replace-spoken"/);
+  assert.match(ui, /if \(e\.altKey && !\(e\.ctrlKey \|\| e\.metaKey \|\| e\.shiftKey\)\)/);
+  assert.match(ui, /用识别文字替换错误文稿（Alt\+点击）/);
+});
+
+test("daily projects, Chinese captions, fullscreen and downstream batch editing are discoverable", () => {
+  assert.match(ui, /captionLines:\s*1/);
+  assert.match(ui, /data-caption-lines="1"[^>]*>单行（默认）/);
+  assert.match(main, /captionLines:\s*input\?\.captionLines \?\? 1/);
+  assert.match(ui, /data-speech-language-quick="zh"/);
+  assert.match(whisper, /\{ id: "zh", label: "中文（普通话）"/);
+  assert.match(ui, /function projectDayKey\(value\)/);
+  assert.match(ui, /class="projectdaygrid"/);
+  assert.match(ui, /function togglePreviewFullscreen\(\)/);
+  assert.match(ui, /id="selectAfterPlayhead"/);
+  assert.match(ui, /function selectAfterPlayhead\(\)/);
+  assert.match(ui, /function selectedVisualTransformTargets\(\)/);
+  assert.match(ui, /已多选画面片段/);
+  assert.match(ui, /色块跟随文字（默认开启）/);
+});
+
+test("export hardware can be re-probed and reports the verified encoder", () => {
+  assert.match(main, /resetExportHardwareProbe/);
+  assert.match(main, /refreshExportHardware: safe/);
+  assert.match(ui, /id="refreshExportHardware"/);
+  assert.match(ui, /function renderExportHardwareStatus\(\)/);
+  assert.match(ui, /已通过实际编码测试/);
 });
 
 test("timeline zoom stays anchored to the playhead or pointer", () => {
@@ -371,6 +414,20 @@ test("filter cards have differentiated thumbnails and beauty includes whitening"
   assert.ok(fs.statSync(path.join(root, "assets/filter-preview-portrait.jpg")).size > 50_000);
   assert.match(ui, /\["whitening", "自然美白"/);
   assert.match(ui, /scale\(1\.3\)/);
+});
+
+test("professional grading controls, presets and export fields stay wired", () => {
+  for (const key of ["shadows", "highlights", "blacks", "whites", "sharpness", "fade"])
+    assert.match(ui, new RegExp(`\\["${key}",`));
+  assert.match(ui, /data-grade-preset="auto"/);
+  assert.match(ui, /data-grade-preset="flat"/);
+  assert.match(ui, /data-grade-preset="cinema"/);
+  assert.match(ui, /const gradePresets = \{/);
+  assert.match(media, /const blacks =/);
+  assert.match(media, /const whites =/);
+  assert.match(media, /const shadows =/);
+  assert.match(media, /const highlights =/);
+  assert.match(media, /const sharpness =/);
 });
 
 test("beauty preview uses a bounded GPU edge-preserving pass", () => {

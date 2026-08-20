@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Version = "2.7.44"
+$Version = "2.7.45"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-macOS-$Version"
 $tempBase = [System.IO.Path]::GetTempPath()

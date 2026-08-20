@@ -859,6 +859,13 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
   const neural = model
     ? `aresample=48000,arnndn=m='${escapeFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
+  // The bundled Windows FFmpeg build crashes inside anlmdn with 0xC0000005 /
+  // 0xC0000374. Keep the stable neural and FFT denoisers on Windows; other
+  // platforms may still add NL-means.
+  const nlmeans = (value) =>
+    process.platform === "win32"
+      ? ""
+      : `anlmdn=s=${Number(value).toFixed(4)}:p=0.002:r=0.006`;
   if (mode === "uvr5-master" || mode === "uvr5") {
     const warmthGain = (1.6 + amount * 1.8).toFixed(2);
     const presenceGain = (1.2 + amount * 1.6).toFixed(2);
@@ -869,7 +876,7 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
       neural,
       "adeclick",
       `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1:tr=1`,
-      `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
+      nlmeans(0.0006 + amount * 0.0012),
       `equalizer=f=185:t=q:w=0.85:g=${warmthGain}`,
       "equalizer=f=1000:t=q:w=1.2:g=0.5",
       `equalizer=f=3300:t=q:w=1.05:g=${presenceGain}`,
@@ -899,7 +906,7 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
       "lowpass=f=17500",
       neural,
       `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1`,
-      `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
+      nlmeans(0.0006 + amount * 0.0012),
       "alimiter=limit=0.96",
     ]
       .filter(Boolean)
@@ -910,7 +917,7 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
       "highpass=f=50",
       "lowpass=f=18000",
       `afftdn=nr=${Math.max(6, Math.round(6 + amount * 10))}:nf=-45:tn=1`,
-      `anlmdn=s=${(0.0004 + amount * 0.0008).toFixed(4)}:p=0.002:r=0.006`,
+      nlmeans(0.0004 + amount * 0.0008),
       "alimiter=limit=0.98",
     ]
       .filter(Boolean)
@@ -922,7 +929,7 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
       "lowpass=f=16500",
       neural,
       `afftdn=nr=${Math.max(8, Math.round(reduction * 0.72))}:nf=-38:tn=1`,
-      `anlmdn=s=${(0.0005 + amount * 0.0014).toFixed(4)}:p=0.002:r=0.006`,
+      nlmeans(0.0005 + amount * 0.0014),
       "alimiter=limit=0.96",
     ]
       .filter(Boolean)
@@ -941,6 +948,11 @@ export function audioDenoiseFilter(mode, strength = 0.8) {
       .join(",");
   }
   return `highpass=f=60,lowpass=f=16000,afftdn=nr=${Math.max(6, Math.round(reduction * 0.7))}:nf=-38:tn=1`;
+}
+
+function stableDenoiseFallbackFilter(strength = 0.8) {
+  const amount = Math.max(0, Math.min(1, Number(strength || 0.8)));
+  return `aresample=48000,highpass=f=60,lowpass=f=16500,afftdn=nr=${Math.round(8 + amount * 10)}:nf=-42:tn=1,alimiter=limit=0.97`;
 }
 
 function audioMasterFilter(config, info) {
@@ -2301,11 +2313,17 @@ export function buildExportGraph(config, info) {
   const lift = Math.max(-1, Math.min(1, Number(color.lift || 0) / 100));
   const gamma = Math.max(-1, Math.min(1, Number(color.gamma || 0) / 100));
   const gain = Math.max(-1, Math.min(1, Number(color.gain || 0) / 100));
-  if (Math.abs(lift) > 0.001 || Math.abs(gain) > 0.001) {
-    const inputBlack = Math.max(-0.18, Math.min(0.18, -lift * 0.12));
-    const outputBlack = Math.max(0, Math.min(0.18, lift * 0.12));
-    const inputWhite = Math.max(0.78, Math.min(1, 1 - Math.max(0, gain) * 0.18));
-    const outputWhite = Math.max(0.78, Math.min(1, 1 + Math.min(0, gain) * 0.18));
+  const blacks = Math.max(-1, Math.min(1, Number(color.blacks || 0) / 100));
+  const whites = Math.max(-1, Math.min(1, Number(color.whites || 0) / 100));
+  const fade = Math.max(0, Math.min(1, Number(color.fade || 0) / 100));
+  if (
+    Math.abs(lift) > 0.001 || Math.abs(gain) > 0.001 ||
+    Math.abs(blacks) > 0.001 || Math.abs(whites) > 0.001 || fade > 0.001
+  ) {
+    const inputBlack = Math.max(-0.18, Math.min(0.18, -lift * 0.12 - blacks * 0.08));
+    const outputBlack = Math.max(0, Math.min(0.22, lift * 0.12 + Math.max(0, blacks) * 0.06 + fade * 0.12));
+    const inputWhite = Math.max(0.72, Math.min(1, 1 - Math.max(0, gain) * 0.18 - Math.max(0, whites) * 0.09));
+    const outputWhite = Math.max(0.72, Math.min(1, 1 + Math.min(0, gain) * 0.18 + Math.min(0, whites) * 0.08 - fade * 0.05));
     filters.push(
       `colorlevels=rimin=${inputBlack.toFixed(3)}:gimin=${inputBlack.toFixed(3)}:bimin=${inputBlack.toFixed(3)}:rimax=${inputWhite.toFixed(3)}:gimax=${inputWhite.toFixed(3)}:bimax=${inputWhite.toFixed(3)}:romin=${outputBlack.toFixed(3)}:gomin=${outputBlack.toFixed(3)}:bomin=${outputBlack.toFixed(3)}:romax=${outputWhite.toFixed(3)}:gomax=${outputWhite.toFixed(3)}:bomax=${outputWhite.toFixed(3)}`,
     );
@@ -2313,6 +2331,13 @@ export function buildExportGraph(config, info) {
   if (Math.abs(gamma) > 0.001) {
     const mid = Math.max(0.08, Math.min(0.92, 0.5 + gamma * 0.24));
     filters.push(`curves=all='0/0 0.5/${mid.toFixed(3)} 1/1'`);
+  }
+  const shadows = Math.max(-1, Math.min(1, Number(color.shadows || 0) / 100));
+  const highlights = Math.max(-1, Math.min(1, Number(color.highlights || 0) / 100));
+  if (Math.abs(shadows) > 0.001 || Math.abs(highlights) > 0.001) {
+    const shadowPoint = Math.max(0.08, Math.min(0.43, 0.25 + shadows * 0.14));
+    const highlightPoint = Math.max(0.57, Math.min(0.92, 0.75 + highlights * 0.14));
+    filters.push(`curves=all='0/0 0.25/${shadowPoint.toFixed(3)} 0.5/0.5 0.75/${highlightPoint.toFixed(3)} 1/1'`);
   }
   const vibrance = Math.max(
     -2,
@@ -2335,6 +2360,9 @@ export function buildExportGraph(config, info) {
   const midtoneDetail = Math.max(-100, Math.min(100, Number(color.midtoneDetail || 0)));
   if (Math.abs(midtoneDetail) > 0.1)
     filters.push(`unsharp=9:9:${(midtoneDetail / 32).toFixed(3)}:7:7:0`);
+  const sharpness = Math.max(0, Math.min(100, Number(color.sharpness || 0)));
+  if (sharpness > 0.1)
+    filters.push(`unsharp=5:5:${(sharpness / 42).toFixed(3)}:5:5:0`);
   const vignette = Math.max(0, Math.min(1, Number(color.vignette || 0) / 100));
   if (vignette > 0.01)
     filters.push(
@@ -2787,68 +2815,47 @@ export function findDemucsBinary() {
   ].filter(Boolean);
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) return candidate;
+    try {
+      if (!fs.statSync(candidate).isFile()) continue;
+      if (!isWin && (fs.statSync(candidate).mode & 0o111) === 0) continue;
+      return candidate;
+    } catch {}
   }
-  const manifest = path.join(engineRoot, "manifest.json");
-  if (fs.existsSync(manifest)) return manifest;
   return "";
 }
 
 export function hasDemucsEngine() {
-  return Boolean(findDemucsBinary());
+  const binary = findDemucsBinary();
+  if (!binary) return false;
+  try {
+    const checked = spawnSync(binary, ["--help"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 5000,
+    });
+    return !checked.error && checked.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 const demucsInstallJobs = new Map();
 
 export function startDemucsInstall(input = {}) {
   const jobId = crypto.randomUUID();
+  const alreadyInstalled = hasDemucsEngine();
   const job = {
     id: jobId,
-    status: "downloading",
-    progress: 0,
-    message: "正在准备下载 Meta Demucs 深度学习模型…",
-    error: null,
+    status: alreadyInstalled ? "ready" : "error",
+    progress: alreadyInstalled ? 100 : 0,
+    message: alreadyInstalled
+      ? "Meta Demucs 本地引擎已验证可用。"
+      : "未检测到可执行的 Demucs 引擎；本次将使用内置 FFmpeg 稳定降噪，不会伪装成安装成功。",
+    error: alreadyInstalled ? null : "Demucs 自动安装源尚未配置",
     startedAt: Date.now(),
     cancelled: false,
   };
   demucsInstallJobs.set(jobId, job);
-
-  // Background async worker
-  (async () => {
-    try {
-      const engineDir = path.join(supportRoot(), "engines", "demucs");
-      fs.mkdirSync(engineDir, { recursive: true, mode: 0o700 });
-
-      job.progress = 20;
-      job.message = "正在连接模型分发网络并同步权重…";
-
-      for (let p = 25; p <= 90; p += 15) {
-        if (job.cancelled) return;
-        await new Promise((resolve) => setTimeout(resolve, 350));
-        job.progress = p;
-        job.message = `正在解压并部署 Demucs 深度时域模型… ${p}%`;
-      }
-
-      if (job.cancelled) return;
-
-      const manifestPath = path.join(engineDir, "manifest.json");
-      fs.writeFileSync(
-        manifestPath,
-        JSON.stringify({ version: "4.0.0", engine: "htdemucs", ready: true, updatedAt: new Date().toISOString() }, null, 2),
-        "utf8",
-      );
-
-      job.progress = 100;
-      job.status = "ready";
-      job.message = "Meta Demucs 深度时域引擎已就绪！";
-    } catch (err) {
-      if (!job.cancelled) {
-        job.status = "error";
-        job.error = err?.message || "安装失败";
-        job.message = `安装失败：${job.error}`;
-      }
-    }
-  })();
 
   return { jobId, status: job.status, progress: job.progress, message: job.message };
 }
@@ -3057,7 +3064,7 @@ export async function renderDenoisePreview(inputPath, time, mode, strength) {
 
   // Graceful fallback / traditional filter graph
   const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
-  await run(mediaBinary("ffmpeg"), [
+  const previewArgs = (audioFilter) => [
     "-y",
     "-hide_banner",
     "-loglevel",
@@ -3070,13 +3077,20 @@ export async function renderDenoisePreview(inputPath, time, mode, strength) {
     inputPath,
     "-vn",
     "-af",
-    filter,
+    audioFilter,
     "-c:a",
     "aac",
     "-b:a",
     "192k",
     outputPath,
-  ]);
+  ];
+  try {
+    await run(mediaBinary("ffmpeg"), previewArgs(filter));
+  } catch (error) {
+    console.warn("Denoise preview advanced filters failed; retrying stable chain:", error?.message);
+    await fs.promises.unlink(outputPath).catch(() => {});
+    await run(mediaBinary("ffmpeg"), previewArgs(stableDenoiseFallbackFilter(strength)));
+  }
   return outputPath;
 }
 
@@ -3132,23 +3146,30 @@ export async function renderDenoisedTrack(inputPath, mode, strength, destination
     `.${path.basename(outputPath)}.${crypto.randomUUID()}.partial.m4a`,
   );
   const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
+  const trackArgs = (audioFilter) => [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    inputPath,
+    "-vn",
+    "-af",
+    audioFilter,
+    "-c:a",
+    "aac",
+    "-b:a",
+    "224k",
+    temporary,
+  ];
   try {
-    await run(mediaBinary("ffmpeg"), [
-      "-y",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-i",
-      inputPath,
-      "-vn",
-      "-af",
-      filter,
-      "-c:a",
-      "aac",
-      "-b:a",
-      "224k",
-      temporary,
-    ]);
+    try {
+      await run(mediaBinary("ffmpeg"), trackArgs(filter));
+    } catch (error) {
+      console.warn("Denoise track advanced filters failed; retrying stable chain:", error?.message);
+      await fs.promises.unlink(temporary).catch(() => {});
+      await run(mediaBinary("ffmpeg"), trackArgs(stableDenoiseFallbackFilter(strength)));
+    }
     const stat = await fs.promises.stat(temporary).catch(() => null);
     if (!stat?.isFile() || stat.size < 256)
       throw new Error("降噪音轨没有正确生成，请重试。");

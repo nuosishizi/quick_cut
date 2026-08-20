@@ -1,9 +1,9 @@
 ; QuickCut Windows Inno Setup Script
 #ifndef MyAppVersion
-  #define MyAppVersion "2.7.44"
+  #define MyAppVersion "2.7.45"
 #endif
 #ifndef SourceDir
-  #define SourceDir "D:\QuickCut-win-pack\QuickCut-Windows-2.7.44"
+  #define SourceDir "D:\QuickCut-win-pack\QuickCut-Windows-2.7.45"
 #endif
 
 #define MyAppName "快剪"

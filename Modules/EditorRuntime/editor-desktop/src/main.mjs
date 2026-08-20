@@ -40,6 +40,7 @@ import {
   saveCaptionPreset,
   supportRoot,
   detectExportHardware,
+  resetExportHardwareProbe,
 } from "./media.mjs";
 import {
   cancelModelDownload,
@@ -69,6 +70,7 @@ import {
   openAntigravityLogin,
   saveReviewSettings,
 } from "./ai-settings.mjs";
+import { translateAuxiliaryCaptions } from "./caption-translation.mjs";
 import { applyCaptionPolish, blockingScriptureIssues, DEFAULT_REVIEW_PROMPTS } from "./script-judge.mjs";
 import { writeResolveTimeline } from "./resolve-export.mjs";
 import {
@@ -399,7 +401,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.44" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.45" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1324,7 +1326,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.44",
+    version: "2.7.45",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1514,6 +1516,10 @@ nativeMethods = {
   sendToResolve: safe((input) => sendToResolve(input || {})),
   startExport: safe((config) => startExport(config)),
   exportHardware: safe(() => detectExportHardware()),
+  refreshExportHardware: safe(() => {
+    resetExportHardwareProbe();
+    return detectExportHardware();
+  }),
   exportStatus: safe((jobId) => exportStatus(jobId)),
   cancelExport: safe((jobId) => cancelExport(jobId)),
   modelStatus: safe(() => modelStatus()),
@@ -1530,7 +1536,7 @@ nativeMethods = {
   startScriptAnalysis: safe((input) => startScriptAnalysis(input)),
   regroupCaptions: safe((input) =>
     regroupProjectCaptions(input?.captions || [], {
-      captionLines: input?.captionLines ?? 2,
+      captionLines: input?.captionLines ?? 1,
       boxWidth: input?.boxWidth,
       canvasWidth: input?.canvasWidth || input?.width,
       scale: input?.scale,
@@ -1542,6 +1548,7 @@ nativeMethods = {
   scriptAnalysisStatus: safe((jobId) => scriptAnalysisStatus(jobId)),
   cancelScriptAnalysis: safe((jobId) => cancelScriptAnalysis(jobId)),
   reviewScriptIssues: safe((input) => reviewScriptIssues(input || {})),
+  translateAuxiliaryCaptions: safe((input) => translateAuxiliaryCaptions(input || {})),
   reviewSettings: safe(() => listReviewModels()),
   refreshGeminiModels: safe(() => listReviewModels({ refresh: true })),
   saveReviewSettings: safe((input) => saveReviewSettings(input || {})),

@@ -51,10 +51,10 @@
 
 ```bash
 # Windows
-gh attestation verify ./快剪-Windows-2.7.44-安装包.exe --repo nuosishizi/quick_cut
+gh attestation verify ./快剪-Windows-2.7.45-安装包.exe --repo nuosishizi/quick_cut
 
 # macOS
-gh attestation verify ./快剪-macOS-2.7.44-安装包.dmg --repo nuosishizi/quick_cut
+gh attestation verify ./快剪-macOS-2.7.45-安装包.dmg --repo nuosishizi/quick_cut
 ```
 
 > ✅ 验证成功即代表该文件 100% 由 GitHub Actions 官方编译机生成，数字签名与源码提交完全吻合。

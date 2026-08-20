@@ -529,6 +529,22 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
       }
+      .grade-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:9px; }
+      .grade-panel-head h3 { margin:0 0 2px; }
+      .grade-panel-head > div > span { color:var(--muted); font:700 8px/1.2 Consolas,monospace; letter-spacing:.08em; }
+      .grade-node { display:flex; align-items:center; gap:5px; padding:4px 6px; border:1px solid #3b4045; border-radius:4px; color:#aeb4b9; font-size:9px; }
+      .grade-node.active { border-color:#d2a540; box-shadow:inset 0 -2px #d2a540; }
+      .grade-node.beauty { border-color:#7e5f91; box-shadow:inset 0 -2px #9d72b6; }
+      .grade-node i { font-style:normal; color:var(--muted); }
+      .grade-presets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+      .grade-control-group { border-top:1px solid #303438; margin-top:8px; padding-top:7px; }
+      .grade-control-title { margin-bottom:3px; color:#aeb4b9; font:700 9px/1.2 sans-serif; letter-spacing:.05em; }
+      .grade-control-grid { display:grid; grid-template-columns:1fr; }
+      .grade-control-grid .field { margin-top:6px; }
+      .beauty-skin-note { display:grid; grid-template-columns:10px 1fr; gap:1px 6px; align-items:center; padding:7px; margin:4px 0 8px; border:1px solid #354039; border-radius:4px; background:#19221d; }
+      .beauty-skin-note i { grid-row:1/3; width:8px; height:8px; border-radius:50%; background:#52b879; box-shadow:0 0 6px #52b879; }
+      .beauty-skin-note span { color:#bcd5c5; font-size:10px; }
+      .beauty-skin-note small { color:#6f8076; font-size:8px; line-height:1.25; }
       .filter-card {
         min-height: 94px;
         border: 1px solid var(--line);
@@ -561,6 +577,21 @@
       .caption-inspector-row textarea {
         min-height:48px;resize:vertical;width:100%;background:#141618;
         border:1px solid var(--line2);border-radius:6px;padding:6px;
+      }
+      .caption-inspector-copy { display:grid;gap:6px;min-width:0; }
+      .caption-aux-head { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+      .caption-aux-edit { color:#cdd7e4;min-height:42px!important; }
+      .caption-aux-state { color:var(--muted);font-size:9px; }
+      .caption-aux-state.stale { color:#f1a84b; }
+      .caption-aux-state.locked { color:#7fc5ff; }
+      .aux-subtitle-panel { margin-top:9px;padding:9px;border:1px solid #34404d;border-radius:8px;background:#192029; }
+      .aux-subtitle-panel .sectiontitle { margin:0 0 4px; }
+      .aux-subtitle-toggles { display:flex;gap:7px;margin-top:8px; }
+      .aux-subtitle-toggle { display:flex;align-items:center;gap:6px;color:#c5ccd3;font-size:10px; }
+      .auxcaptionobject {
+        pointer-events:none;z-index:8;text-align:center;color:#e9edf2;
+        font-weight:650;line-height:1.24;white-space:normal;overflow-wrap:anywhere;
+        text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.78);
       }
       .filter-card:after { content:""; position:absolute; inset:0; background:linear-gradient(120deg,transparent,rgba(255,255,255,.18),transparent); transform:translateX(-120%); }
       .filter-card:hover:after { transform:translateX(120%); transition:.45s; }
@@ -602,6 +633,22 @@
           #17191b 62%,
           #111 100%
         );
+      }
+      .stage.preview-fullscreen,
+      .stage:fullscreen,
+      .stage:-webkit-full-screen {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 10000;
+        background: #050607;
+      }
+      .stage.preview-fullscreen .frame,
+      .stage:fullscreen .frame,
+      .stage:-webkit-full-screen .frame {
+        max-width: calc(100vw - 32px);
+        max-height: calc(100vh - 32px);
       }
       .stage.empty:after {
         content: "拖入视频或点击“导入视频”";
@@ -1756,6 +1803,30 @@
         margin-top: 22px;
         overflow: auto;
         padding: 1px 4px 18px 1px;
+      }
+      .projectday {
+        grid-column: 1 / -1;
+        min-width: 0;
+      }
+      .projectdayhead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 4px 0 10px;
+        color: #d7dbe0;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .projectdayhead:after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: var(--line);
+      }
+      .projectdaygrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 14px;
       }
       .projectcard {
         min-height: 181px;
@@ -3306,10 +3377,26 @@
               <div class="field" style="margin-top:10px">
                 <div class="fieldhead"><span>字幕切句</span></div>
                 <div class="align-buttons" id="captionLinesButtons">
-                  <button class="btn" type="button" data-caption-lines="1" title="按标点和单行字数上限切句，随时可改，不用重新匹配">单行</button>
-                  <button class="btn active" type="button" data-caption-lines="2" title="按标点和两行字数上限切句">2行</button>
+                  <button class="btn active" type="button" data-caption-lines="1" title="默认单行；按标点和单行字数上限切句，随时可改，不用重新匹配">单行（默认）</button>
+                  <button class="btn" type="button" data-caption-lines="2" title="按标点和两行字数上限切句">2行</button>
                   <button class="btn" type="button" data-caption-lines="multi" title="主要按句号问号切，字数上限更宽">多行</button>
                 </div>
+              </div>
+              <div class="aux-subtitle-panel" id="auxSubtitlePanel">
+                <div class="sectiontitle">中文辅助翻译</div>
+                <div class="small">英文仍负责对齐、词级高亮和剪辑；中文只跟随整句，不改变英文时间。</div>
+                <label class="field" style="margin-top:7px"><span class="small">目标中文</span>
+                  <select class="select" id="auxSubtitleLanguage">
+                    <option value="zh-Hans">简体中文</option>
+                    <option value="zh-Hant">繁体中文</option>
+                  </select>
+                </label>
+                <div class="aux-subtitle-toggles">
+                  <label class="aux-subtitle-toggle"><input type="checkbox" id="auxSubtitleEditorVisible" checked> 编辑时显示</label>
+                </div>
+                <div class="small" style="margin-top:5px;color:#7f8b97">仅供编辑校对查看，不进入视频或达芬奇导出。</div>
+                <button class="btn primary wide" id="generateAuxSubtitles" style="margin-top:8px">生成／更新中文辅助字幕</button>
+                <div class="small" id="auxSubtitleStatus" style="margin-top:6px">匹配英文文案后可生成；人工修改的中文会锁定保留。</div>
               </div>
               <button class="btn wide" id="openReviewSettings" style="margin-top:7px">纠正设置</button>
               <div class="sectiontitle" style="margin-top: 12px">听写引擎</div>
@@ -3339,6 +3426,10 @@
                     <div class="lang-combo-list" id="speechLanguageList"></div>
                   </div>
                   <input type="hidden" id="speechLanguage" value="en" />
+                </div>
+                <div class="row" style="margin-top:6px;gap:6px">
+                  <button class="btn small grow" type="button" data-speech-language-quick="zh">中文原声识别</button>
+                  <button class="btn small" type="button" data-speech-language-quick="en">英文</button>
                 </div>
               </div>
               <div id="groqSpeechSettings">
@@ -3482,6 +3573,8 @@
         <main class="previewarea">
           <div class="stage empty" id="stage" data-drop-zone="preview">
             <div class="ratio">
+              <button class="btn" id="previewFullscreen" title="全屏预览（F11 或 Esc 退出）">全屏预览</button
+              >
               <button class="btn" data-ratio="9:16">9:16</button
               ><button class="btn" data-ratio="16:9">16:9</button
               ><select class="select" id="resolution" style="width: 132px">
@@ -3507,6 +3600,7 @@
                 id="captionPreview"
                 data-type="caption"
               ></div>
+              <div class="visualobject auxcaptionobject" id="auxCaptionPreview"></div>
               <div
                 class="visualobject reviewobject"
                 id="reviewPreview"
@@ -3643,6 +3737,9 @@
                 <div class="row field">
                   <button class="btn grow" id="fitObject">适应画布</button
                   ><button class="btn grow" id="centerObject">居中</button>
+                </div>
+                <div class="status" id="multiTransformHint" style="display:none">
+                  已多选画面片段：缩放、位置、旋转、裁剪会同步应用到全部所选画面，可撤销。
                 </div>
               </div>
               <div id="textProperties">
@@ -3799,9 +3896,10 @@
                     <button class="btn" data-background-mode="line">逐行底板</button>
                   </div>
                   <div class="switch" style="margin-top: 6px;">
-                    <span>跟随文字宽度</span>
+                    <span>色块跟随文字（默认开启）</span>
                     <input id="backgroundFitText" type="checkbox" checked />
                   </div>
+                  <div class="small" style="margin-top:5px;color:var(--muted)">开启后底色会按每条字幕的实际文字宽度自动伸缩。</div>
                   <div class="field">
                     <div class="fieldhead"><span>背景颜色</span></div>
                     <input class="input colorinput" id="backgroundColor" type="color" value="#000000" />
@@ -3817,7 +3915,15 @@
             </div>
             <div class="sidepage" id="inspect-color">
               <div class="inspectsection">
-                <h3>基础校正</h3>
+                <div class="grade-panel-head">
+                  <div><h3>主校色</h3><span>PRIMARY CORRECTION · REC.709</span></div>
+                  <div class="grade-node active"><i>01</i><b>基础校正</b></div>
+                </div>
+                <div class="grade-presets field">
+                  <button class="btn" data-grade-preset="auto">自动平衡</button>
+                  <button class="btn" data-grade-preset="flat">柔和人像</button>
+                  <button class="btn" data-grade-preset="cinema">电影对比</button>
+                </div>
                 <div id="colorControls"></div>
                 <div class="row field">
                   <button class="btn grow" id="resetColor">重置调色</button
@@ -3833,7 +3939,7 @@
             </div>
             <div class="sidepage" id="inspect-filter">
               <div class="inspectsection">
-                <h3>视频滤镜</h3>
+                <div class="grade-panel-head"><div><h3>创意外观</h3><span>LOOK / LUT</span></div><div class="grade-node"><i>02</i><b>外观</b></div></div>
                 <p class="small">30 款内置效果使用真实调色参数，预览与导出一致；选择视频后点击即可套用。</p>
                 <div class="filter-grid field" id="filterGrid"></div>
                 <div class="field">
@@ -3849,10 +3955,11 @@
             </div>
             <div class="sidepage" id="inspect-beauty">
               <div class="inspectsection">
-                <h3>人像美颜</h3>
+                <div class="grade-panel-head"><div><h3>人像修饰</h3><span>PORTRAIT FINISH</span></div><div class="grade-node beauty"><i>03</i><b>肤质</b></div></div>
                 <p class="small">
                   肤质平滑采用保边处理，细节恢复负责重新增强边缘；各项含义互不重复。
                 </p>
+                <div class="beauty-skin-note"><i></i><span>肤色保护已启用</span><small>预览使用肤色遮罩；导出采用保守肤色校正与保边降噪</small></div>
                 <div id="beautyControls"></div>
                 <div class="row field">
                   <button class="btn grow" id="resetBeauty">重置</button
@@ -3929,14 +4036,14 @@
               <div class="inspectsection">
                 <h3>AI 语音母带与降噪</h3>
                 <p class="small">
-                  融合 UVR5 架构与 48kHz 深度神经网络，一键完成【深度去噪 + 去房间回声 + 人声磁性通透增强 + 防爆音平稳】。
+                  提供 RNNoise/频谱降噪、外部 DeepFilterNet 或 Demucs 处理；缺少外部引擎时会明确使用稳定滤镜回退。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="uvr5-master" selected>✨ UVR5 级 · 录音棚人声母带 (去噪+去回声+音质提升 · 推荐)</option>
-                    <option value="demucs">🚀 Meta Demucs 深度时域去噪 (Alexandre Défossez · 高阶可选)</option>
-                    <option value="ai-isolation">AI 语音隔离 (达芬奇级 · 强力去杂音)</option>
-                    <option value="dereverb">去房间混响 / 空旷回声 (De-Reverb · 贴耳干声)</option>
+                    <option value="uvr5-master" selected>✨ 录音棚人声净化（RNNoise/频谱降噪 · 推荐）</option>
+                    <option value="demucs">🚀 Meta Demucs 人声分离（需要本地引擎）</option>
+                    <option value="ai-isolation">AI 语音隔离（检测到 DeepFilterNet 时启用）</option>
+                    <option value="dereverb">房间回声抑制（频谱降噪与均衡）</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
                     <option value="strong">强力去底噪 (空调/风扇/风噪)</option>
                     <option value="off">关闭降噪</option>
@@ -4106,6 +4213,9 @@
               ><button class="btn iconbtn" id="splitClip" title="在播放头切割当前片段（⌘B / Ctrl+B）">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 3"/><polyline points="8 8 4 12 8 16"/><polyline points="16 8 20 12 16 16"/></svg>
               </button
+              ><button class="btn iconbtn" id="selectAfterPlayhead" title="全选播放头后全部轨道素材（Alt+A），拖动任一已选片段可整体后移">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="3" x2="7" y2="21"/><polyline points="11 7 15 7 15 17 11 17"/><polyline points="18 7 22 7 22 17 18 17"/></svg>
+              </button
               ><button
                 class="btn iconbtn"
                 id="trimLeft"
@@ -4233,7 +4343,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.44</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.45</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -4298,7 +4408,7 @@
             </select></label
           >
           <div class="field">
-            <span class="small">渲染设备</span>
+            <div class="fieldhead"><span class="small">渲染设备</span><button class="btn small" type="button" id="refreshExportHardware">重新检测显卡</button></div>
             <div class="row" style="gap:16px;margin-top:6px;flex-wrap:wrap">
               <label class="row" style="gap:6px;align-items:center;margin:0">
                 <input type="checkbox" id="exportUseGpu" checked />
@@ -4309,6 +4419,7 @@
                 <span class="small">CPU 软件编码</span>
               </label>
             </div>
+            <div class="small" id="exportHardwareStatus" style="margin-top:7px;color:var(--muted)">正在检测可用硬件编码器…</div>
           </div>
           <label class="field"
             ><span class="small">色彩空间</span
@@ -4598,6 +4709,15 @@
             wrapper.append(makeButton(-1), input, makeButton(1), reset);
           });
       }
+      function defaultAuxSubtitleSettings() {
+        return {
+          language: "zh-Hans",
+          editorVisible: true,
+          fontScale: 0.62,
+          color: "#e9edf2",
+          gap: 18,
+        };
+      }
       const state = {
         projectId: "",
         projectName: "未命名工程",
@@ -4611,6 +4731,7 @@
         images: [],
         titles: [],
         captions: [],
+        auxSubtitles: defaultAuxSubtitleSettings(),
         reviewCaptions: [],
         issues: [],
         matchIssues: [],
@@ -4661,7 +4782,7 @@
         trackSolo: {},
         avLinked: true,
         snapping: true,
-        captionLines: 2,
+        captionLines: 1,
         captionStyle: {
           fontFamily: "Helvetica",
           fontSize: 58,
@@ -4707,12 +4828,18 @@
           lift: 0,
           gamma: 0,
           gain: 0,
+          shadows: 0,
+          highlights: 0,
+          blacks: 0,
+          whites: 0,
           saturation: 0,
           temperature: 0,
           tint: 0,
           vibrance: 0,
           hue: 0,
           midtoneDetail: 0,
+          sharpness: 0,
+          fade: 0,
           vignette: 0,
         },
         denoise: { mode: "uvr5-master", strength: 0.85 },
@@ -4752,6 +4879,7 @@
         projectCoverPath: "",
         playing: false,
         colorBypass: false,
+        beautyBypass: false,
         filterLook: { id: "none", intensity: 1, baseColor: null },
         lut: null,
         exportJobId: "",
@@ -4759,7 +4887,7 @@
       };
       const captionStyleDefaults = Object.freeze({ ...state.captionStyle });
       function normalizeCaptionLineMode(value) {
-        const raw = String(value ?? "2").trim().toLowerCase();
+        const raw = String(value ?? "1").trim().toLowerCase();
         if (raw === "1" || raw === "one" || raw === "single") return 1;
         if (raw === "3" || raw === "three") return 3;
         if (raw === "0" || raw === "multi" || raw === "many" || raw === "auto") return "multi";
@@ -5326,6 +5454,24 @@
           return "刚刚";
         }
       }
+      function projectDayKey(value) {
+        const date = new Date(value || Date.now());
+        if (!Number.isFinite(date.getTime())) return "未知日期";
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+        const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+        const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+        if (key === todayKey) return "今天";
+        if (key === yesterdayKey) return "昨天";
+        return new Intl.DateTimeFormat("zh-CN", {
+          year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+          month: "long",
+          day: "numeric",
+          weekday: "short",
+        }).format(date);
+      }
       function renderProjectHome(items = []) {
         const query = $("homeSearch").value.trim().toLowerCase();
         const filtered = items.filter(
@@ -5335,11 +5481,17 @@
               .toLowerCase()
               .includes(query),
         );
-        $("homeProjectGrid").innerHTML = filtered
-          .map(
+        const groups = new Map();
+        for (const item of filtered) {
+          const day = projectDayKey(item.updatedAt || item.createdAt);
+          if (!groups.has(day)) groups.set(day, []);
+          groups.get(day).push(item);
+        }
+        $("homeProjectGrid").innerHTML = [...groups.entries()]
+          .map(([day, projects]) => `<section class="projectday"><div class="projectdayhead"><span>📁 ${escapeHtml(day)}</span><span class="small">${projects.length} 个工程</span></div><div class="projectdaygrid">${projects.map(
             (item) =>
               `<div class="projectcard" data-project-id="${item.id}" tabindex="0"><button type="button" class="projectdelete" data-delete-project="${item.id}" title="删除工程">×</button><div class="projectthumb">${item.thumbnailUrl ? `<img src="${escapeHtml(item.thumbnailUrl)}" alt="工程预览">` : escapeHtml(item.ratio || "9:16")}</div><b class="ellipsis" title="${escapeHtml(item.name || "未命名工程")}">${escapeHtml(item.name || "未命名工程")}</b><div class="projectmeta ellipsis">${escapeHtml(item.videoName || "尚未导入视频")}</div><div class="projectmeta">更新于 ${projectDate(item.updatedAt)}</div></div>`,
-          )
+          ).join("")}</div></section>`)
           .join("");
         $("homeProjectGrid").style.display = filtered.length ? "grid" : "none";
         $("homeEmpty").classList.toggle("on", !filtered.length);
@@ -5363,6 +5515,7 @@
           images: [],
           titles: [],
           captions: [],
+          auxSubtitles: defaultAuxSubtitleSettings(),
           reviewCaptions: [],
           issues: [],
           matchIssues: [],
@@ -5404,7 +5557,7 @@
           trackSolo: {},
           avLinked: true,
           snapping: true,
-          captionLines: 2,
+          captionLines: 1,
           captionStyle: {
             fontFamily: "Helvetica",
             fontSize: 58,
@@ -5445,12 +5598,18 @@
             lift: 0,
             gamma: 0,
             gain: 0,
+            shadows: 0,
+            highlights: 0,
+            blacks: 0,
+            whites: 0,
             saturation: 0,
             temperature: 0,
             tint: 0,
             vibrance: 0,
             hue: 0,
             midtoneDetail: 0,
+            sharpness: 0,
+            fade: 0,
             vignette: 0,
           },
           denoise: { mode: "uvr5-master", strength: 0.85 },
@@ -5489,6 +5648,7 @@
           projectCoverPath: "",
           playing: false,
           colorBypass: false,
+          beautyBypass: false,
           exportJobId: "",
           layout: { side: 310, inspector: 300, timeline: 270, trackLabel: 132 },
         });
@@ -5520,6 +5680,11 @@
           images: data.images || [],
           titles: data.titles || [],
           captions: data.captions || [],
+          auxSubtitles: {
+            ...defaultAuxSubtitleSettings(),
+            ...(data.auxSubtitles || {}),
+          },
+          captionLines: normalizeCaptionLineMode(data.captionLines ?? data.captionStyle?.captionLines ?? 1),
           reviewCaptions: data.reviewCaptions || [],
           issues: data.issues || [],
           matchIssues: data.matchIssues || data.issues || [],
@@ -5568,12 +5733,18 @@
             lift: 0,
             gamma: 0,
             gain: 0,
+            shadows: 0,
+            highlights: 0,
+            blacks: 0,
+            whites: 0,
             saturation: 0,
             temperature: 0,
             tint: 0,
             vibrance: 0,
             hue: 0,
             midtoneDetail: 0,
+            sharpness: 0,
+            fade: 0,
             vignette: 0,
             ...(data.color || {}),
           },
@@ -5705,7 +5876,7 @@
         if (item.type === "missing" || item.action === "missing") return detail;
         if (["accept", "insert"].includes(item.action))
           return `${detail}。已生成绿字幕；Shift+点击可波纹切除`;
-        return `${detail}。点击试听；Ctrl+点击保留不删除；Shift+点击接受并删除`;
+        return `${detail}。点击试听；Alt+点击替换为识别口播；Ctrl+点击保留不删除；Shift+点击接受并删除`;
       }
       function repairScriptDifferenceLinks() {
         state.reviewCaptions = (state.reviewCaptions || [])
@@ -5930,6 +6101,41 @@
         if (state.selected.type === "review")
           return state.reviewCaptions.find((x) => x.id === state.selected.id);
         return null;
+      }
+      function selectedVisualTransformTargets() {
+        const selected = (state.selectedItems || []).length
+          ? state.selectedItems
+          : [state.selected];
+        const targets = [];
+        const seen = new Set();
+        for (const item of selected) {
+          if (!item || !["video", "videolayer", "image"].includes(item.type)) continue;
+          if (selectionIsLocked(item.type, item.id)) continue;
+          let object = null;
+          if (item.type === "video") {
+            const clip = item.id === "main"
+              ? activeMainVideoClip()
+              : mainClips().find((entry) => entry.id === item.id);
+            object = clip ? mainVideoSettings(clip) : state.videoTransform;
+          } else {
+            object = timelineObjectFor(item.type, item.id);
+          }
+          if (!object || seen.has(object)) continue;
+          seen.add(object);
+          targets.push(object);
+        }
+        if (!targets.length) {
+          const current = currentObject();
+          if (current) targets.push(current);
+        }
+        return targets;
+      }
+      function mutateSelectedVisualTransforms(mutator) {
+        const targets = selectedVisualTransformTargets();
+        if (!targets.length || !guardUnlocked()) return [];
+        for (const target of targets) mutator(target);
+        queueAutosave();
+        return targets;
       }
       function selectionTrackId(type = state.selected.type, id = state.selected.id) {
         if (type === "video") return state.mainVideoTrackMap?.[id] || "video";
@@ -6876,6 +7082,43 @@
         state.selected = state.selectedItems.at(-1) || { type: "video", id: "main" };
         return state.selectedItems.length > 0;
       }
+      function selectAfterPlayhead() {
+        const start = Math.max(0, Number(state.currentTime || 0));
+        const end = Math.max(start + 0.1, visibleTimelineDuration(), Number(state.duration || 0)) + 1;
+        const types = new Set([
+          "video", "audio", "videolayer", "audioasset", "image", "text", "caption", "review",
+        ]);
+        const crossing = rangeTargetsAt(types, start).filter((item) => {
+          const object = item.type === "video"
+            ? mainClips().find((entry) => entry.id === item.id)
+            : item.type === "audio"
+              ? mainAudioClips().find((entry) => entry.id === item.id)
+              : timelineObjectFor(item.type, item.id);
+          return object && Number(object.start || 0) < start - 0.02 &&
+            Number(object.end || 0) > start + 0.02;
+        });
+        if (crossing.length) {
+          snapshot();
+          if (!splitClipsAt(start, crossing, { record: false, quiet: true })) state.undo.pop();
+        }
+        const picked = expandLinkedSelection(collectRangeHits(types, start, end));
+        state.timelineRange = { start, end: Math.max(start, end - 1), types: [...types] };
+        state.selectedItems = [
+          ...new Map(picked.map((item) => [selectionKey(item.type, item.id), item])).values(),
+        ];
+        state.selected = state.selectedItems.find((item) => item.type === "video") ||
+          state.selectedItems.find((item) => ["videolayer", "image"].includes(item.type)) ||
+          state.selectedItems.at(-1) || { type: "video", id: "main" };
+        renderTimeline();
+        renderPreviewObjects();
+        updateInspector();
+        syncTimelineRangeOverlay();
+        if (crossing.length) queueAutosave();
+        toast(state.selectedItems.length
+          ? `${crossing.length ? "已在播放头分割；" : ""}已选后方 ${state.selectedItems.length} 个素材，拖动任一已选片段可整体移动`
+          : "播放头后没有可选择的素材");
+        return state.selectedItems.length > 0;
+      }
       function syncTimelineRangeOverlay() {
         const el = $("timelineRange");
         if (!el) return;
@@ -7583,6 +7826,44 @@
           renderAll();
         }
       }
+      function previewIsFullscreen() {
+        const stage = $("stage");
+        return document.fullscreenElement === stage || document.webkitFullscreenElement === stage ||
+          stage?.classList.contains("preview-fullscreen");
+      }
+      function syncPreviewFullscreen() {
+        const active = previewIsFullscreen();
+        $("stage")?.classList.toggle(
+          "preview-fullscreen",
+          active && !document.fullscreenElement && !document.webkitFullscreenElement,
+        );
+        if ($("previewFullscreen"))
+          $("previewFullscreen").textContent = active ? "退出全屏" : "全屏预览";
+        requestAnimationFrame(() => updateFrameSize(true));
+      }
+      async function togglePreviewFullscreen() {
+        const stage = $("stage");
+        if (!stage) return;
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement) {
+            if (document.exitFullscreen) await document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          } else if (stage.classList.contains("preview-fullscreen")) {
+            stage.classList.remove("preview-fullscreen");
+          } else if (stage.requestFullscreen) {
+            await stage.requestFullscreen();
+          } else if (stage.webkitRequestFullscreen) {
+            stage.webkitRequestFullscreen();
+          } else {
+            stage.classList.add("preview-fullscreen");
+          }
+        } catch {
+          stage.classList.toggle("preview-fullscreen");
+        }
+        syncPreviewFullscreen();
+      }
+      document.addEventListener("fullscreenchange", syncPreviewFullscreen);
+      document.addEventListener("webkitfullscreenchange", syncPreviewFullscreen);
       function applyLayout() {
         const layout = state.layout || {};
         const sideMax = Math.max(
@@ -7931,18 +8212,25 @@
           lift: 0,
           gamma: 0,
           gain: 0,
+          shadows: 0,
+          highlights: 0,
+          blacks: 0,
+          whites: 0,
           saturation: 0,
           temperature: 0,
           tint: 0,
           vibrance: 0,
           hue: 0,
           midtoneDetail: 0,
+          sharpness: 0,
+          fade: 0,
           vignette: 0,
         };
         state.beauty = {
           smoothing: 0,
           blemish: 0,
           texture: 0,
+          whitening: 0,
           brighten: 0,
           warmth: 0,
           rosy: 0,
@@ -8543,6 +8831,7 @@
         beautyCanvas.style.opacity = $("video").style.opacity;
         beautyCanvas.style.mixBlendMode = $("video").style.mixBlendMode;
         $("captionPreview").style.transform = `translate(calc(-50% + ${state.captionTransform.x * px}px),calc(-50% + ${state.captionTransform.y * py}px)) scale(${state.captionTransform.scale || 1})`;
+        renderAuxCaptionPreview(captionAtTime(state.currentTime), px, py);
         $("reviewPreview").style.transform = reviewTransform(px, py);
         const object = currentObject();
         if (object && !["video", "caption", "review", "audio"].includes(state.selected.type)) {
@@ -8660,6 +8949,41 @@
         );
         if (!covering.length) return null;
         return covering.sort((left, right) => Number(right.start) - Number(left.start))[0];
+      }
+      function auxiliaryCaptionOffset(caption) {
+        if (!caption) return 0;
+        const style = state.captionStyle || {};
+        const boxWidth = Number(state.captionTransform.width || state.width * 0.8);
+        let mainHeight = Number(style.fontSize || 58) * Number(style.lineHeight || 1.15);
+        try {
+          mainHeight = Number(layoutCaptionForCanvas(caption, style, boxWidth, 1)?.boxHeight || mainHeight);
+        } catch {
+          // The estimate is sufficient while fonts are still loading.
+        }
+        const auxSize = Number(style.fontSize || 58) * Number(state.auxSubtitles?.fontScale || 0.62);
+        return mainHeight / 2 + auxSize / 2 + Number(state.auxSubtitles?.gap || 18);
+      }
+      function renderAuxCaptionPreview(caption, px, py) {
+        const preview = $("auxCaptionPreview");
+        if (!preview) return;
+        const text = String(caption?.auxText || "").trim();
+        const visible = !!caption && !!text && state.auxSubtitles?.editorVisible !== false;
+        preview.style.display = visible ? "block" : "none";
+        if (!visible) {
+          preview.textContent = "";
+          return;
+        }
+        const style = state.captionStyle || {};
+        const size = Number(style.fontSize || 58) * Number(state.auxSubtitles?.fontScale || 0.62);
+        preview.textContent = text;
+        preview.style.left = "50%";
+        preview.style.top = "50%";
+        preview.style.width = `${Number(state.captionTransform.width || state.width * 0.8) * px}px`;
+        preview.style.fontFamily = `${style.fontFamily || "Helvetica"}, "PingFang SC", "Microsoft YaHei", sans-serif`;
+        preview.style.fontSize = `${size * px}px`;
+        preview.style.color = state.auxSubtitles?.color || "#e9edf2";
+        preview.style.zIndex = String(Math.max(1, visualZ(caption.trackId || "caption") - 1));
+        preview.style.transform = `translate(calc(-50% + ${state.captionTransform.x * px}px),calc(-50% + ${(state.captionTransform.y + auxiliaryCaptionOffset(caption)) * py}px)) scale(${state.captionTransform.scale || 1})`;
       }
       function renderPreviewObjects(force = true) {
         ensureIndependentTransforms();
@@ -8853,6 +9177,7 @@
         preview.style.transform = captionTransform;
         preview.style.setProperty("--caption-transform", captionTransform);
         applyCaptionCanvasHost(preview, px);
+        renderAuxCaptionPreview(caption, px, py);
         const reviewPreview = $("reviewPreview");
         reviewPreview.textContent = String(
           review?.expectedText && !/^\s*[—-]\s*$/.test(review.expectedText)
@@ -9640,7 +9965,7 @@
               ? `<button class="trackdelete" data-delete-track="${key}" title="删除轨道">×</button>`
               : "";
             const labelTitle = key === "review"
-              ? "待处理片段：点击试听，Ctrl+点击保留不删除，Shift+点击接受并删除"
+              ? "待处理片段：点击试听，Alt+点击替换为识别口播，Ctrl+点击保留，Shift+点击删除"
               : meta.label;
             return `<div class="tracklabel ${meta.className}" draggable="true" data-track-key="${key}"><span class="trackhandle">⠿</span><span class="dot" style="background:${meta.color}"></span><span class="ellipsis" title="${escapeHtml(labelTitle)}">${escapeHtml(meta.label)}</span>${remove}${audioTrack ? `<button class="tracksolo ${soloed ? "on" : ""}" data-solo-track="${key}" title="独听此轨">S</button><button class="trackheight" data-height-track="${key}" title="切换轨道高度">↕</button>` : ""}<button class="tracklock ${locked ? "on" : ""}" data-lock-track="${key}" title="${locked ? "解锁轨道" : "锁定轨道"}">${locked ? "🔒" : "🔓"}</button><button class="visibility ${visible ? "" : "off"}" data-toggle-track="${key}" title="${visible ? "关闭轨道" : "显示轨道"}">${symbol}</button></div>`;
           })
@@ -10193,8 +10518,8 @@
           missingCount = state.issues.filter((item) => item.type === "missing").length,
           replaceCount = 0;
         box.innerHTML = state.issues.length
-          ? `<div class="status warn">共 ${state.issues.length} 处：${cutCount} 个红色段点击试听，Ctrl+点击保留不删除，Shift+点击接受并删除${missingCount ? `，${missingCount} 处文案没有读出，已标记需补录` : ""}。主字幕只显示已和音频可靠匹配的正确文案。</div>`
-          : '<div class="small">匹配后：主字幕逐词使用正确文案；红色段点击试听，Ctrl+点击保留，Shift+点击删除。</div>';
+          ? `<div class="status warn">共 ${state.issues.length} 处：${cutCount} 个红色段点击试听，Alt+点击用识别口播替换错误文稿，Ctrl+点击保留不删除，Shift+点击接受并删除${missingCount ? `，${missingCount} 处文案没有读出，已标记需补录` : ""}。主字幕只显示已和音频可靠匹配的正确文案。</div>`
+          : '<div class="small">匹配后：红色段点击试听，Alt+点击替换为识别口播，Ctrl+点击保留，Shift+点击删除。</div>';
       }
       let captionInspectorKey = "";
       function editableCaptionTokens(text) {
@@ -10257,17 +10582,91 @@
           matchType: "match",
         }));
       }
+      function auxiliaryCaptionState(caption) {
+        const text = String(caption?.auxText || "").trim();
+        if (!text) return { key: "missing", label: "待翻译" };
+        const stale =
+          String(caption.auxSourceText || "") !== String(caption.text || "") ||
+          String(caption.auxLanguage || "zh-Hans") !== String(state.auxSubtitles.language || "zh-Hans");
+        if (caption.auxLocked && stale) return { key: "locked", label: "人工已锁定 · 英文有变化" };
+        if (caption.auxLocked) return { key: "locked", label: "人工已锁定" };
+        if (stale) return { key: "stale", label: "英文有变化 · 待更新" };
+        return { key: "current", label: "已同步" };
+      }
+      function syncAuxSubtitleControls() {
+        state.auxSubtitles = { ...defaultAuxSubtitleSettings(), ...(state.auxSubtitles || {}) };
+        if ($("auxSubtitleLanguage")) $("auxSubtitleLanguage").value = state.auxSubtitles.language;
+        if ($("auxSubtitleEditorVisible")) $("auxSubtitleEditorVisible").checked = state.auxSubtitles.editorVisible !== false;
+        const counts = { missing: 0, stale: 0, locked: 0, current: 0 };
+        for (const caption of state.captions || []) counts[auxiliaryCaptionState(caption).key] += 1;
+        if ($("auxSubtitleStatus")) {
+          $("auxSubtitleStatus").textContent = state.captions.length
+            ? `已同步 ${counts.current} · 待生成/更新 ${counts.missing + counts.stale} · 人工锁定 ${counts.locked}`
+            : "匹配英文文案后可生成；人工修改的中文会锁定保留。";
+        }
+      }
+      async function generateAuxiliarySubtitles(ids = null) {
+        if (!state.captions.length) return toast("请先匹配英文文案");
+        const requested = ids ? new Set(ids.map(String)) : null;
+        const targets = state.captions.filter((caption) => {
+          if (requested) return requested.has(String(caption.id));
+          const status = auxiliaryCaptionState(caption).key;
+          return !caption.auxLocked && (status === "missing" || status === "stale");
+        });
+        if (!targets.length) return toast(requested ? "没有可重译的字幕" : "中文辅助字幕已经是最新；人工锁定内容不会被覆盖");
+        const button = $("generateAuxSubtitles");
+        if (button) {
+          button.disabled = true;
+          button.textContent = `正在翻译 ${targets.length} 句…`;
+        }
+        try {
+          const result = await nativeCall("translateAuxiliaryCaptions", {
+            targetLanguage: state.auxSubtitles.language,
+            captions: targets.map((caption) => ({ id: caption.id, text: caption.text })),
+          });
+          snapshot();
+          const translated = new Map((result.translations || []).map((item) => [String(item.id), item.text]));
+          let applied = 0;
+          for (const caption of targets) {
+            const text = String(translated.get(String(caption.id)) || "").trim();
+            if (!text) continue;
+            caption.auxText = text;
+            caption.auxSourceText = caption.text;
+            caption.auxLanguage = state.auxSubtitles.language;
+            caption.auxLocked = false;
+            applied += 1;
+          }
+          captionInspectorKey = "";
+          renderCaptionInspector(true);
+          syncAuxSubtitleControls();
+          renderPreviewObjects(true);
+          queueAutosave();
+          toast(applied === targets.length ? `已生成 ${applied} 句中文辅助字幕` : `已生成 ${applied}/${targets.length} 句，未返回的句子可再次更新`);
+        } catch (error) {
+          toast(error.message);
+          if (/纠正设置/.test(error.message)) openReviewSettings();
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "生成／更新中文辅助字幕";
+          }
+        }
+      }
       function renderCaptionInspector(force = false) {
-        const key = JSON.stringify(state.captions.map((caption) => [caption.id, caption.start, caption.end, caption.text]));
+        const key = JSON.stringify(state.captions.map((caption) => [
+          caption.id, caption.start, caption.end, caption.text, caption.auxText,
+          caption.auxSourceText, caption.auxLanguage, caption.auxLocked,
+        ]));
         if (!force && key === captionInspectorKey) {
           focusCaptionInspector(state.selected.type === "caption" ? state.selected.id : "", false);
           return;
         }
         captionInspectorKey = key;
         $("captionInspectorList").innerHTML = state.captions.length
-          ? state.captions.map((caption, index) =>
-              `<label class="caption-inspector-row ${state.selected.type === "caption" && state.selected.id === caption.id ? "selected" : ""}" data-caption-row="${escapeHtml(caption.id)}"><input type="checkbox" data-caption-check="${escapeHtml(caption.id)}" checked><span class="small">${formatTime(caption.start, false)}</span><textarea data-caption-edit="${escapeHtml(caption.id)}" aria-label="第 ${index + 1} 段字幕">${escapeHtml(caption.text)}</textarea></label>`
-            ).join("")
+          ? state.captions.map((caption, index) => {
+              const auxState = auxiliaryCaptionState(caption);
+              return `<div class="caption-inspector-row ${state.selected.type === "caption" && state.selected.id === caption.id ? "selected" : ""}" data-caption-row="${escapeHtml(caption.id)}"><input type="checkbox" data-caption-check="${escapeHtml(caption.id)}" checked><span class="small">${formatTime(caption.start, false)}</span><div class="caption-inspector-copy"><textarea data-caption-edit="${escapeHtml(caption.id)}" aria-label="第 ${index + 1} 段英文主字幕">${escapeHtml(caption.text)}</textarea><div class="caption-aux-head"><span class="caption-aux-state ${auxState.key}">${escapeHtml(auxState.label)}</span><button type="button" class="btn small" data-caption-aux-retranslate="${escapeHtml(caption.id)}">重译</button></div><textarea class="caption-aux-edit" data-caption-aux-edit="${escapeHtml(caption.id)}" aria-label="第 ${index + 1} 段中文辅助字幕" placeholder="中文辅助翻译（不影响英文）">${escapeHtml(caption.auxText || "")}</textarea></div></div>`;
+            }).join("")
           : '<div class="small">匹配文案后，这里会显示已经断行的全部字幕。</div>';
       }
       function focusCaptionInspector(id, scroll = true) {
@@ -10487,8 +10886,14 @@
             caption: "字幕属性",
             review: "差异复核",
           };
-        $("selectionTitle").textContent =
-          labels[state.selected.type] || "素材属性";
+        const selectedVisualCount = (state.selectedItems || []).filter((item) =>
+          ["video", "videolayer", "image"].includes(item.type),
+        ).length;
+        $("selectionTitle").textContent = selectedVisualCount > 1
+          ? `已选 ${selectedVisualCount} 个画面片段`
+          : labels[state.selected.type] || "素材属性";
+        if ($("multiTransformHint"))
+          $("multiTransformHint").style.display = selectedVisualCount > 1 ? "block" : "none";
         $("objectScale").value = Math.round((obj.scale || 1) * 100);
         $("scaleOut").textContent = `${$("objectScale").value}%`;
         $("objectX").value = Math.round(obj.x || 0);
@@ -10593,6 +10998,10 @@
                 (c.lift || 0) * 0.24 +
                 (c.gain || 0) * 0.3 +
                 (c.gamma || 0) * 0.35 +
+                (c.shadows || 0) * 0.13 +
+                (c.highlights || 0) * 0.11 +
+                (c.blacks || 0) * 0.08 +
+                (c.whites || 0) * 0.1 +
                 (c.pivot || 0) * -0.08) /
                 78,
           ),
@@ -10601,6 +11010,8 @@
             1 +
               ((c.contrast || 0) +
                 (c.midtoneDetail || 0) * 0.42 +
+                (c.sharpness || 0) * 0.08 -
+                (c.fade || 0) * 0.48 +
                 (c.gain || 0) * 0.12 -
                 (c.lift || 0) * 0.12) /
                 72,
@@ -10808,6 +11219,7 @@
       }
       function renderAll() {
         syncCaptionLineButtons();
+        syncAuxSubtitleControls();
         normalizeSelection();
         ensureIndependentTransforms();
         const primary = $("video");
@@ -12617,6 +13029,7 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 2)}" title="跳点试听此段">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="定位并复核">定位</button>
+                  <button class="btn small" data-polish-action="replace-spoken" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="用实际识别到的口播替换文稿字幕（Alt+点击红段）">🎙 替换为口播</button>
                   <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="确认保留（并入相邻字幕）">✓ 保留</button>
                   <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small" data-polish-action="ignore-issue" data-issue-id="${escapeHtml(item.id || item.issueId || "")}" title="忽略此项（不做任何改动）">✕ 忽略</button>
@@ -12656,6 +13069,7 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.8)}">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
+                  <button class="btn small" data-polish-action="replace-spoken" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="用实际识别到的口播替换错误文稿字幕（Alt+点击红段）">🎙 替换为口播</button>
                   <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="把口播内容并入相邻字幕">✓ 并入字幕</button>
                   <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此段">✂ 切除</button>
@@ -12699,6 +13113,7 @@
                 <div class="polish-card-actions">
                   <button class="btn small" data-polish-action="preview" data-start="${Number(item.start || 0)}" data-duration="${Number(item.duration || 1.5)}">▶ 试听</button>
                   <button class="btn small primary" data-polish-action="locate-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}">定位</button>
+                  <button class="btn small" data-polish-action="replace-spoken" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="确认这遍口播正确时，用识别文字替换文稿字幕">🎙 替换为口播</button>
                   <button class="btn small" data-polish-action="accept-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留并合并到相邻字幕">✓ 并入字幕</button>
                   <button class="btn small" data-polish-action="keep-solo" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="保留为独立字幕条，不与前后合并">✓ 独立字幕</button>
                   <button class="btn small danger" data-polish-action="cut-issue" data-issue-id="${escapeHtml(item.issueId || item.id || "")}" title="波纹切除此废话">✂ 立即切除</button>
@@ -13188,18 +13603,34 @@
         seekTimeline(Math.max(0, Number(issue.start || 0) - 0.15));
         return true;
       }
-      function replaceReviewCaption(id) {
-        const review = state.reviewCaptions.find((item) => item.id === id);
+      function replaceReviewCaption(id, sourceMode = "expected") {
+        const linkedReview = state.reviewCaptions.find(
+          (item) => item.id === id || item.issueId === id,
+        );
+        const linkedIssue = state.issues.find(
+          (item) => item.id === id || item.id === linkedReview?.issueId,
+        ) || state.matchIssues?.find(
+          (item) => item.id === id || item.id === linkedReview?.issueId,
+        );
+        const review = linkedReview || (linkedIssue
+          ? { ...linkedIssue, issueId: linkedIssue.id, id: linkedIssue.id }
+          : null);
         if (!review) return;
         if (review.action === "missing") {
           focusScriptDifference(review.issueId || review.id);
           toast("这段正确文案在音频中没有读出，不能只靠替换字幕修复，需要补录或重新剪辑");
           return;
         }
-        const text = String(review.expectedText || "")
+        const expectedText = String(review.expectedText || review.expected || "");
+        const spokenText = String(review.spokenText || review.spoken || review.text || "");
+        const text = String(sourceMode === "spoken" ? spokenText : expectedText)
           .replace(/^\s*[—-]\s*$/, "")
           .trim();
-        if (!text || review.action === "cut") {
+        if (!text && sourceMode === "spoken") {
+          toast("这一处没有可用的识别文字，请先重新识别或手动编辑字幕");
+          return;
+        }
+        if (!text || (review.action === "cut" && sourceMode !== "spoken")) {
           cutReviewSegment(id);
           return;
         }
@@ -13231,7 +13662,7 @@
             ),
             trackId: "caption",
           };
-        const tokens = text.split(/\s+/).filter(Boolean);
+        const tokens = editableCaptionTokens(text);
         const words = Array.isArray(caption.words) && caption.words.length
           ? caption.words.map((word) => ({ ...word }))
           : String(caption.text || "")
@@ -13303,16 +13734,22 @@
         if (!target) state.captions.push(caption);
         state.captions.sort((left, right) => left.start - right.start);
         state.reviewCaptions = state.reviewCaptions.filter(
-          (item) => item.id !== id,
+          (item) => item.id !== review.id,
         );
         state.issues = state.issues.filter(
+          (item) => item.id !== (review.issueId || id),
+        );
+        state.matchIssues = (state.matchIssues || []).filter(
           (item) => item.id !== (review.issueId || id),
         );
         state.selected = { type: "caption", id: caption.id };
         state.selectedItems = [{ type: "caption", id: caption.id }];
         seekTimeline(Math.max(0, Number(state.currentTime || review.start || 0)));
         renderAll();
-        toast("这一处已替换");
+        toast(sourceMode === "spoken" ? "已用识别文字替换错误文稿字幕" : "这一处已替换");
+      }
+      function replaceReviewWithSpoken(id) {
+        replaceReviewCaption(id, "spoken");
       }
       function cutReviewSegment(id) {
         const review = state.reviewCaptions.find(
@@ -13501,7 +13938,7 @@
         }));
         // Split into multiple captions using buildCaptions-like logic
         const maxWords = 7;
-        const maxChars = 28 * (Number(state.captionLines) || 2);
+        const maxChars = 28 * captionWrapLineLimit(state.captionLines);
         const SENTENCE_END = /[.!?。！？]["'\u201d\u2019)]*$/u;
         const CLAUSE_END = /[,;:—–\-，、；：]["'\u201d\u2019)]*$/u;
         const captions = [];
@@ -13550,6 +13987,14 @@
         toast(`已保留为 ${captions.length} 条独立字幕`);
       }
       function applyRedReviewGesture(e, id) {
+        if (e.altKey && !(e.ctrlKey || e.metaKey || e.shiftKey)) {
+          if (isTrackLocked("review")) {
+            toast("待处理片段轨道已锁定");
+            return true;
+          }
+          replaceReviewWithSpoken(id);
+          return true;
+        }
         if (e.shiftKey && !(e.ctrlKey || e.metaKey)) {
           if (isTrackLocked("review")) {
             toast("待处理片段轨道已锁定");
@@ -13743,25 +14188,33 @@
         }
       }
       function colorControls() {
-        const defs = [
-          ["exposure", "曝光", -100, 100],
-          ["contrast", "对比度", -100, 100],
-          ["pivot", "对比枢轴", -100, 100],
-          ["lift", "暗部 Lift", -100, 100],
-          ["gamma", "中间调 Gamma", -100, 100],
-          ["gain", "亮部 Gain", -100, 100],
-          ["saturation", "饱和度", -100, 100],
-          ["vibrance", "自然饱和度", -100, 100],
-          ["temperature", "色温", -100, 100],
-          ["tint", "色偏", -100, 100],
-          ["hue", "色相", -100, 100],
-          ["midtoneDetail", "中间调细节", -100, 100],
-          ["vignette", "暗角", 0, 100],
+        const groups = [
+          ["曝光与对比", [
+            ["exposure", "曝光", -100, 100], ["contrast", "对比度", -100, 100],
+            ["pivot", "对比枢轴", -100, 100], ["fade", "褪色", 0, 100],
+          ]],
+          ["色调范围", [
+            ["lift", "Lift 暗部", -100, 100], ["gamma", "Gamma 中间调", -100, 100],
+            ["gain", "Gain 亮部", -100, 100], ["shadows", "阴影", -100, 100],
+            ["highlights", "高光", -100, 100], ["blacks", "黑场", -100, 100],
+            ["whites", "白场", -100, 100],
+          ]],
+          ["白平衡与色彩", [
+            ["temperature", "色温", -100, 100], ["tint", "色偏", -100, 100],
+            ["saturation", "饱和度", -100, 100], ["vibrance", "自然饱和度", -100, 100],
+            ["hue", "色相", -100, 100],
+          ]],
+          ["细节与镜头", [
+            ["midtoneDetail", "中间调细节", -100, 100], ["sharpness", "锐化", 0, 100],
+            ["vignette", "暗角", 0, 100],
+          ]],
         ];
-        $("colorControls").innerHTML = defs
-          .map(
-            ([id, label, min, max]) =>
-              `<div class="field"><div class="fieldhead"><span>${label}</span><output id="${id}Out">${state.color[id]}</output></div><input class="range colorrange" data-color="${id}" data-reset-value="0" type="range" min="${min}" max="${max}" value="${state.color[id]}"></div>`,
+        $("colorControls").innerHTML = groups
+          .map(([title, defs]) =>
+            `<section class="grade-control-group"><div class="grade-control-title">${title}</div><div class="grade-control-grid">${defs.map(
+              ([id, label, min, max]) =>
+                `<div class="field"><div class="fieldhead"><span>${label}</span><output id="${id}Out">${Number(state.color[id] || 0)}</output></div><input class="range colorrange" data-color="${id}" data-reset-value="0" type="range" min="${min}" max="${max}" value="${Number(state.color[id] || 0)}"></div>`,
+            ).join("")}</div></section>`,
           )
           .join("");
         installRangeSteppers($("colorControls"));
@@ -13827,11 +14280,11 @@
         if (hasDenoised) {
           const modeLabel =
             state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
-              ? "✨ UVR5 级录音棚母带净化"
+              ? "录音棚人声净化（RNNoise/频谱）"
               : state.denoisedAudio.mode === "ai-isolation"
-                ? "达芬奇级 AI 语音隔离"
+                ? "AI 语音隔离（DeepFilter/稳定回退）"
                 : state.denoisedAudio.mode === "dereverb"
-                  ? "去房间回声 De-Reverb"
+                  ? "房间回声抑制（频谱）"
                   : state.denoisedAudio.mode === "gentle"
                     ? "温和人声去噪"
                     : "强力去底噪";
@@ -13877,34 +14330,6 @@
       }
       const syncAudioInspectors = syncAudioControls;
       window.syncAudioInspectors = syncAudioControls;
-      async function installDemucsAutomatically(callback) {
-        $("denoiseApplyState").textContent = "正在启动 Meta Demucs 引擎全自动部署…";
-        try {
-          const init = await nativeCall("startDemucsInstall", {});
-          const jobId = init.jobId;
-          const timer = setInterval(async () => {
-            try {
-              const status = await nativeCall("demucsInstallStatus", jobId);
-              if (status.status === "ready") {
-                clearInterval(timer);
-                $("denoiseApplyState").textContent = "✨ Meta Demucs 深度时域引擎已成功就绪！";
-                toast("✨ Meta Demucs 引擎部署完成！");
-                if (typeof callback === "function") callback();
-              } else if (status.status === "error") {
-                clearInterval(timer);
-                $("denoiseApplyState").textContent = status.message || "部署失败";
-                toast(status.message || "部署失败");
-              } else {
-                $("denoiseApplyState").textContent = `${status.message || "正在部署…"} (${status.progress || 0}%)`;
-              }
-            } catch (err) {
-              clearInterval(timer);
-            }
-          }, 400);
-        } catch (e) {
-          toast(e.message);
-        }
-      }
       async function ensureDemucsEngine(callback) {
         if (state.denoise.mode !== "demucs") {
           return callback();
@@ -13914,11 +14339,12 @@
           return callback();
         }
         askConfirm(
-          "未检测到本地 Meta Demucs 独立运行环境。\n\n点击【确定】将为您【全自动一键安装 Demucs 深度时域引擎】并在就绪后立即处理。\n\n您也可以直接选用内置免安装的「✨ UVR5 录音棚母带」（已集成 48kHz 全频去噪与去回声）。",
+          "未检测到可执行的 Meta Demucs 本地引擎。\n\n继续后将明确使用内置 RNNoise/频谱稳定降噪，不会把模拟安装当成 Demucs。\n\n如需真正的 Demucs，请先配置 QUICKCUT_DEMUCS_BIN 指向可运行的 demucs 程序。",
           () => {
-            installDemucsAutomatically(callback);
+            $("denoiseApplyState").textContent = "未找到 Demucs，当前使用内置 FFmpeg 稳定降噪回退。";
+            callback();
           },
-          "一键自动安装 Demucs",
+          "使用稳定回退",
         );
       }
       async function previewDenoise() {
@@ -14040,6 +14466,7 @@
           images: state.images,
           titles: state.titles,
           captions: state.captions,
+          auxSubtitles: state.auxSubtitles,
           reviewCaptions: state.reviewCaptions,
           issues: state.issues,
           matchIssues: state.matchIssues,
@@ -14111,7 +14538,7 @@
             images: d.images || [],
             titles: d.titles || [],
             captions: d.captions || [],
-            captionLines: normalizeCaptionLineMode(d.captionLines ?? d.captionStyle?.captionLines ?? 2),
+            captionLines: normalizeCaptionLineMode(d.captionLines ?? d.captionStyle?.captionLines ?? 1),
             reviewCaptions: d.reviewCaptions || [],
             issues: d.issues || [],
             removals: d.removals || [],
@@ -14132,6 +14559,18 @@
               y: Math.round((d.height || 1920) * 0.28),
               scale: 1,
               width: Math.round((d.width || 1080) * 0.8),
+            },
+            color: {
+              exposure: 0, contrast: 0, pivot: 0, lift: 0, gamma: 0, gain: 0,
+              shadows: 0, highlights: 0, blacks: 0, whites: 0,
+              saturation: 0, temperature: 0, tint: 0, vibrance: 0, hue: 0,
+              midtoneDetail: 0, sharpness: 0, fade: 0, vignette: 0,
+              ...(d.color || {}),
+            },
+            beauty: {
+              smoothing: 0, blemish: 0, texture: 0, whitening: 0,
+              brighten: 0, warmth: 0, rosy: 0,
+              ...(d.beauty || {}),
             },
             projectPath: opened.projectPath,
             selected: { type: "video", id: "main" },
@@ -14220,13 +14659,28 @@
         } catch {}
         applyExportDevice(stored);
       }
-      async function loadExportHardware() {
-        if (cachedExportHardware) return cachedExportHardware;
+      function renderExportHardwareStatus() {
+        const status = $("exportHardwareStatus");
+        if (!status) return;
+        if (!cachedExportHardware) {
+          status.textContent = "正在检测可用硬件编码器…";
+          return;
+        }
+        const hardware = cachedExportHardware;
+        status.textContent = hardware.vendor === "software"
+          ? "未通过显卡编码实测，将安全使用 CPU。可更新显卡驱动后点“重新检测显卡”。"
+          : `已通过实际编码测试：${hardware.label || hardware.vendor} · ${hardware.h264 || "自动编码器"}`;
+      }
+      async function loadExportHardware(force = false) {
+        if (cachedExportHardware && !force) return cachedExportHardware;
+        if (force) cachedExportHardware = null;
+        renderExportHardwareStatus();
         try {
-          cachedExportHardware = await nativeCall("exportHardware");
+          cachedExportHardware = await nativeCall(force ? "refreshExportHardware" : "exportHardware");
         } catch {
           cachedExportHardware = { vendor: "unknown", label: "自动选择编码器" };
         }
+        renderExportHardwareStatus();
         return cachedExportHardware;
       }
       function openExportSettings() {
@@ -15137,6 +15591,7 @@
             const reviewId = clip.dataset.cutReview;
             showContextMenu(event, [
               { label: "试听这段", action: () => previewReviewSegment(reviewId) },
+              { label: "用识别文字替换错误文稿（Alt+点击）", action: () => replaceReviewWithSpoken(reviewId) },
               { label: "保留，不删除（Ctrl+点击）", action: () => acceptReviewSegment(reviewId) },
               { label: "接受并删除（Shift+点击）", danger: true, action: () => cutReviewSegment(reviewId) },
             ]);
@@ -15267,6 +15722,7 @@
       if ($("zoomOutBtn")) $("zoomOutBtn").onclick = () => setTimelineZoomAroundPlayhead(state.zoom * 0.85);
       if ($("zoomInBtn")) $("zoomInBtn").onclick = () => setTimelineZoomAroundPlayhead(state.zoom * 1.18);
       $("splitClip").onclick = splitSelected;
+      if ($("selectAfterPlayhead")) $("selectAfterPlayhead").onclick = selectAfterPlayhead;
       if ($("selectTool"))
         $("selectTool").onclick = () => {
           setEditTool("select");
@@ -15339,6 +15795,24 @@
           persistExportDevice();
           updateExportSummary();
         };
+      if ($("refreshExportHardware"))
+        $("refreshExportHardware").onclick = async () => {
+          const button = $("refreshExportHardware");
+          button.disabled = true;
+          button.textContent = "检测中…";
+          try {
+            const hardware = await loadExportHardware(true);
+            updateExportSummary();
+            toast(hardware.vendor === "software"
+              ? "未检测到可实际编码的独显；请确认驱动完整安装"
+              : `已识别 ${hardware.label || hardware.vendor}`);
+          } catch (error) {
+            toast(error.message);
+          } finally {
+            button.disabled = false;
+            button.textContent = "重新检测显卡";
+          }
+        };
       $("exportColorSpace").onchange = (event) => {
         if (["hlg", "pq"].includes(event.target.value)) {
           $("exportCodec").value = "hevc";
@@ -15349,26 +15823,38 @@
       $("previewDenoise").onclick = previewDenoise;
       $("applyDenoiseTrack").onclick = applyDenoiseToTrack;
       if ($("revertDenoisedTrack")) $("revertDenoisedTrack").onclick = revertDenoisedTrack;
-      $("denoiseMode").onchange = (e) => {
-        state.denoise.mode = e.target.value;
-        queueAutosave();
-      };
-      $("denoiseStrength").oninput = (e) => {
-        const val = Number(e.target.value);
-        state.denoise.strength = val / 100;
-        $("denoiseOut").textContent = `${val}%`;
-      };
-      $("denoiseStrength").onchange = () => {
-        queueAutosave();
-      };
       $("trimLeft").onclick = () => trimAtPlayhead("left");
       $("trimRight").onclick = () => trimAtPlayhead("right");
       $("freezeFrame").onclick = createFreezeFrame;
       $("resetColor").onclick = () => {
+        snapshot();
         Object.keys(state.color).forEach((k) => (state.color[k] = 0));
+        state.filterLook = { id: "none", intensity: 1, baseColor: null };
+        state.lut = null;
         colorControls();
         applyVideoCss();
+        renderFilterPanel();
+        queueAutosave();
       };
+      const gradePresets = {
+        auto: { exposure: 4, contrast: 10, pivot: 3, shadows: 7, highlights: -9, blacks: -3, whites: 4, saturation: 5, vibrance: 8, sharpness: 8 },
+        flat: { exposure: 5, contrast: -7, shadows: 12, highlights: -16, blacks: 4, whites: -3, saturation: -4, vibrance: 8, temperature: 3, midtoneDetail: -6, sharpness: 4 },
+        cinema: { exposure: -2, contrast: 22, pivot: -4, shadows: -9, highlights: -12, blacks: -10, whites: 7, saturation: -8, vibrance: 12, temperature: 4, midtoneDetail: 9, sharpness: 12, vignette: 14 },
+      };
+      document.querySelectorAll("[data-grade-preset]").forEach((button) => {
+        button.onclick = () => {
+          snapshot();
+          Object.keys(state.color).forEach((key) => (state.color[key] = 0));
+          Object.assign(state.color, gradePresets[button.dataset.gradePreset] || {});
+          state.filterLook = { id: "none", intensity: 1, baseColor: null };
+          state.lut = null;
+          colorControls();
+          applyVideoCss();
+          renderFilterPanel();
+          queueAutosave();
+          toast(`已应用${button.textContent.trim()}校色`);
+        };
+      });
       $("toggleColor").onclick = () => {
         state.colorBypass = !state.colorBypass;
         applyVideoCss();
@@ -15377,9 +15863,11 @@
           : "对比原片";
       };
       $("resetBeauty").onclick = () => {
+        snapshot();
         Object.keys(state.beauty).forEach((key) => (state.beauty[key] = 0));
         beautyControls();
         applyVideoCss();
+        queueAutosave();
       };
       $("toggleBeauty").onclick = () => {
         state.beautyBypass = !state.beautyBypass;
@@ -15391,6 +15879,7 @@
       document
         .querySelectorAll("[data-ratio]")
         .forEach((b) => (b.onclick = () => setRatio(b.dataset.ratio)));
+      if ($("previewFullscreen")) $("previewFullscreen").onclick = togglePreviewFullscreen;
       $("resolution").onchange = (e) => {
         [state.width, state.height] = e.target.value.split("x").map(Number);
         updateFrameSize();
@@ -16488,17 +16977,59 @@
         };
       }
       $("captionInspectorList").oninput = (event) => {
+        const auxEditor = event.target.closest("[data-caption-aux-edit]");
+        if (auxEditor) {
+          const caption = state.captions.find((item) => item.id === auxEditor.dataset.captionAuxEdit);
+          if (!caption) return;
+          caption.auxText = auxEditor.value;
+          caption.auxSourceText = caption.text;
+          caption.auxLanguage = state.auxSubtitles.language;
+          caption.auxLocked = true;
+          renderPreviewObjects(true);
+          syncAuxSubtitleControls();
+          queueAutosave();
+          return;
+        }
         const editor = event.target.closest("[data-caption-edit]");
         if (!editor) return;
         const caption = state.captions.find((item) => item.id === editor.dataset.captionEdit);
         if (!caption) return;
         caption.text = editor.value;
         caption.words = timedCaptionWords(editor.value, caption);
+        const auxStatus = auxiliaryCaptionState(caption);
+        const auxLabel = editor.closest("[data-caption-row]")?.querySelector(".caption-aux-state");
+        if (auxLabel) {
+          auxLabel.className = `caption-aux-state ${auxStatus.key}`;
+          auxLabel.textContent = auxStatus.label;
+        }
         captionInspectorKey = "";
         renderTimeline();
         renderPreviewObjects();
+        syncAuxSubtitleControls();
         queueAutosave();
       };
+      $("captionInspectorList").onclick = (event) => {
+        const button = event.target.closest("[data-caption-aux-retranslate]");
+        if (!button) return;
+        event.preventDefault();
+        generateAuxiliarySubtitles([button.dataset.captionAuxRetranslate]);
+      };
+      if ($("generateAuxSubtitles"))
+        $("generateAuxSubtitles").onclick = () => generateAuxiliarySubtitles();
+      if ($("auxSubtitleLanguage"))
+        $("auxSubtitleLanguage").onchange = () => {
+          state.auxSubtitles.language = $("auxSubtitleLanguage").value || "zh-Hans";
+          captionInspectorKey = "";
+          renderCaptionInspector(true);
+          syncAuxSubtitleControls();
+          queueAutosave();
+        };
+      if ($("auxSubtitleEditorVisible"))
+        $("auxSubtitleEditorVisible").onchange = () => {
+          state.auxSubtitles.editorVisible = $("auxSubtitleEditorVisible").checked;
+          renderPreviewObjects(true);
+          queueAutosave();
+        };
       $("visualLayer").onpointerdown = (e) => {
         const o = e.target.closest("[data-type]");
         if (!o) return;
@@ -16663,44 +17194,50 @@
         { passive: false },
       );
       $("objectScale").oninput = (e) => {
-        const o = currentObject();
-        if (!o || !guardUnlocked()) return;
-        o.scale = Number(e.target.value) / 100;
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.scale = Number(e.target.value) / 100; },
+        );
+        if (!targets.length) return;
         $("scaleOut").textContent = `${e.target.value}%`;
         updatePreviewTransformOnly();
       };
       $("objectX").oninput = (e) => {
-        const o = currentObject();
-        if (o && guardUnlocked()) {
-          o.x = Number(e.target.value);
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.x = Number(e.target.value); },
+        );
+        if (targets.length) {
           updatePreviewTransformOnly();
         }
       };
       $("objectY").oninput = (e) => {
-        const o = currentObject();
-        if (o && guardUnlocked()) {
-          o.y = Number(e.target.value);
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.y = Number(e.target.value); },
+        );
+        if (targets.length) {
           updatePreviewTransformOnly();
         }
       };
       $("objectRotation").oninput = (e) => {
-        const o = currentObject();
-        if (!o || !guardUnlocked()) return;
-        o.rotation = Number(e.target.value);
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.rotation = Number(e.target.value); },
+        );
+        if (!targets.length) return;
         $("rotationOut").textContent = `${e.target.value}°`;
         updatePreviewTransformOnly();
       };
       $("objectOpacity").oninput = (e) => {
-        const o = currentObject();
-        if (!o || !guardUnlocked()) return;
-        o.opacity = Number(e.target.value) / 100;
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.opacity = Number(e.target.value) / 100; },
+        );
+        if (!targets.length) return;
         $("opacityOut").textContent = `${e.target.value}%`;
         updatePreviewTransformOnly();
       };
       $("objectBlendMode").onchange = (e) => {
-        const o = currentObject();
-        if (!o || !guardUnlocked()) return;
-        o.blendMode = e.target.value;
+        const targets = mutateSelectedVisualTransforms(
+          (object) => { object.blendMode = e.target.value; },
+        );
+        if (!targets.length) return;
         renderPreviewObjects();
         queueAutosave();
       };
@@ -16712,10 +17249,12 @@
       ]) {
         if ($(id)) {
           $(id).oninput = (e) => {
-            const o = currentObject();
-            if (!o || !guardUnlocked()) return;
-            o[key] = Math.max(0, Math.min(95, Number(e.target.value) || 0));
-            $(`${id}Out`).textContent = `${o[key]}%`;
+            const value = Math.max(0, Math.min(95, Number(e.target.value) || 0));
+            const targets = mutateSelectedVisualTransforms(
+              (object) => { object[key] = value; },
+            );
+            if (!targets.length) return;
+            $(`${id}Out`).textContent = `${value}%`;
             renderPreviewObjects();
             queueAutosave();
           };
@@ -16723,12 +17262,15 @@
       }
       if ($("resetCropBtn")) {
         $("resetCropBtn").onclick = () => {
-          const o = currentObject();
-          if (!o || !guardUnlocked()) return;
-          o.cropTop = 0;
-          o.cropBottom = 0;
-          o.cropLeft = 0;
-          o.cropRight = 0;
+          if (!guardUnlocked()) return;
+          snapshot();
+          const targets = mutateSelectedVisualTransforms((object) => {
+            object.cropTop = 0;
+            object.cropBottom = 0;
+            object.cropLeft = 0;
+            object.cropRight = 0;
+          });
+          if (!targets.length) return;
           if ($("cropTop")) {
             $("cropTop").value = 0;
             $("cropTopOut").textContent = "0%";
@@ -16744,22 +17286,42 @@
         };
       }
       $("centerObject").onclick = () => {
-        const o = currentObject();
-        if (o && guardUnlocked()) {
-          o.x = 0;
-          o.y = 0;
+        if (guardUnlocked()) {
+          snapshot();
+          const targets = mutateSelectedVisualTransforms((object) => {
+            object.x = 0;
+            object.y = 0;
+          });
+          if (!targets.length) return;
           renderAll();
         }
       };
       $("fitObject").onclick = () => {
-        const o = currentObject();
-        if (o && guardUnlocked()) {
-          o.scale = 1;
-          o.x = 0;
-          o.y = 0;
+        if (guardUnlocked()) {
+          snapshot();
+          const targets = mutateSelectedVisualTransforms((object) => {
+            object.scale = 1;
+            object.x = 0;
+            object.y = 0;
+          });
+          if (!targets.length) return;
           renderAll();
         }
       };
+      for (const id of [
+        "objectScale", "objectX", "objectY", "objectRotation", "objectOpacity",
+        "objectBlendMode", "cropTop", "cropBottom", "cropLeft", "cropRight",
+      ]) {
+        const control = $(id);
+        if (!control) continue;
+        control.addEventListener("pointerdown", () => {
+          if (guardUnlocked()) snapshot();
+        });
+        control.addEventListener("keydown", (event) => {
+          if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key) && guardUnlocked())
+            snapshot();
+        });
+      }
       function refreshLiveTextStyle(reflow = true) {
         const style = currentStyle() || state.captionStyle;
         if (!style) return;
@@ -17438,6 +18000,12 @@
               renderPolishSidebarList();
               return;
             }
+            if (action === "replace-spoken") {
+              const issueId = actionBtn.dataset.issueId;
+              replaceReviewWithSpoken(issueId);
+              renderPolishSidebarList();
+              return;
+            }
             if (action === "keep-solo") {
               const issueId = actionBtn.dataset.issueId;
               keepSoloReviewSegment(issueId);
@@ -17651,6 +18219,14 @@
           await checkModel();
           toast("识别语言已保存");
         };
+      document.querySelectorAll("[data-speech-language-quick]").forEach((button) => {
+        button.onclick = async () => {
+          const speechLanguage = button.dataset.speechLanguageQuick;
+          unwrap(await window.native.saveSpeechSettings({ speechLanguage }));
+          await checkModel();
+          toast(speechLanguage === "zh" ? "已切换中文识别，生成可编辑中文字幕" : "已切换英文识别");
+        };
+      });
       document.addEventListener("pointerdown", (event) => {
         if (!event.target.closest?.("#speechLanguageCombo")) closeSpeechLanguageCombo();
       });
@@ -17818,6 +18394,17 @@
         const textEditing = isTypingField(target);
         const command = e.metaKey || e.ctrlKey;
         const code = e.code || "";
+        if (code === "F11" && !textEditing) {
+          e.preventDefault();
+          togglePreviewFullscreen();
+          return;
+        }
+        if (code === "Escape" && $("stage")?.classList.contains("preview-fullscreen")) {
+          e.preventDefault();
+          $("stage").classList.remove("preview-fullscreen");
+          syncPreviewFullscreen();
+          return;
+        }
         if (command && code === "KeyA" && target?.id === "scriptText") {
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -17866,7 +18453,12 @@
           }
           return;
         }
-        if (code === "KeyA" && !command && !textEditing) {
+        if (code === "KeyA" && e.altKey && !command && !textEditing) {
+          e.preventDefault();
+          selectAfterPlayhead();
+          return;
+        }
+        if (code === "KeyA" && !e.altKey && !command && !textEditing) {
           e.preventDefault();
           if (editTool !== "select") {
             setEditTool("select");
@@ -17931,7 +18523,7 @@
           splitSelected();
           return;
         }
-        if (code === "KeyA" && !command && !textEditing) {
+        if (code === "KeyA" && !e.altKey && !command && !textEditing) {
           e.preventDefault();
           setEditTool("select");
           toast("选择模式 (A)：修剪当前片段，前后锁定不动");

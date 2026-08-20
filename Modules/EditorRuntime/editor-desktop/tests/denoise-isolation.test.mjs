@@ -8,6 +8,7 @@ import {
   hasDeepFilterEngine,
   findDemucsBinary,
   hasDemucsEngine,
+  startDemucsInstall,
   renderDenoisePreview,
   renderDenoisedTrack,
   buildExportGraph,
@@ -39,7 +40,10 @@ test("audioDenoiseFilter maps all modes and strengths correctly", () => {
   const aiFilter = audioDenoiseFilter("ai-isolation", 0.8);
   assert.ok(aiFilter.includes("highpass=f=55"), "AI isolation should include highpass 55Hz");
   assert.ok(aiFilter.includes("lowpass=f=17500"), "AI isolation should include lowpass 17.5kHz");
-  assert.ok(aiFilter.includes("anlmdn"), "AI isolation should include non-local means denoiser");
+  if (process.platform === "win32")
+    assert.ok(!aiFilter.includes("anlmdn"), "Windows must avoid the FFmpeg anlmdn crash path");
+  else
+    assert.ok(aiFilter.includes("anlmdn"), "Non-Windows AI isolation may include non-local means denoiser");
   assert.ok(aiFilter.includes("afftdn"), "AI isolation should include FFT denoiser");
 
   // Gentle mode
@@ -62,6 +66,30 @@ test("findDeepFilterBinary and findDemucsBinary return safely when not present",
   const binDemucs = findDemucsBinary();
   assert.equal(typeof binDemucs, "string");
   assert.equal(typeof hasDemucsEngine(), "boolean");
+});
+
+test("a Demucs manifest is never treated as an executable engine", () => {
+  const previousRoot = process.env.QUICKCUT_SUPPORT_ROOT;
+  const previousBin = process.env.QUICKCUT_DEMUCS_BIN;
+  const tempRoot = fs.mkdtempSync(path.join(process.env.TEMP || "/tmp", "qc-test-demucs-"));
+  const engineDir = path.join(tempRoot, "engines", "demucs");
+  fs.mkdirSync(engineDir, { recursive: true });
+  fs.writeFileSync(path.join(engineDir, "manifest.json"), JSON.stringify({ ready: true }));
+  process.env.QUICKCUT_SUPPORT_ROOT = tempRoot;
+  delete process.env.QUICKCUT_DEMUCS_BIN;
+  try {
+    assert.equal(findDemucsBinary(), "");
+    assert.equal(hasDemucsEngine(), false);
+    const install = startDemucsInstall();
+    assert.equal(install.status, "error");
+    assert.match(install.message, /不会伪装成安装成功/);
+  } finally {
+    if (previousRoot === undefined) delete process.env.QUICKCUT_SUPPORT_ROOT;
+    else process.env.QUICKCUT_SUPPORT_ROOT = previousRoot;
+    if (previousBin === undefined) delete process.env.QUICKCUT_DEMUCS_BIN;
+    else process.env.QUICKCUT_DEMUCS_BIN = previousBin;
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("renderDenoisePreview and renderDenoisedTrack fallback gracefully with real media", async () => {
@@ -146,4 +174,29 @@ test("buildAudioExportGraph for MP3 routes pre-denoised track cleanly", () => {
   assert.ok(!built.graph.includes("afftdn=nr="), "MP3 export with pre-denoised track skips duplicate heavy denoise");
 
   fs.rmSync(tempDir, { recursive: true, force: true });
+});
+
+test("advanced grading fields are emitted into the FFmpeg export graph", () => {
+  const built = buildExportGraph({
+    inputPath: "video.mp4",
+    includeAudio: false,
+    color: {
+      shadows: 12,
+      highlights: -9,
+      blacks: -8,
+      whites: 7,
+      fade: 10,
+      sharpness: 18,
+    },
+    mainVideoClips: [{ id: "c1", start: 0, end: 5, sourceStart: 0, sourceEnd: 5 }],
+  }, {
+    duration: 5,
+    width: 1920,
+    height: 1080,
+    videoCodec: "h264",
+    audioCodec: "aac",
+  });
+  assert.match(built.graph, /colorlevels=/);
+  assert.match(built.graph, /curves=all=/);
+  assert.match(built.graph, /unsharp=5:5:/);
 });
