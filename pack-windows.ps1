@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Version = "2.7.45"
+$Version = "2.7.46"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-Windows-$Version"
 $tempBase = [System.IO.Path]::GetTempPath()
@@ -254,6 +254,8 @@ if ($iscc) {
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 Info "Creating $ZipPath"
 Compress-Archive -Path $Stage -DestinationPath $ZipPath -Force
+$PortableZip = Join-Path $TargetDir "QuickCut-Windows-$Version-Portable.zip"
+Copy-Item $ZipPath $PortableZip -Force
 
 $zip = Get-Item $ZipPath
 Info ""

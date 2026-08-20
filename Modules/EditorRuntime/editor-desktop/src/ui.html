@@ -1034,6 +1034,44 @@
         border: 1px solid var(--line);
         display: none;
       }
+      .denoise-chain {
+        display: grid;
+        gap: 7px;
+        margin: 9px 0;
+      }
+      .denoise-stage {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.025);
+        padding: 8px;
+      }
+      .denoise-stage-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .denoise-stage-title span:first-child {
+        min-width: 0;
+      }
+      .denoise-stage-note {
+        color: var(--muted);
+        font-size: 10px;
+        margin-top: 3px;
+      }
+      .denoise-stage .field {
+        margin-top: 7px;
+        margin-bottom: 0;
+      }
+      .denoise-stage .row .select {
+        min-width: 0;
+      }
+      .denoise-chain.disabled {
+        opacity: 0.48;
+        pointer-events: none;
+      }
       .timeline {
         background: #17191b;
         border-top: 1px solid var(--line);
@@ -4034,15 +4072,16 @@
                 <div class="switch"><span>片段静音</span><input id="clipMute" type="checkbox" /></div>
               </div>
               <div class="inspectsection">
-                <h3>AI 语音母带与降噪</h3>
+                <h3>专业多级人声降噪</h3>
                 <p class="small">
-                  提供 RNNoise/频谱降噪、外部 DeepFilterNet 或 Demucs 处理；缺少外部引擎时会明确使用稳定滤镜回退。
+                  按顺序处理电流嗡声、风噪、飞机等持续环境声、虫鸣残留，最后修复人声。预览、整轨应用和导出使用同一组参数。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="uvr5-master" selected>✨ 录音棚人声净化（RNNoise/频谱降噪 · 推荐）</option>
-                    <option value="demucs">🚀 Meta Demucs 人声分离（需要本地引擎）</option>
-                    <option value="ai-isolation">AI 语音隔离（检测到 DeepFilterNet 时启用）</option>
+                    <option value="studio-chain" selected>专业多级降噪（推荐）</option>
+                    <option value="uvr5-master">兼容：录音棚人声净化</option>
+                    <option value="ai-isolation">兼容：DeepFilterNet 语音隔离</option>
+                    <option value="demucs">兼容：Demucs 人声分离（需要本地引擎）</option>
                     <option value="dereverb">房间回声抑制（频谱降噪与均衡）</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
                     <option value="strong">强力去底噪 (空调/风扇/风噪)</option>
@@ -4062,11 +4101,74 @@
                     value="85"
                   />
                 </div>
+                <div class="field">
+                  <div class="fieldhead"><span>噪声场景预设</span></div>
+                  <select class="select" id="denoisePreset">
+                    <option value="balanced">均衡人声（推荐）</option>
+                    <option value="wind">户外风声 / 麦克风低频震动</option>
+                    <option value="electrical">电流声 / 50–60 Hz 嗡声</option>
+                    <option value="aircraft">飞机 / 空调 / 持续机器声</option>
+                    <option value="insects">蛐蛐 / 高频虫鸣 / 嘶声</option>
+                    <option value="mixed-heavy">混合重噪声（谨慎）</option>
+                  </select>
+                </div>
+                <div class="denoise-chain" id="denoiseProfessionalControls">
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title">
+                      <span>1 · De-Hum 电流嗡声</span>
+                      <input id="denoiseHumEnabled" type="checkbox" checked />
+                    </div>
+                    <div class="denoise-stage-note">先精准削减 50/60 Hz 及其谐波，避免后级反复放大嗡声。</div>
+                    <div class="row field">
+                      <select class="select grow" id="denoiseHumFrequency">
+                        <option value="auto">自动检测 50/60 Hz</option>
+                        <option value="50">强制 50 Hz</option>
+                        <option value="60">强制 60 Hz</option>
+                      </select>
+                      <button class="btn" id="analyzeDenoiseNoise">分析</button>
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>陷波深度</span><output id="denoiseHumDepthOut">62%</output></div>
+                      <input class="range" id="denoiseHumDepth" type="range" min="0" max="100" value="62" />
+                    </div>
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>2 · 风噪与低频轰鸣</span><output id="denoiseWindOut">45%</output></div>
+                    <div class="denoise-stage-note">高通削减风声、脚架震动和麦克风碰触低频。</div>
+                    <input class="range field" id="denoiseWind" type="range" min="0" max="100" value="45" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>3 · 持续环境声</span><output id="denoiseEnvironmentOut">58%</output></div>
+                    <div class="denoise-stage-note">自适应频谱处理飞机、空调、风扇和稳定背景底噪。</div>
+                    <input class="range field" id="denoiseEnvironment" type="range" min="0" max="100" value="58" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>4 · RNNoise 神经人声净化</span><output id="denoiseNeuralOut">62%</output></div>
+                    <div class="denoise-stage-note">针对口播的神经网络降噪；过强可能产生水声或金属感。</div>
+                    <input class="range field" id="denoiseNeural" type="range" min="0" max="100" value="62" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>5 · 高频虫鸣与嘶声</span><output id="denoiseInsectOut">18%</output></div>
+                    <div class="denoise-stage-note">抑制蛐蛐等持续高频；过强会同时减少齿音和空气感。</div>
+                    <input class="range field" id="denoiseInsect" type="range" min="0" max="100" value="18" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>6 · 残留噪声二次清理</span><output id="denoiseResidualOut">34%</output></div>
+                    <div class="denoise-stage-note">使用更温和、不同参数的第二次频谱清理，不盲目叠加同一效果。</div>
+                    <input class="range field" id="denoiseResidual" type="range" min="0" max="100" value="34" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>7 · EQ 人声修复</span><output id="denoiseVoiceRestoreOut">50%</output></div>
+                    <div class="denoise-stage-note">最后恢复温暖度、清晰度并控制齿音与峰值。</div>
+                    <input class="range field" id="denoiseVoiceRestore" type="range" min="0" max="100" value="50" />
+                  </div>
+                </div>
                 <div class="row" style="flex-wrap: wrap; gap: 6px;">
                   <button class="btn grow" id="previewDenoise">试听当前片段</button>
                   <button class="btn primary grow" id="applyDenoiseTrack">应用整条音轨</button>
                   <button class="btn danger grow" id="revertDenoisedTrack" style="display:none">还原原始音频</button>
                 </div>
+                <div class="status" id="denoiseAnalysisState">尚未分析工频嗡声；选择“自动”时，试听或应用整轨也会自动检测。</div>
                 <div class="status" id="denoiseApplyState">导出时会自动应用当前降噪参数。</div>
                 <audio
                   class="denoisecompare"
@@ -4343,7 +4445,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.45</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.46</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -4718,6 +4820,52 @@
           gap: 18,
         };
       }
+      const denoisePresetMap = Object.freeze({
+        balanced: { humEnabled: true, humDepth: 0.62, humHarmonics: 4, wind: 0.45, environment: 0.58, neural: 0.62, insect: 0.18, residual: 0.34, voiceRestore: 0.5 },
+        wind: { humEnabled: false, humDepth: 0.35, humHarmonics: 3, wind: 0.9, environment: 0.62, neural: 0.7, insect: 0.08, residual: 0.42, voiceRestore: 0.58 },
+        electrical: { humEnabled: true, humDepth: 0.92, humHarmonics: 6, wind: 0.28, environment: 0.54, neural: 0.55, insect: 0.12, residual: 0.34, voiceRestore: 0.52 },
+        aircraft: { humEnabled: true, humDepth: 0.68, humHarmonics: 4, wind: 0.66, environment: 0.86, neural: 0.76, insect: 0.1, residual: 0.48, voiceRestore: 0.62 },
+        insects: { humEnabled: false, humDepth: 0.35, humHarmonics: 3, wind: 0.32, environment: 0.66, neural: 0.68, insect: 0.82, residual: 0.56, voiceRestore: 0.64 },
+        "mixed-heavy": { humEnabled: true, humDepth: 0.82, humHarmonics: 5, wind: 0.72, environment: 0.82, neural: 0.8, insect: 0.52, residual: 0.58, voiceRestore: 0.68 },
+      });
+      function defaultDenoiseSettings() {
+        return {
+          mode: "studio-chain",
+          strength: 0.82,
+          preset: "balanced",
+          humFrequency: "auto",
+          detectedHumFrequency: 0,
+          ...denoisePresetMap.balanced,
+        };
+      }
+      function normalizeDenoiseSettings(source = {}) {
+        const preset = denoisePresetMap[source?.preset] ? source.preset : "balanced";
+        return {
+          ...defaultDenoiseSettings(),
+          ...denoisePresetMap[preset],
+          ...(source || {}),
+          preset,
+        };
+      }
+      function denoiseSettingsSignature(source = state.denoise) {
+        const value = normalizeDenoiseSettings(source);
+        return JSON.stringify({
+          mode: value.mode,
+          strength: Number(value.strength || 0).toFixed(4),
+          preset: value.preset,
+          humEnabled: value.humEnabled !== false,
+          humFrequency: value.humFrequency,
+          detectedHumFrequency: Number(value.detectedHumFrequency || 0),
+          humDepth: Number(value.humDepth || 0).toFixed(4),
+          humHarmonics: Number(value.humHarmonics || 0),
+          wind: Number(value.wind || 0).toFixed(4),
+          environment: Number(value.environment || 0).toFixed(4),
+          neural: Number(value.neural || 0).toFixed(4),
+          insect: Number(value.insect || 0).toFixed(4),
+          residual: Number(value.residual || 0).toFixed(4),
+          voiceRestore: Number(value.voiceRestore || 0).toFixed(4),
+        });
+      }
       const state = {
         projectId: "",
         projectName: "未命名工程",
@@ -4842,7 +4990,7 @@
           fade: 0,
           vignette: 0,
         },
-        denoise: { mode: "uvr5-master", strength: 0.85 },
+        denoise: defaultDenoiseSettings(),
         denoiseEnabled: false,
         denoisedAudio: null,
         beauty: {
@@ -5612,7 +5760,7 @@
             fade: 0,
             vignette: 0,
           },
-          denoise: { mode: "uvr5-master", strength: 0.85 },
+          denoise: defaultDenoiseSettings(),
           denoiseEnabled: false,
           denoisedAudio: null,
           beauty: {
@@ -5758,6 +5906,7 @@
             rosy: 0,
             ...(data.beauty || {}),
           },
+          denoise: normalizeDenoiseSettings(data.denoise),
           audio: {
             speed: 1,
             volume: 1,
@@ -8235,7 +8384,7 @@
           warmth: 0,
           rosy: 0,
         };
-        state.denoise = { mode: "uvr5-master", strength: 0.85 };
+        state.denoise = defaultDenoiseSettings();
         state.denoiseEnabled = false;
         state.denoisedAudio = null;
         state.audio = {
@@ -14237,7 +14386,39 @@
           .join("");
         installRangeSteppers($("beautyControls"));
       }
+      function syncDenoiseProfessionalControls() {
+        state.denoise = normalizeDenoiseSettings(state.denoise);
+        const config = state.denoise;
+        $("denoisePreset").value = config.preset;
+        $("denoiseHumEnabled").checked = config.humEnabled !== false;
+        $("denoiseHumFrequency").value = config.humFrequency || "auto";
+        const controls = {
+          denoiseHumDepth: ["humDepth", "denoiseHumDepthOut"],
+          denoiseWind: ["wind", "denoiseWindOut"],
+          denoiseEnvironment: ["environment", "denoiseEnvironmentOut"],
+          denoiseNeural: ["neural", "denoiseNeuralOut"],
+          denoiseInsect: ["insect", "denoiseInsectOut"],
+          denoiseResidual: ["residual", "denoiseResidualOut"],
+          denoiseVoiceRestore: ["voiceRestore", "denoiseVoiceRestoreOut"],
+        };
+        for (const [id, [key, outputId]] of Object.entries(controls)) {
+          const percent = Math.round(Number(config[key] || 0) * 100);
+          $(id).value = percent;
+          $(outputId).textContent = `${percent}%`;
+        }
+        const professional = ["studio-chain", "professional", "pro"].includes(config.mode);
+        $("denoiseProfessionalControls").classList.toggle("disabled", !professional);
+        $("denoisePreset").disabled = !professional;
+        if (config.humFrequency === "auto") {
+          $("denoiseAnalysisState").textContent = config.detectedHumFrequency
+            ? `已检测到 ${config.detectedHumFrequency} Hz 工频嗡声；De-Hum 会处理基频与 ${config.humHarmonics} 组谐波。`
+            : "尚未可靠检测到 50/60 Hz 工频嗡声；试听或应用整轨时会自动检测，不会强行陷波。";
+        } else {
+          $("denoiseAnalysisState").textContent = `已手动指定 ${config.humFrequency} Hz De-Hum；将处理基频与 ${config.humHarmonics} 组谐波。`;
+        }
+      }
       function syncAudioControls() {
+        syncDenoiseProfessionalControls();
         $("audioSpeed").value = Math.round(state.audio.speed * 100);
         $("speedOut").textContent = `${state.audio.speed.toFixed(2)}×`;
         $("audioVolume").value = Math.round(state.audio.volume * 100);
@@ -14267,7 +14448,7 @@
         $("audioLowCut").value = state.audio.lowCut || 60;
         $("audioHighCut").value = state.audio.highCut || 16500;
         $("audioChannelMode").value = state.audio.channelMode || "original";
-        $("denoiseMode").value = state.denoise.mode || "uvr5-master";
+        $("denoiseMode").value = state.denoise.mode || "studio-chain";
         $("denoiseStrength").value = Math.round(
           (state.denoise.strength ?? 0.85) * 100,
         );
@@ -14279,7 +14460,9 @@
         }
         if (hasDenoised) {
           const modeLabel =
-            state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
+            ["studio-chain", "professional", "pro"].includes(state.denoisedAudio.mode)
+              ? "专业多级降噪"
+              : state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
               ? "录音棚人声净化（RNNoise/频谱）"
               : state.denoisedAudio.mode === "ai-isolation"
                 ? "AI 语音隔离（DeepFilter/稳定回退）"
@@ -14347,6 +14530,45 @@
           "使用稳定回退",
         );
       }
+      async function analyzeDenoiseNoise() {
+        if (!state.video) {
+          toast("请先导入视频");
+          return;
+        }
+        const button = $("analyzeDenoiseNoise");
+        button.disabled = true;
+        button.textContent = "分析中…";
+        $("denoiseAnalysisState").textContent = "正在分析播放头附近最多 10 秒音频的 50/60 Hz 工频与谐波…";
+        try {
+          const profile = await nativeCall("analyzeNoiseProfile", {
+            path: state.video.path,
+            time: Math.max(0, timelineToSource(state.currentTime) - 2),
+            duration: 10,
+          });
+          state.denoise.detectedHumFrequency = Number(profile.humFrequency || 0);
+          state.denoise.humFrequency = "auto";
+          if (profile.humFrequency) {
+            state.denoise.humEnabled = true;
+            $("denoiseAnalysisState").textContent =
+              `${profile.message} 置信度 ${Math.round(Number(profile.confidence || 0) * 100)}%，分析 ${profile.sampleSeconds} 秒。`;
+            toast(`检测到 ${profile.humFrequency} Hz 电流嗡声`);
+          } else {
+            $("denoiseAnalysisState").textContent =
+              `${profile.message} 50 Hz 得分 ${profile.score50Db} dB，60 Hz 得分 ${profile.score60Db} dB。`;
+            toast("未检测到可靠的 50/60 Hz 工频嗡声");
+          }
+          state.denoisedAudio = null;
+          syncDenoiseProfessionalControls();
+          syncPreviewAudio();
+          queueAutosave();
+        } catch (error) {
+          $("denoiseAnalysisState").textContent = error.message;
+          toast(error.message);
+        } finally {
+          button.disabled = false;
+          button.textContent = "分析";
+        }
+      }
       async function previewDenoise() {
         if (!state.video) {
           toast("请先导入视频");
@@ -14360,8 +14582,9 @@
             const result = await nativeCall("denoisePreview", {
               path: state.video.path,
               time: timelineToSource(state.currentTime),
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "studio-chain",
               strength: state.denoise.strength ?? 0.85,
+              config: { ...state.denoise },
             });
             $("denoiseCompare").src = result.url;
             $("denoiseCompare").style.display = "block";
@@ -14386,19 +14609,21 @@
           const button = $("applyDenoiseTrack");
           button.disabled = true;
           button.textContent = "正在处理整轨…";
-          $("denoiseApplyState").textContent = "正在通过 AI 深度神经网络生成整条音轨的高清降噪缓存…";
+          $("denoiseApplyState").textContent = "正在按 De-Hum → 风噪 → 环境声 → RNNoise → 残留 → EQ 的顺序生成整轨降噪…";
           try {
             const media = await nativeCall("applyDenoiseTrack", {
               projectId: state.projectId,
               path: state.video.path,
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "studio-chain",
               strength: state.denoise.strength ?? 0.85,
+              config: { ...state.denoise },
             });
             state.denoisedAudio = {
               ...media,
               sourcePath: state.video.path,
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "studio-chain",
               strength: state.denoise.strength ?? 0.85,
+              configSignature: denoiseSettingsSignature(),
             };
             state.denoiseEnabled = true;
             syncAudioControls();
@@ -14572,6 +14797,7 @@
               brighten: 0, warmth: 0, rosy: 0,
               ...(d.beauty || {}),
             },
+            denoise: normalizeDenoiseSettings(d.denoise),
             projectPath: opened.projectPath,
             selected: { type: "video", id: "main" },
             selectedItems: [],
@@ -15091,13 +15317,15 @@
           let mainAudioPath = "";
           const isDenoiseActive = !!(state.denoiseEnabled && Number(state.denoise?.strength || 0) > 0.01);
           if (isDenoiseActive && state.video?.path) {
-            const currentMode = state.denoise?.mode || "uvr5-master";
+            const currentMode = state.denoise?.mode || "studio-chain";
             const currentStrength = state.denoise?.strength ?? 0.85;
+            const currentConfigSignature = denoiseSettingsSignature();
             const isCacheValid = state.denoisedAudio &&
               state.denoisedAudio.path &&
               state.denoisedAudio.sourcePath === state.video.path &&
               state.denoisedAudio.mode === currentMode &&
-              Math.abs(Number(state.denoisedAudio.strength ?? 0.85) - Number(currentStrength)) < 0.01;
+              Math.abs(Number(state.denoisedAudio.strength ?? 0.85) - Number(currentStrength)) < 0.01 &&
+              state.denoisedAudio.configSignature === currentConfigSignature;
 
             if (isCacheValid) {
               mainAudioPath = state.denoisedAudio.path;
@@ -15109,12 +15337,14 @@
                   path: state.video.path,
                   mode: currentMode,
                   strength: currentStrength,
+                  config: { ...state.denoise },
                 });
                 state.denoisedAudio = {
                   ...media,
                   sourcePath: state.video.path,
                   mode: currentMode,
                   strength: currentStrength,
+                  configSignature: currentConfigSignature,
                 };
                 state.denoiseEnabled = true;
                 mainAudioPath = state.denoisedAudio.path;
@@ -15822,6 +16052,7 @@
       };
       $("previewDenoise").onclick = previewDenoise;
       $("applyDenoiseTrack").onclick = applyDenoiseToTrack;
+      $("analyzeDenoiseNoise").onclick = analyzeDenoiseNoise;
       if ($("revertDenoisedTrack")) $("revertDenoisedTrack").onclick = revertDenoisedTrack;
       $("trimLeft").onclick = () => trimAtPlayhead("left");
       $("trimRight").onclick = () => trimAtPlayhead("right");
@@ -18248,6 +18479,7 @@
       $("denoiseMode").onchange = (e) => {
         state.denoise.mode = e.target.value;
         state.denoiseEnabled = Number(state.denoise.strength || 0) > 0.01;
+        syncDenoiseProfessionalControls();
         scheduleDenoiseMonitor();
       };
       $("denoiseStrength").oninput = (e) => {
@@ -18256,6 +18488,41 @@
         $("denoiseOut").textContent = `${e.target.value}%`;
         scheduleDenoiseMonitor();
       };
+      $("denoisePreset").onchange = (event) => {
+        const preset = denoisePresetMap[event.target.value] ? event.target.value : "balanced";
+        Object.assign(state.denoise, denoisePresetMap[preset], {
+          preset,
+          mode: "studio-chain",
+        });
+        state.denoiseEnabled = Number(state.denoise.strength || 0) > 0.01;
+        syncAudioControls();
+        scheduleDenoiseMonitor();
+      };
+      $("denoiseHumEnabled").onchange = (event) => {
+        state.denoise.humEnabled = event.target.checked;
+        scheduleDenoiseMonitor();
+      };
+      $("denoiseHumFrequency").onchange = (event) => {
+        state.denoise.humFrequency = event.target.value;
+        syncDenoiseProfessionalControls();
+        scheduleDenoiseMonitor();
+      };
+      const denoiseStageControls = {
+        denoiseHumDepth: ["humDepth", "denoiseHumDepthOut"],
+        denoiseWind: ["wind", "denoiseWindOut"],
+        denoiseEnvironment: ["environment", "denoiseEnvironmentOut"],
+        denoiseNeural: ["neural", "denoiseNeuralOut"],
+        denoiseInsect: ["insect", "denoiseInsectOut"],
+        denoiseResidual: ["residual", "denoiseResidualOut"],
+        denoiseVoiceRestore: ["voiceRestore", "denoiseVoiceRestoreOut"],
+      };
+      for (const [id, [key, outputId]] of Object.entries(denoiseStageControls)) {
+        $(id).oninput = (event) => {
+          state.denoise[key] = Number(event.target.value) / 100;
+          $(outputId).textContent = `${event.target.value}%`;
+          scheduleDenoiseMonitor();
+        };
+      }
       $("beautyControls").oninput = (event) => {
         const key = event.target.dataset.beauty;
         if (!key) return;

@@ -842,22 +842,328 @@ export async function analyzePauses(inputPath, options = {}) {
   };
 }
 
-export function audioDenoiseFilter(mode, strength = 0.8) {
-  const amount = Math.max(0, Math.min(1, Number(strength)));
-  if (!mode || mode === "off" || amount <= 0.01) return "";
-  const reduction = Math.round(8 + amount * 18);
-  const model = [
+const DENOISE_PRESETS = Object.freeze({
+  balanced: {
+    humEnabled: true,
+    humDepth: 0.62,
+    humHarmonics: 4,
+    wind: 0.45,
+    environment: 0.58,
+    neural: 0.62,
+    insect: 0.18,
+    residual: 0.34,
+    voiceRestore: 0.5,
+  },
+  wind: {
+    humEnabled: false,
+    humDepth: 0.35,
+    humHarmonics: 3,
+    wind: 0.9,
+    environment: 0.62,
+    neural: 0.7,
+    insect: 0.08,
+    residual: 0.42,
+    voiceRestore: 0.58,
+  },
+  electrical: {
+    humEnabled: true,
+    humDepth: 0.92,
+    humHarmonics: 6,
+    wind: 0.28,
+    environment: 0.54,
+    neural: 0.55,
+    insect: 0.12,
+    residual: 0.34,
+    voiceRestore: 0.52,
+  },
+  aircraft: {
+    humEnabled: true,
+    humDepth: 0.68,
+    humHarmonics: 4,
+    wind: 0.66,
+    environment: 0.86,
+    neural: 0.76,
+    insect: 0.1,
+    residual: 0.48,
+    voiceRestore: 0.62,
+  },
+  insects: {
+    humEnabled: false,
+    humDepth: 0.35,
+    humHarmonics: 3,
+    wind: 0.32,
+    environment: 0.66,
+    neural: 0.68,
+    insect: 0.82,
+    residual: 0.56,
+    voiceRestore: 0.64,
+  },
+  "mixed-heavy": {
+    humEnabled: true,
+    humDepth: 0.82,
+    humHarmonics: 5,
+    wind: 0.72,
+    environment: 0.82,
+    neural: 0.8,
+    insect: 0.52,
+    residual: 0.58,
+    voiceRestore: 0.68,
+  },
+});
+
+const clampDenoise = (value, fallback = 0) =>
+  Math.max(0, Math.min(1, Number.isFinite(Number(value)) ? Number(value) : fallback));
+
+export function denoisePresetSettings(preset = "balanced") {
+  return { ...(DENOISE_PRESETS[preset] || DENOISE_PRESETS.balanced) };
+}
+
+export function normalizeDenoiseConfig(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const preset = DENOISE_PRESETS[source.preset] ? source.preset : "balanced";
+  const merged = {
+    mode: "studio-chain",
+    strength: 0.82,
+    preset,
+    humFrequency: "auto",
+    detectedHumFrequency: 0,
+    ...denoisePresetSettings(preset),
+    ...source,
+  };
+  const humFrequency = ["auto", "50", "60"].includes(String(merged.humFrequency))
+    ? String(merged.humFrequency)
+    : "auto";
+  const detectedHumFrequency = [50, 60].includes(Number(merged.detectedHumFrequency))
+    ? Number(merged.detectedHumFrequency)
+    : 0;
+  return {
+    ...merged,
+    mode: String(merged.mode || "studio-chain").toLowerCase(),
+    strength: clampDenoise(merged.strength, 0.82),
+    preset,
+    humEnabled: merged.humEnabled !== false,
+    humFrequency,
+    detectedHumFrequency,
+    humDepth: clampDenoise(merged.humDepth, 0.62),
+    humHarmonics: Math.max(1, Math.min(8, Math.round(Number(merged.humHarmonics) || 4))),
+    wind: clampDenoise(merged.wind, 0.45),
+    environment: clampDenoise(merged.environment, 0.58),
+    neural: clampDenoise(merged.neural, 0.62),
+    insect: clampDenoise(merged.insect, 0.18),
+    residual: clampDenoise(merged.residual, 0.34),
+    voiceRestore: clampDenoise(merged.voiceRestore, 0.5),
+  };
+}
+
+export function denoiseConfigFingerprint(input = {}) {
+  const config = normalizeDenoiseConfig(input);
+  const stable = Object.fromEntries(
+    [
+      "mode", "strength", "preset", "humEnabled", "humFrequency",
+      "detectedHumFrequency", "humDepth", "humHarmonics", "wind",
+      "environment", "neural", "insect", "residual", "voiceRestore",
+    ].map((key) => [key, config[key]]),
+  );
+  return crypto.createHash("sha256").update(JSON.stringify(stable)).digest("hex").slice(0, 20);
+}
+
+function rnnoiseModelPath() {
+  return [
     path.resolve(moduleDir, "../assets/models/std.rnnn"),
     path.resolve(moduleDir, "../../assets/models/std.rnnn"),
     path.resolve(moduleDir, "../../../models/std.rnnn"),
   ].find((candidate) => fs.existsSync(candidate));
-  const escapeFilterPath = (str) =>
-    String(str || "")
-      .replace(/\\/g, "/")
-      .replace(/:/g, "\\:")
-      .replace(/'/g, "\\'");
+}
+
+const escapeAudioFilterPath = (str) =>
+  String(str || "")
+    .replace(/\\/g, "/")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'");
+
+export function buildProfessionalDenoiseChain(input = {}) {
+  const config = normalizeDenoiseConfig(input);
+  if (config.mode === "off" || config.strength <= 0.01) return "";
+  const scale = 0.2 + config.strength * 0.8;
+  const filters = ["aresample=48000"];
+
+  // Wind and handling rumble are removed before noise learning so they do not
+  // consume the spectral denoisers' reduction budget.
+  const highpass = Math.round(42 + config.wind * scale * 58);
+  filters.push(`highpass=f=${highpass}:p=2`);
+
+  const forcedHum = Number(config.humFrequency);
+  const humFrequency = [50, 60].includes(forcedHum)
+    ? forcedHum
+    : config.detectedHumFrequency;
+  if (config.humEnabled && [50, 60].includes(humFrequency)) {
+    const notchGain = -(6 + config.humDepth * scale * 20).toFixed(2);
+    const notchQ = (18 + config.humDepth * 18).toFixed(1);
+    for (let harmonic = 1; harmonic <= config.humHarmonics; harmonic += 1) {
+      const frequency = humFrequency * harmonic;
+      if (frequency >= 1000) break;
+      filters.push(`equalizer=f=${frequency}:t=q:w=${notchQ}:g=${notchGain}`);
+    }
+  }
+
+  if (config.environment > 0.01) {
+    const reduction = (4 + config.environment * scale * 14).toFixed(2);
+    const adaptivity = (0.52 + (1 - config.environment) * 0.22).toFixed(3);
+    filters.push(
+      `afftdn=nr=${reduction}:nf=-48:tn=1:tr=1:ad=${adaptivity}:fo=1.15:gs=8`,
+    );
+  }
+
+  const model = rnnoiseModelPath();
+  if (model && config.neural > 0.01) {
+    const mix = Math.min(0.92, 0.16 + config.neural * scale * 0.78).toFixed(3);
+    filters.push(`arnndn=m='${escapeAudioFilterPath(model)}':mix=${mix}`);
+  }
+
+  if (config.insect > 0.01) {
+    const highDip = -(config.insect * scale * 5.5).toFixed(2);
+    const highCut = Math.round(18000 - config.insect * scale * 3000);
+    filters.push(`equalizer=f=7600:t=q:w=1.35:g=${highDip}`);
+    filters.push(`lowpass=f=${highCut}:p=1`);
+  } else {
+    filters.push("lowpass=f=18000:p=1");
+  }
+
+  // A deliberately gentler second pass removes residual stationary noise.
+  // It uses different parameters from pass one instead of blindly stacking an
+  // identical noise reducer, which is more prone to metallic speech artifacts.
+  if (config.residual > 0.01) {
+    const reduction = (2.5 + config.residual * scale * 8.5).toFixed(2);
+    filters.push(
+      `afftdn=nr=${reduction}:nf=-55:tn=1:tr=1:ad=0.860:fo=0.92:gs=14`,
+    );
+  }
+
+  if (config.voiceRestore > 0.01) {
+    const restore = config.voiceRestore * scale;
+    filters.push(`equalizer=f=185:t=q:w=0.90:g=${(restore * 1.8).toFixed(2)}`);
+    filters.push(`equalizer=f=3200:t=q:w=1.05:g=${(restore * 2.2).toFixed(2)}`);
+    filters.push(`highshelf=f=10500:g=${(restore * 0.9).toFixed(2)}`);
+    filters.push(
+      `deesser=i=${Math.min(0.55, 0.18 + restore * 0.34).toFixed(3)}:m=0.55:f=0.55`,
+    );
+  }
+  filters.push("alimiter=limit=0.96");
+  return filters.filter(Boolean).join(",");
+}
+
+function goertzelPower(samples, sampleRate, frequency) {
+  if (!samples?.length || frequency <= 0 || frequency >= sampleRate / 2) return 0;
+  const omega = (2 * Math.PI * frequency) / sampleRate;
+  const coefficient = 2 * Math.cos(omega);
+  let previous = 0;
+  let previous2 = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / Math.max(1, samples.length - 1));
+    const current = Number(samples[index] || 0) * window + coefficient * previous - previous2;
+    previous2 = previous;
+    previous = current;
+  }
+  return Math.max(0, previous2 * previous2 + previous * previous - coefficient * previous * previous2);
+}
+
+function humCandidateScore(samples, sampleRate, fundamental) {
+  const ratios = [];
+  const weights = [0.5, 0.28, 0.1, 0.06, 0.04, 0.02];
+  for (let harmonic = 1; harmonic <= 6; harmonic += 1) {
+    const frequency = fundamental * harmonic;
+    if (frequency >= sampleRate / 2 - 10) break;
+    const tone = Math.max(
+      goertzelPower(samples, sampleRate, frequency - 0.35),
+      goertzelPower(samples, sampleRate, frequency),
+      goertzelPower(samples, sampleRate, frequency + 0.35),
+    );
+    const neighborhood = 0.5 * (
+      goertzelPower(samples, sampleRate, frequency - 4) +
+      goertzelPower(samples, sampleRate, frequency + 4)
+    );
+    ratios.push(10 * Math.log10((tone + 1e-20) / (neighborhood + 1e-20)));
+  }
+  let weighted = 0;
+  let totalWeight = 0;
+  for (let index = 0; index < ratios.length; index += 1) {
+    const weight = weights[index] || 0;
+    // A speech pitch can land on a third or later power-line harmonic. Make
+    // the fundamental and 2nd harmonic decisive, and cap a single late spike
+    // so male voice cannot masquerade as 60 Hz electrical hum.
+    const bounded = Math.max(-12, Math.min(45, ratios[index]));
+    weighted += bounded * weight;
+    totalWeight += weight;
+  }
+  return totalWeight ? weighted / totalWeight : -120;
+}
+
+export function analyzeHumSamples(samples, sampleRate = 12000) {
+  const score50 = humCandidateScore(samples, sampleRate, 50);
+  const score60 = humCandidateScore(samples, sampleRate, 60);
+  const bestFrequency = score50 >= score60 ? 50 : 60;
+  const bestScore = Math.max(score50, score60);
+  const difference = Math.abs(score50 - score60);
+  // Prefer a safe no-op over a false De-Hum notch. Weak/ambiguous cases stay
+  // undetected and can still be selected manually in the UI.
+  const detected = bestScore >= 5 && difference >= 1.25 ? bestFrequency : 0;
+  return {
+    humFrequency: detected,
+    score50Db: Number(score50.toFixed(2)),
+    score60Db: Number(score60.toFixed(2)),
+    confidence: Number(Math.max(0, Math.min(1, (bestScore - 1.5) / 9 + difference / 24)).toFixed(3)),
+  };
+}
+
+export async function analyzeNoiseProfile(inputPath, options = {}) {
+  if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要分析的音频。");
+  const sampleRate = 12000;
+  const bytes = await run(mediaBinary("ffmpeg"), [
+    "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-ss", String(Math.max(0, Number(options.time || 0))),
+    "-t", String(Math.max(3, Math.min(15, Number(options.duration || 10)))),
+    "-i", inputPath, "-vn", "-ac", "1", "-ar", String(sampleRate),
+    "-f", "f32le", "pipe:1",
+  ], { lowPriority: true });
+  const samples = new Float32Array(
+    bytes.buffer,
+    bytes.byteOffset,
+    Math.floor(bytes.byteLength / 4),
+  );
+  if (!samples.length) throw new Error("没有读取到可分析的音频。");
+  let sum = 0;
+  let peak = 0;
+  for (const sample of samples) {
+    const value = Number(sample || 0);
+    sum += value * value;
+    peak = Math.max(peak, Math.abs(value));
+  }
+  const hum = analyzeHumSamples(samples, sampleRate);
+  return {
+    ...hum,
+    sampleSeconds: Number((samples.length / sampleRate).toFixed(2)),
+    rmsDb: Number((20 * Math.log10(Math.sqrt(sum / samples.length) + 1e-12)).toFixed(2)),
+    peakDb: Number((20 * Math.log10(peak + 1e-12)).toFixed(2)),
+    message: hum.humFrequency
+      ? `检测到 ${hum.humFrequency} Hz 工频嗡声，可启用 De-Hum 精准陷波。`
+      : "没有可靠检测到 50/60 Hz 工频嗡声；不会自动强行陷波。",
+  };
+}
+
+export function audioDenoiseFilter(mode, strength = 0.8, settings = {}) {
+  const supplied = mode && typeof mode === "object"
+    ? mode
+    : { ...(settings || {}), mode, strength };
+  const config = normalizeDenoiseConfig(supplied);
+  const amount = config.strength;
+  mode = config.mode;
+  if (!mode || mode === "off" || amount <= 0.01) return "";
+  if (["studio-chain", "professional", "pro"].includes(mode))
+    return buildProfessionalDenoiseChain(config);
+  const reduction = Math.round(8 + amount * 18);
+  const model = rnnoiseModelPath();
   const neural = model
-    ? `aresample=48000,arnndn=m='${escapeFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
+    ? `aresample=48000,arnndn=m='${escapeAudioFilterPath(model)}':mix=${(0.4 + amount * 0.6).toFixed(3)}`
     : "";
   // The bundled Windows FFmpeg build crashes inside anlmdn with 0xC0000005 /
   // 0xC0000374. Keep the stable neural and FFT denoisers on Windows; other
@@ -988,6 +1294,7 @@ function audioMasterFilter(config, info) {
   const denoise = audioDenoiseFilter(
     config.denoise?.mode,
     config.denoise?.strength,
+    config.denoise,
   );
   if (denoise) filters.push(denoise);
   const volume = Math.max(0, Math.min(4, Number(audio.volume ?? 1)));
@@ -3030,12 +3337,38 @@ export async function renderDeepFilterTrack(inputPath, strength = 0.8, outputPat
   }
 }
 
-export async function renderDenoisePreview(inputPath, time, mode, strength) {
+async function resolveAutomaticHum(inputPath, input, time = 0) {
+  const config = normalizeDenoiseConfig(input);
+  if (
+    !["studio-chain", "professional", "pro"].includes(config.mode) ||
+    !config.humEnabled ||
+    config.humFrequency !== "auto" ||
+    config.detectedHumFrequency
+  ) return config;
+  try {
+    const profile = await analyzeNoiseProfile(inputPath, { time, duration: 10 });
+    return { ...config, detectedHumFrequency: profile.humFrequency || 0 };
+  } catch (error) {
+    console.warn("Automatic hum analysis failed; continuing without a forced notch:", error?.message);
+    return config;
+  }
+}
+
+export async function renderDenoisePreview(
+  inputPath,
+  time,
+  mode,
+  strength,
+  settings = {},
+) {
+  if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要降噪的音频。");
   const directory = path.join(supportRoot(), "previews");
   fs.mkdirSync(directory, { recursive: true });
   const outputPath = path.join(directory, `denoise-${crypto.randomUUID()}.m4a`);
 
-  const effectiveMode = String(mode || "ai-isolation").toLowerCase();
+  const supplied = { ...(settings || {}), mode: mode || settings?.mode, strength };
+  const resolvedConfig = await resolveAutomaticHum(inputPath, supplied, Math.max(0, Number(time || 0) - 2));
+  const effectiveMode = resolvedConfig.mode;
   const startTime = Math.max(0, Number(time || 0) - 2);
 
   // If Demucs is selected and Demucs binary exists, try demucs
@@ -3063,7 +3396,7 @@ export async function renderDenoisePreview(inputPath, time, mode, strength) {
   }
 
   // Graceful fallback / traditional filter graph
-  const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
+  const filter = audioDenoiseFilter(resolvedConfig) || "anull";
   const previewArgs = (audioFilter) => [
     "-y",
     "-hide_banner",
@@ -3110,7 +3443,13 @@ export async function renderLutPreviewFrame(inputPath, time, lutPath) {
   return outputPath;
 }
 
-export async function renderDenoisedTrack(inputPath, mode, strength, destination = "") {
+export async function renderDenoisedTrack(
+  inputPath,
+  mode,
+  strength,
+  destination = "",
+  settings = {},
+) {
   if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要降噪的音频。");
   const directory = destination
     ? path.dirname(path.resolve(destination))
@@ -3120,7 +3459,9 @@ export async function renderDenoisedTrack(inputPath, mode, strength, destination
     ? path.resolve(destination)
     : path.join(directory, `denoised-track-${crypto.randomUUID()}.m4a`);
 
-  const effectiveMode = String(mode || "uvr5-master").toLowerCase();
+  const supplied = { ...(settings || {}), mode: mode || settings?.mode, strength };
+  const resolvedConfig = await resolveAutomaticHum(inputPath, supplied, 0);
+  const effectiveMode = resolvedConfig.mode;
 
   // If Demucs is selected and Demucs binary exists, try demucs
   if (effectiveMode === "demucs" && hasDemucsEngine()) {
@@ -3145,7 +3486,7 @@ export async function renderDenoisedTrack(inputPath, mode, strength, destination
     directory,
     `.${path.basename(outputPath)}.${crypto.randomUUID()}.partial.m4a`,
   );
-  const filter = audioDenoiseFilter(effectiveMode, strength) || "anull";
+  const filter = audioDenoiseFilter(resolvedConfig) || "anull";
   const trackArgs = (audioFilter) => [
     "-y",
     "-hide_banner",

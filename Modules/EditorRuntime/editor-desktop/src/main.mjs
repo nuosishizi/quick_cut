@@ -16,6 +16,7 @@ import {
 import {
   analyzePauses,
   analyzeWaveform,
+  analyzeNoiseProfile,
   cachedMediaPreview,
   cancelExport,
   createMediaPreviewAsync,
@@ -401,7 +402,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.45" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.46" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -1326,7 +1327,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.45",
+    version: "2.7.46",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),
@@ -1458,6 +1459,12 @@ nativeMethods = {
   startDemucsInstall: safe((input) => startDemucsInstall(input || {})),
   demucsInstallStatus: safe((jobId) => demucsInstallStatus(jobId)),
   cancelDemucsInstall: safe((jobId) => cancelDemucsInstall(jobId)),
+  analyzeNoiseProfile: safe((input = {}) =>
+    analyzeNoiseProfile(input.path, {
+      time: input.time,
+      duration: input.duration,
+    }),
+  ),
   denoisePreview: safe(async (input) =>
     registerAsset(
       await renderDenoisePreview(
@@ -1465,6 +1472,7 @@ nativeMethods = {
         input.time,
         input.mode,
         input.strength,
+        input.config || input.denoise || {},
       ),
     ),
   ),
@@ -1475,7 +1483,13 @@ nativeMethods = {
       directory,
       `denoised-track-${crypto.randomUUID().slice(0, 12)}.m4a`,
     );
-    await renderDenoisedTrack(input.path, input.mode, input.strength, output);
+    await renderDenoisedTrack(
+      input.path,
+      input.mode,
+      input.strength,
+      output,
+      input.config || input.denoise || {},
+    );
     const stat = fs.statSync(output);
     if (!stat.isFile() || stat.size < 256)
       throw new Error("降噪音轨写入工程失败，请重试。");

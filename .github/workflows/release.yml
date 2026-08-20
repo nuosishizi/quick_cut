@@ -44,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           cd Modules/EditorRuntime/editor-desktop
-          node --test tests/ai-settings.test.mjs tests/vertex-express.test.mjs tests/waveform-timeline.test.mjs tests/startup-package.test.mjs tests/alignment-status.test.mjs tests/script-judge.test.mjs tests/resolve-export.test.mjs tests/resolve-link.test.mjs tests/export-captions.test.mjs tests/timeline-edit.test.mjs tests/text-layout.test.mjs tests/ui-regressions.test.mjs tests/punctuation-quotes.test.mjs tests/denoise-isolation.test.mjs
+          npm test
 
       - name: Package Application
         shell: pwsh
@@ -67,6 +67,9 @@ jobs:
       attestations: write
 
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -81,6 +84,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist/QuickCut-*
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
