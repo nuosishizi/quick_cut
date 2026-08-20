@@ -170,6 +170,13 @@ test("Deepgram word timestamps become alignment segments", () => {
   assert.equal(segments[1].text, "world.");
 });
 
+test("Deepgram preserves filler words and disables smart formatting", () => {
+  const source = fs.readFileSync(new URL("../src/whisper.mjs", import.meta.url), "utf8");
+  assert.match(source, /filler_words", "true"/);
+  assert.match(source, /smart_format", "false"/);
+  assert.doesNotMatch(source, /smart_format", "true"/);
+});
+
 test("Deepgram key can be selected as the speech engine", () => {
   const saved = saveDeepgramApiKey("  dg_test_quickcut_deepgram_key  ");
   assert.equal(saved.configured, true);

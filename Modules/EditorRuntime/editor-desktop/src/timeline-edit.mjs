@@ -317,7 +317,33 @@ export function rulerTickPlan(zoom) {
   if (z < 80) return { major: 2, minor: 0.5, micro: 0.1 };
   if (z < 130) return { major: 1, minor: 0.2, micro: 1 / 30 };
   if (z < 200) return { major: 0.5, minor: 0.1, micro: 1 / 30 };
-  return { major: 1 / 15, minor: 1 / 30, micro: 1 / 60 };
+  // Keep text labels at least 100px apart. Frame ticks may stay dense, but
+  // labelling every two frames makes the ruler unreadable at high zoom.
+  return { major: 0.5, minor: 1 / 30, micro: 1 / 30 };
+}
+
+export function findTimelineGap(items = [], time = 0, minimum = 0.04) {
+  const point = Math.max(0, Number(time) || 0);
+  const clips = (items || [])
+    .map((item) => ({
+      ...item,
+      start: Math.max(0, Number(item?.start) || 0),
+      end: Math.max(0, Number(item?.end) || 0),
+    }))
+    .filter((item) => item.end > item.start + 0.001)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  if (!clips.length) return null;
+  if (clips.some((item) => point >= item.start - 0.002 && point <= item.end + 0.002))
+    return null;
+  let start = 0;
+  let end = Infinity;
+  for (const item of clips) {
+    if (item.end <= point + 0.002) start = Math.max(start, item.end);
+    if (item.start >= point - 0.002) end = Math.min(end, item.start);
+  }
+  if (!Number.isFinite(end) || end - start < Math.max(0.002, Number(minimum) || 0.04))
+    return null;
+  return { start, end, duration: end - start };
 }
 
 export function snapGroupDelta(moving, delta, points, threshold) {
@@ -560,8 +586,9 @@ export function mainTrimSourceBounds({
   };
 }
 
-export function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1) {
-  const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < 1 / 30);
+export function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1, frameRate = 30) {
+  const frame = 1 / Math.max(1, Number(frameRate) || 30);
+  const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < frame);
   if (!tiny.length) return { packed, removals, manualCuts };
   const nextRemovals = normalizeRemovalsList([
     ...removals,

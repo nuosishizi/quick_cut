@@ -19,17 +19,18 @@ Choose one decision per item:
 Prefer cut for anything that does not serve the manuscript. Keep is rare.
 Return JSON only: {"decisions":[{"id":"...","decision":"cut","reason":"..."}]}`,
   natural: `You review English voiceover against a manuscript. Mode: NATURAL fluency.
-The finished video should follow the manuscript meaning, but short natural speech may stay.
-Captions already use the manuscript. You only decide which spoken spans stay.
+  The finished video should follow the manuscript meaning, but the voiceover does not need to match word for word.
+  Captions already use the manuscript. You only decide which spoken spans stay.
 
 Choose one decision per item:
 - keep: ASR glitch (The/Tthe, dropped leading T), same meaning, filler, a title/question expansion such as "Are You Guilty?" → "Are you guilty of any...", or a short helpful aside.
-- cut: a clear reread/restart/self-correction (type=repeat, including a repeated ending such as "to you, to you"), a long off-topic tangent, or a meaning change of 3+ words. Prefer the later clean take. Rereads must be cut.
-- missing: manuscript phrase was not spoken. Do not cut.
-- unsure: leave the original mark.
+  - cut: only a clearly abandoned reread/restart followed by a cleaner replacement, a long off-topic tangent, or a real meaning-changing error followed by a correct take.
+  - missing: manuscript phrase was not spoken. Do not cut.
+  - unsure: leave the original mark for human review and never cut it automatically.
 
-Default to keep for ordinary extras. Never keep a reread just because it is short.
-Return JSON only: {"decisions":[{"id":"...","decision":"keep","reason":"..."}]}`,
+  A pause, breath, timestamp gap, ASR boundary, caption boundary, punctuation split, or number split is never proof of a restart. A restart requires later audio to repeat or replace content already attempted.
+  Normalize contractions, Bible references, and spoken/written number forms by meaning. Default to keep for harmless wording differences and natural additions.
+  Return JSON only: {"decisions":[{"id":"...","decision":"keep","confidence":"high|medium|low","reason":"..."}]}`,
 };
 
 export const DEFAULT_REVIEW_PROMPTS = MODE_PROMPTS;
@@ -62,6 +63,9 @@ export function parseJudgeResponse(text) {
       return {
         id,
         decision,
+        confidence: ["high", "medium", "low"].includes(String(row?.confidence || "").toLowerCase())
+          ? String(row.confidence).toLowerCase()
+          : "",
         reason: String(row?.reason || "").trim().slice(0, 180),
       };
     })
@@ -216,13 +220,15 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
     const inferredKeep = inferKeepable(issue, reviewMode, aligned.operations || []);
     if (scripture && !looksLikeAsrGlitch(issue.spokenText, issue.expectedText)) {
       issue.confirmedError = issue.type === "mismatch" || issue.type === "missing";
+      issue.confirmedCut = false;
       issue.suppressReview = false;
       if (issue.type === "missing") issue.action = "missing";
       else if (issue.type !== "repeat") {
-        issue.action = "cut";
-        issue.label = "经文不符，需重录";
+        issue.action = "unsure";
+        issue.label = "经文差异，需人工复核";
       }
       issue.aiDecision = judged?.decision || "scripture";
+      issue.aiConfidence = judged?.confidence || "";
       issue.aiMode = reviewMode;
       if (issue.confirmedError) summary.missing += issue.type === "missing" ? 1 : 0;
       continue;
@@ -247,8 +253,8 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
     let decision = judged.decision;
     if ((decision === "unsure" || (decision === "cut" && inferredKeep && reviewMode === "natural")) && inferredKeep)
       decision = "keep";
-    if (decision === "unsure" && issue.type === "repeat") decision = "cut";
     issue.aiDecision = decision;
+    issue.aiConfidence = judged.confidence || "";
     issue.aiReason = judged.reason || "";
     issue.aiMode = reviewMode;
     summary[decision] = (summary[decision] || 0) + 1;
@@ -259,6 +265,13 @@ export function applyJudgeDecisions(aligned, decisions = [], mode = "natural") {
       issue.severity = "low";
       issue.action = "keep";
       issue.suppressReview = true;
+      continue;
+    }
+    if (decision === "unsure") {
+      issue.confirmedCut = false;
+      issue.suggested = true;
+      issue.action = "unsure";
+      issue.suppressReview = false;
       continue;
     }
     if (decision === "cut" && cuttable.has(issue.type)) {
@@ -283,9 +296,11 @@ function systemPromptFor(mode) {
   const custom = reviewMode === "strict" ? settings.promptStrict : settings.promptNatural;
   const base = MODE_PROMPTS[reviewMode];
   const scriptureRule = `
-Scripture and quoted Word of God (items with scripture=true) are NEVER optional.
-Do not mark them keep unless the spoken text is clearly the same words with only an ASR typo.
-Wrong, missing, or paraphrased scripture must be missing or cut and must block export.`;
+Scripture and quoted Word of God (items with scripture=true) require semantic care, not speculative deletion.
+Equivalent number formats, Bible-reference forms, contractions, connected speech, and clear ASR variants are not errors.
+If important wording may genuinely be wrong and no clearly correct later take replaces it, decision=unsure, never cut.
+Only an earlier wrong take followed by a clearly correct reread may be cut.
+A pause or segmentation boundary alone can never be a reread or restart.`;
   return `${custom.trim() || base}\n${scriptureRule}`;
 }
 

@@ -228,6 +228,33 @@ export function waveformPeaks(samples, points = 1600) {
   return result;
 }
 
+// Produces one min/max pair per channel for interleaved PCM. Stereo entries
+// are [leftMin, leftMax, rightMin, rightMax]; mono remains backward compatible.
+export function waveformChannelPeaks(samples, points = 1600, channels = 2) {
+  const count = Math.max(1, Math.floor(Number(channels) || 1));
+  if (count === 1) return waveformPeaks(samples, points);
+  const frames = Math.floor(samples.length / count);
+  if (!frames || points <= 0) return [];
+  const bucket = Math.max(1, Math.ceil(frames / points));
+  const result = [];
+  for (let offset = 0; offset < frames; offset += bucket) {
+    const mins = Array(count).fill(1);
+    const maxs = Array(count).fill(-1);
+    for (let frame = offset; frame < Math.min(frames, offset + bucket); frame += 1) {
+      for (let channel = 0; channel < count; channel += 1) {
+        const value = samples[frame * count + channel] || 0;
+        mins[channel] = Math.min(mins[channel], value);
+        maxs[channel] = Math.max(maxs[channel], value);
+      }
+    }
+    const entry = [];
+    for (let channel = 0; channel < count; channel += 1)
+      entry.push(Number(mins[channel].toFixed(4)), Number(maxs[channel].toFixed(4)));
+    result.push(entry);
+  }
+  return result;
+}
+
 export function mergeRanges(ranges, duration = Infinity) {
   const sorted = ranges
     .map((range) => ({

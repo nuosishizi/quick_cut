@@ -15,6 +15,7 @@ Thumbs.db
 Modules/EditorRuntime/runtime/bun-arm64
 Modules/EditorRuntime/media/ffmpeg
 Modules/EditorRuntime/media/ffprobe
+Modules/EditorRuntime/media/lib/
 Modules/EditorRuntime/editor-desktop/macos/QuickCut
 
 # local secrets — never commit API keys

@@ -1235,6 +1235,17 @@
         position: relative;
         border-bottom: 1px solid #292c30;
       }
+      .timeline-gap-selection {
+        position: absolute;
+        top: 3px;
+        bottom: 3px;
+        z-index: 1;
+        pointer-events: none;
+        border: 1px solid rgba(218, 226, 235, 0.48);
+        border-radius: 3px;
+        background: rgba(151, 165, 180, 0.28);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      }
       .clip {
         position: absolute;
         contain: none;
@@ -2611,9 +2622,21 @@
       .tracklabel .tracklock.on {
         color: #ffbd54;
       }
+      .tracklabel .tracksolo,
+      .tracklabel .trackheight {
+        color: #8f969f;
+        padding: 0 3px;
+        font: 600 10px/18px -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      .tracklabel .tracksolo.on {
+        color: #111;
+        background: #ffd24d;
+        border-radius: 3px;
+      }
       .trackrow.locked-track {
         opacity: 0.72;
       }
+      .trackrow.solo-muted { opacity: .42; }
       .trackdelete {
         width: 18px;
         height: 18px;
@@ -2683,6 +2706,38 @@
       .clip.audio.has-wave-preview::before {
         opacity: 0.12;
       }
+      .clip-volume-line {
+        position:absolute; left:8px; right:8px; height:1px; z-index:9;
+        background:#ffe36a; box-shadow:0 0 0 1px rgba(0,0,0,.25);
+        cursor:ns-resize;
+      }
+      .clip-volume-line:after {
+        content:""; position:absolute; right:-3px; top:-3px; width:7px; height:7px;
+        border-radius:50%; background:#ffe36a;
+      }
+      .trim-audio-detail {
+        position: absolute;
+        z-index: 55;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        height: 116px;
+        display: none;
+        pointer-events: none;
+        border: 1px solid #5d6670;
+        border-radius: 7px;
+        background: rgba(16, 18, 20, .96);
+        box-shadow: 0 10px 28px rgba(0,0,0,.55);
+        overflow: hidden;
+      }
+      .trim-audio-detail.on { display: block; }
+      .trim-audio-detail canvas { position:absolute; inset:24px 0 0; width:100%; height:92px; }
+      .trim-audio-readout {
+        position:absolute; inset:0 8px auto; height:24px; display:flex;
+        align-items:center; justify-content:space-between; color:#dfe5eb;
+        font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .trim-audio-cursor { position:absolute; top:24px; bottom:0; left:50%; width:1px; background:#ffcf4a; }
       .clip.audio .clipname {
         position: relative;
         z-index: 5;
@@ -4042,7 +4097,7 @@
               <button class="btn iconbtn active" id="selectTool" title="选择模式（A）：修剪当前片段，前后锁定不动">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7 18 3-7 7-3L3 3z"/><path d="M13 13l6 6"/></svg>
               </button
-              ><button class="btn iconbtn" id="trimTool" title="波纹修剪模式（T）：拖动边缘全轨道跟随推移。Shift 加选后可整组左右移动">
+              ><button class="btn iconbtn" id="trimTool" title="智能修剪（T）：拖边缘波纹修剪；Shift+拖编辑点为 Roll；Option+拖片段内容为 Slip">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><polyline points="8 4 4 8 8 12"/><polyline points="16 12 20 16 16 20"/></svg>
               </button
               ><button class="btn iconbtn" id="bladeTool" title="剃刀切割：点击片段直接切断（B）">
@@ -4137,6 +4192,10 @@
               <div class="blade-guide" id="bladeGuide">
                 <span class="blade-time" id="bladeTime"></span>
               </div>
+              <div class="trim-audio-detail" id="trimAudioDetail">
+                <div class="trim-audio-readout"><span id="trimAudioMode">修剪</span><span id="trimAudioValue">00:00:00:00 · +0 帧</span></div>
+                <canvas id="trimAudioCanvas"></canvas><i class="trim-audio-cursor"></i>
+              </div>
             </div>
             <div class="ruler-bar" id="rulerBar">
               <div class="ruler" id="ruler"></div>
@@ -4174,7 +4233,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.43</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.44</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -4598,6 +4657,8 @@
           audio: true,
         },
         trackLocks: {},
+        trackHeights: {},
+        trackSolo: {},
         avLinked: true,
         snapping: true,
         captionLines: 2,
@@ -4989,6 +5050,8 @@
         state.trackOrder = state.trackOrder.filter((id) => id !== trackId);
         delete state.trackDefinitions[trackId];
         delete state.trackVisibility[trackId];
+        delete state.trackHeights?.[trackId];
+        delete state.trackSolo?.[trackId];
         state.selectedItems = [];
         state.selected = { type: "video", id: "main" };
         cleanupEmptyDynamicTracks();
@@ -5337,6 +5400,8 @@
             defaultTrackOrder.map((key) => [key, true]),
           ),
           trackLocks: {},
+          trackHeights: {},
+          trackSolo: {},
           avLinked: true,
           snapping: true,
           captionLines: 2,
@@ -5488,6 +5553,8 @@
             ...(data.trackVisibility || {}),
           },
           trackLocks: data.trackLocks || {},
+          trackHeights: data.trackHeights || {},
+          trackSolo: data.trackSolo || {},
           captionTransform: data.captionTransform || {
             x: 0,
             y: Math.round((Number(data.height) || 1920) * 0.28),
@@ -5873,6 +5940,42 @@
       }
       function isTrackLocked(trackId) {
         return !!state.trackLocks?.[trackId];
+      }
+      function activeSoloTracks() {
+        return new Set(
+          Object.entries(state.trackSolo || {})
+            .filter(([, enabled]) => enabled)
+            .map(([trackId]) => trackId),
+        );
+      }
+      function isTrackAudible(trackId) {
+        if (state.trackVisibility?.[trackId] === false) return false;
+        const solo = activeSoloTracks();
+        return !solo.size || solo.has(trackId);
+      }
+      function effectiveTrackVisibility() {
+        return Object.fromEntries(
+          (state.trackOrder || []).map((trackId) => [trackId, isTrackAudible(trackId)]),
+        );
+      }
+      function sourceFrameRate() {
+        return clamp(Number(state.video?.frameRate || state.fps || 30), 1, 240);
+      }
+      function frameDuration() {
+        return 1 / sourceFrameRate();
+      }
+      function formatTimecode(time) {
+        const fps = sourceFrameRate();
+        const totalFrames = Math.max(0, Math.round(Number(time || 0) * fps));
+        const roundedFps = Math.max(1, Math.round(fps));
+        const frames = totalFrames % roundedFps;
+        const totalSeconds = Math.floor(totalFrames / roundedFps);
+        const seconds = totalSeconds % 60;
+        const minutes = Math.floor(totalSeconds / 60) % 60;
+        const hours = Math.floor(totalSeconds / 3600);
+        return [hours, minutes, seconds, frames]
+          .map((value) => String(value).padStart(2, "0"))
+          .join(":");
       }
       function selectionIsLocked(type = state.selected.type, id = state.selected.id) {
         return isTrackLocked(selectionTrackId(type, id));
@@ -6353,7 +6456,7 @@
         };
       }
       function dropSubframeClips(packed = [], removals = [], manualCuts = [], sourceDuration = 0, speed = 1) {
-        const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < 1 / 30);
+        const tiny = (packed || []).filter((clip) => Number(clip.end) - Number(clip.start) < frameDuration());
         if (!tiny.length) return { packed, removals, manualCuts };
         const nextRemovals = normalizeRemovalsList([
           ...removals,
@@ -9373,7 +9476,124 @@
         if (z < 80) return { major: 2, minor: 0.5, micro: 0.1 };
         if (z < 130) return { major: 1, minor: 0.2, micro: 1 / 30 };
         if (z < 200) return { major: 0.5, minor: 0.1, micro: 1 / 30 };
-        return { major: 1 / 15, minor: 1 / 30, micro: 1 / 60 };
+        return { major: 0.5, minor: 1 / 30, micro: 1 / 30 };
+      }
+      function findTimelineGap(items = [], time = 0, minimum = 0.04) {
+        const point = Math.max(0, Number(time) || 0);
+        const clips = (items || [])
+          .map((item) => ({
+            ...item,
+            start: Math.max(0, Number(item?.start) || 0),
+            end: Math.max(0, Number(item?.end) || 0),
+          }))
+          .filter((item) => item.end > item.start + 0.001)
+          .sort((left, right) => left.start - right.start || left.end - right.end);
+        if (!clips.length) return null;
+        if (clips.some((item) => point >= item.start - 0.002 && point <= item.end + 0.002))
+          return null;
+        let start = 0,
+          end = Infinity;
+        for (const item of clips) {
+          if (item.end <= point + 0.002) start = Math.max(start, item.end);
+          if (item.start >= point - 0.002) end = Math.min(end, item.start);
+        }
+        if (!Number.isFinite(end) || end - start < Math.max(0.002, Number(minimum) || 0.04))
+          return null;
+        return { start, end, duration: end - start };
+      }
+      function timelineGapItems(trackId) {
+        if (trackId === "video")
+          return mainClips().filter((clip) => !state.mainVideoTrackMap?.[clip.id]);
+        if (trackId === "audio")
+          return mainAudioClips().filter((clip) => !state.mainAudioTrackMap?.[clip.id]);
+        return trackItems(trackId);
+      }
+      let timelineGapSelection = null;
+      function selectedTimelineGapAt(trackId, time) {
+        const selected = timelineGapSelection;
+        if (!selected || selected.trackId !== trackId) return null;
+        if (Number(time) < selected.start - 0.002 || Number(time) > selected.end + 0.002)
+          return null;
+        const current = findTimelineGap(
+          timelineGapItems(trackId),
+          (Number(selected.start) + Number(selected.end)) / 2,
+        );
+        if (!current) return null;
+        if (Math.abs(current.start - selected.start) > 0.01 || Math.abs(current.end - selected.end) > 0.01)
+          return null;
+        return current;
+      }
+      function rippleDeleteTimelineGap(trackId, gap) {
+        if (!gap || gap.duration <= 0.002) return;
+        if (isTrackLocked(trackId)) {
+          toast("这个轨道已锁定，请先点击轨道前方的锁");
+          return;
+        }
+        const length = Number(gap.duration);
+        const info = trackInfo(trackId);
+        const videoClips = mainClips().filter((clip) =>
+          (trackId === "video" ? !state.mainVideoTrackMap?.[clip.id] : state.mainVideoTrackMap?.[clip.id] === trackId),
+        );
+        const audioClips = mainAudioClips().filter((clip) =>
+          (trackId === "audio" ? !state.mainAudioTrackMap?.[clip.id] : state.mainAudioTrackMap?.[clip.id] === trackId),
+        );
+        const affectedVideo = info.kind === "video"
+          ? videoClips.filter((clip) => clip.start >= gap.end - 0.002)
+          : [];
+        const affectedAudio = info.kind === "audio"
+          ? audioClips.filter((clip) => clip.start >= gap.end - 0.002)
+          : [];
+        snapshot();
+        for (const clip of affectedVideo) {
+          state.mainVideoClipOffsets[clip.id] =
+            Number(state.mainVideoClipOffsets?.[clip.id] || 0) - length;
+          if (state.avLinked)
+            state.mainAudioClipOffsets[clip.id] =
+              Number(state.mainAudioClipOffsets?.[clip.id] || 0) - length;
+        }
+        for (const clip of affectedAudio) {
+          const id = clip.parentId || clip.id;
+          state.mainAudioClipOffsets[id] =
+            Number(state.mainAudioClipOffsets?.[id] || 0) - length;
+          if (state.avLinked)
+            state.mainVideoClipOffsets[id] =
+              Number(state.mainVideoClipOffsets?.[id] || 0) - length;
+        }
+        const closesMainGap = affectedVideo.length || affectedAudio.length;
+        if (closesMainGap && state.avLinked) {
+          shiftTracks(gap.start, length);
+        } else {
+          const overlays =
+            info.kind === "video"
+              ? state.videoLayers
+              : info.kind === "audio"
+                ? state.audioAssets
+                : info.kind === "image"
+                  ? state.images
+                  : info.kind === "text"
+                    ? state.titles
+                    : info.kind === "caption"
+                      ? state.captions
+                      : trackId === "review"
+                        ? state.reviewCaptions
+                        : [];
+          const overlayType = info.kind === "video"
+            ? "videolayer"
+            : info.kind === "audio"
+              ? "audioasset"
+              : trackId === "review"
+                ? "review"
+                : info.kind;
+          rippleOverlayTrack(overlays, trackId, overlayType, gap.start, gap.end);
+          if (trackId === "review")
+            rippleOverlayTrack(state.issues, trackId, "review", gap.start, gap.end);
+        }
+        recomputeContentDuration();
+        timelineGapSelection = null;
+        state.selectedItems = [];
+        seekTimeline(gap.start);
+        renderAll();
+        toast(`已波纹删除空白 ${length.toFixed(2)} 秒`);
       }
       function renderRuler() {
         const visibleDuration = visibleTimelineDuration();
@@ -9386,13 +9606,14 @@
         if (ruler) ruler.style.width = `${width}px`;
         const plan = rulerTickPlan(state.zoom);
         let html = "";
-        for (let t = 0; t <= visibleDuration + 0.0001; t += plan.micro) {
+        const rulerStep = Math.max(plan.micro, frameDuration());
+        for (let t = 0; t <= visibleDuration + 0.0001; t += rulerStep) {
           const major = Math.abs(t / plan.major - Math.round(t / plan.major)) < 0.001;
           const minor = !major && Math.abs(t / plan.minor - Math.round(t / plan.minor)) < 0.001;
           const label = major
             ? plan.major >= 1
               ? formatTime(t, false)
-              : formatTime(t, true).replace(/(\.\d).+$/, "$1")
+              : formatTimecode(t).slice(3)
             : "";
           html += `<span class="tick${major ? "" : minor ? " minor" : " micro"}" style="left:${t * state.zoom}px">${label}</span>`;
         }
@@ -9410,7 +9631,9 @@
           .map((key) => {
             const meta = trackInfo(key),
               visible = state.trackVisibility[key] !== false,
-              locked = isTrackLocked(key);
+              locked = isTrackLocked(key),
+              soloed = !!state.trackSolo?.[key],
+              audioTrack = meta.kind === "audio";
             const symbol =
               key === "audio" ? (visible ? "🔊" : "🔇") : visible ? "◉" : "○";
             const remove = meta.deletable
@@ -9419,7 +9642,7 @@
             const labelTitle = key === "review"
               ? "待处理片段：点击试听，Ctrl+点击保留不删除，Shift+点击接受并删除"
               : meta.label;
-            return `<div class="tracklabel ${meta.className}" draggable="true" data-track-key="${key}"><span class="trackhandle">⠿</span><span class="dot" style="background:${meta.color}"></span><span class="ellipsis" title="${escapeHtml(labelTitle)}">${escapeHtml(meta.label)}</span>${remove}<button class="tracklock ${locked ? "on" : ""}" data-lock-track="${key}" title="${locked ? "解锁轨道" : "锁定轨道"}">${locked ? "🔒" : "🔓"}</button><button class="visibility ${visible ? "" : "off"}" data-toggle-track="${key}" title="${visible ? "关闭轨道" : "显示轨道"}">${symbol}</button></div>`;
+            return `<div class="tracklabel ${meta.className}" draggable="true" data-track-key="${key}"><span class="trackhandle">⠿</span><span class="dot" style="background:${meta.color}"></span><span class="ellipsis" title="${escapeHtml(labelTitle)}">${escapeHtml(meta.label)}</span>${remove}${audioTrack ? `<button class="tracksolo ${soloed ? "on" : ""}" data-solo-track="${key}" title="独听此轨">S</button><button class="trackheight" data-height-track="${key}" title="切换轨道高度">↕</button>` : ""}<button class="tracklock ${locked ? "on" : ""}" data-lock-track="${key}" title="${locked ? "解锁轨道" : "锁定轨道"}">${locked ? "🔒" : "🔓"}</button><button class="visibility ${visible ? "" : "off"}" data-toggle-track="${key}" title="${visible ? "关闭轨道" : "显示轨道"}">${symbol}</button></div>`;
           })
           .join("");
         content.querySelectorAll(".trackrow[data-track-key]").forEach((row) => {
@@ -9440,10 +9663,15 @@
             state.trackVisibility[key] === false,
           );
           row.classList.toggle("locked-track", isTrackLocked(key));
+          row.classList.toggle("solo-muted", trackInfo(key).kind === "audio" && !isTrackAudible(key));
+          const rowHeight = Math.max(34, Number(state.trackHeights?.[key] || 34));
+          row.style.height = `${rowHeight}px`;
           if (tail) content.insertBefore(row, tail);
           else content.appendChild(row);
         }
         labels.querySelectorAll("[data-track-key]").forEach((label) => {
+          const rowHeight = Math.max(34, Number(state.trackHeights?.[label.dataset.trackKey] || 34));
+          label.style.height = `${rowHeight}px`;
           label.ondragstart = (event) => {
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData(
@@ -9521,7 +9749,7 @@
                     `<div class="clip audiomute" title="静音区域" style="${clipGeometryStyle(range)}"></div>`,
                 )
                 .join("") +
-              `<canvas class="wavecanvas" id="waveform" style="position:absolute;inset:0;z-index:3;pointer-events:none"></canvas>`;
+              `<canvas class="wavecanvas" data-main-wave-track="audio" style="position:absolute;inset:0;z-index:3;pointer-events:none"></canvas>`;
           else if (info.kind === "video") {
             const mapped = mainClips()
               .filter((clip) => state.mainVideoTrackMap?.[clip.id] === key)
@@ -9539,7 +9767,7 @@
             html = mapped + state.audioAssets
               .filter((clip) => clip.trackId === key)
               .map((clip) => audioClipHtml(clip, "audioasset", key))
-              .join("");
+              .join("") + `<canvas class="wavecanvas" data-main-wave-track="${escapeHtml(key)}" style="position:absolute;inset:0;z-index:3;pointer-events:none"></canvas>`;
           } else {
             const type = info.kind;
             const items = trackItems(key);
@@ -9554,10 +9782,19 @@
               })
               .join("");
           }
-          const laneHeight = laneCount > 1 ? `${6 + laneCount * 27}px` : "";
-          row.innerHTML = `${html}<span class="trackend" style="left:${state.duration * state.zoom}px"></span>`;
+          const configuredHeight = Math.max(34, Number(state.trackHeights?.[key] || 34));
+          const laneHeight = `${Math.max(configuredHeight, laneCount > 1 ? 6 + laneCount * 27 : 34)}px`;
+          const gapSelection = timelineGapSelection?.trackId === key
+            ? `<span class="timeline-gap-selection" data-selected-gap style="left:${timelineGapSelection.start * state.zoom}px;width:${Math.max(2, timelineGapSelection.duration * state.zoom)}px"></span>`
+            : "";
+          row.innerHTML = `${gapSelection}${html}<span class="trackend" style="left:${state.duration * state.zoom}px"></span>`;
           row.style.width = $("timelineContent").style.width;
           row.style.height = laneHeight;
+          if (laneCount === 1 && configuredHeight > 34)
+            row.querySelectorAll(".clip").forEach((clip) => {
+              clip.style.height = `${configuredHeight - 7}px`;
+              clip.style.top = "3px";
+            });
           const label = $("trackLabels").querySelector(`[data-track-key="${key}"]`);
           if (label) label.style.height = laneHeight;
         }
@@ -9616,6 +9853,8 @@
           ? 0
           : clamp(Number(settings.volume ?? 1), 0, 2);
         element.style.setProperty("--wave-scale", Math.max(0.03, volume / 2));
+        const line = element.querySelector("[data-volume-line]");
+        if (line) line.style.top = `${clamp((1 - volume / 2) * 100, 0, 100)}%`;
       }
       function updateTransformInspector(object) {
         if (!object) return;
@@ -9722,7 +9961,8 @@
           type === "audioasset" && Array.isArray(clip.waveform) && clip.waveform.length
             ? `<canvas class="assetwavecanvas" data-asset-waveform="${escapeHtml(clip.id)}"></canvas>`
             : "";
-        return `<div class="clip audio ${clip.previewUrl ? "has-wave-preview" : ""} ${isSelected(type, clip.id) ? "selected" : ""}" data-type="${type}" data-id="${clip.id}" data-track-id="${trackId}" style="${clipGeometryStyle(clip, lane, laneCount)}${preview}--wave-scale:${Math.max(0.03, volume / 2)}"><i class="trim-handle start" data-trim="start"></i>${waveformCanvas}<span class="clipname clip-sticky ellipsis">${escapeHtml(clip.name || "音频")}</span><i class="trim-handle end" data-trim="end"></i></div>`;
+        const volumeTop = clamp((1 - volume / 2) * 100, 0, 100);
+        return `<div class="clip audio ${clip.previewUrl ? "has-wave-preview" : ""} ${isSelected(type, clip.id) ? "selected" : ""}" data-type="${type}" data-id="${clip.id}" data-track-id="${trackId}" style="${clipGeometryStyle(clip, lane, laneCount)}${preview}--wave-scale:${Math.max(0.03, volume / 2)}"><i class="trim-handle start" data-trim="start"></i>${waveformCanvas}<i class="clip-volume-line" data-volume-line style="top:${volumeTop}%" title="拖动调整片段音量"></i><span class="clipname clip-sticky ellipsis">${escapeHtml(clip.name || "音频")}</span><i class="trim-handle end" data-trim="end"></i></div>`;
       }
       function clipHtml(c, type, lane = 0, laneCount = 1) {
         const visualType = type === "audioasset" ? "audio" : type;
@@ -9794,84 +10034,123 @@
         return `<div class="clip ${visualType}${issueClass}${actionClass}${narrow} ${isSelected(type, c.id) ? "selected" : ""}" data-type="${type}" data-id="${c.id}" data-track-id="${escapeHtml(c.trackId || (type === "review" ? "review" : type))}"${reviewHit} title="${escapeHtml(type === "review" ? reviewClipTitle(c) : displayText)}" style="${clipGeometryStyle(c, lane, laneCount)}"><i class="trim-handle start" data-trim="start"></i>${soloMark}${inner}${replace}<i class="trim-handle end" data-trim="end"></i></div>`;
       }
       function drawWaveform() {
-        const canvas = $("waveform"),
-          row = $("track-audio"),
-          scroll = $("timelineScroll"),
-          dpr = devicePixelRatio || 1,
+        const scroll = $("timelineScroll"),
           viewLeft = Math.max(0, scroll.scrollLeft),
-          w = Math.max(1, scroll.clientWidth),
-          h = Math.max(1, row.clientHeight);
-        canvas.style.left = `${viewLeft}px`;
-        canvas.style.width = `${w}px`;
-        canvas.style.right = "auto";
-        canvas.width = Math.max(1, Math.round(w * dpr));
-        canvas.height = Math.max(1, Math.round(h * dpr));
-        const ctx = canvas.getContext("2d");
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, w, h);
-        if (!state.waveform.length || !state.sourceDuration) return;
-        ctx.strokeStyle = "rgba(25, 221, 175, 0.92)";
+          viewWidth = Math.max(1, scroll.clientWidth),
+          waveform = state.waveform || [],
+          sourceDuration = Math.max(0.001, Number(state.sourceDuration || 0));
+        for (const canvas of document.querySelectorAll("[data-main-wave-track]")) {
+          const trackId = canvas.dataset.mainWaveTrack || "audio";
+          const row = canvas.closest(".trackrow");
+          if (!row) continue;
+          const dpr = devicePixelRatio || 1,
+            width = viewWidth,
+            height = Math.max(1, row.clientHeight);
+          canvas.style.left = `${viewLeft}px`;
+          canvas.style.width = `${width}px`;
+          canvas.style.right = "auto";
+          canvas.width = Math.max(1, Math.round(width * dpr));
+          canvas.height = Math.max(1, Math.round(height * dpr));
+          const ctx = canvas.getContext("2d");
+          ctx.scale(dpr, dpr);
+          ctx.clearRect(0, 0, width, height);
+          if (!waveform.length || !sourceDuration) continue;
+          const clips = mainAudioClips().filter(
+            (item) => (state.mainAudioTrackMap?.[item.id] || "audio") === trackId,
+          );
+          drawWaveformWindow(ctx, {
+            width,
+            height,
+            waveform,
+            sourceDuration,
+            timelineStart: viewLeft / state.zoom,
+            secondsPerPixel: 1 / state.zoom,
+            clips,
+            volumeForClip: (clip, displayTime) => {
+              const settings = mainAudioSettings(clip, false);
+              const muted = settings?.muted || state.audioMutes.some(
+                (range) => displayTime >= range.start && displayTime <= range.end,
+              );
+              return muted || !isTrackAudible(trackId)
+                ? 0
+                : clamp(Number(state.audio.volume ?? 1) * Number(settings?.volume ?? 1), 0, 2.5);
+            },
+          });
+        }
+      }
+      function waveformPeakRange(waveform, from, to, channelOffset = 0) {
+        const start = clamp(Math.floor(from), 0, Math.max(0, waveform.length - 1));
+        const end = clamp(Math.max(start + 1, Math.ceil(to)), 1, waveform.length);
+        let low = 0, high = 0;
+        for (let index = start; index < end; index += 1) {
+          const point = waveform[index] || [];
+          low = Math.min(low, Number(point[channelOffset] || 0));
+          high = Math.max(high, Number(point[channelOffset + 1] || 0));
+        }
+        return [low, high];
+      }
+      function drawWaveformWindow(ctx, options) {
+        const { width, height, waveform, sourceDuration, timelineStart, secondsPerPixel, clips } = options;
+        const stereo = (waveform[0]?.length || 0) >= 4;
+        const channels = stereo ? 2 : 1;
+        const speed = Math.max(0.05, Number(state.audio.speed || 1));
         ctx.lineWidth = 1;
         ctx.lineCap = "butt";
-        ctx.beginPath();
-        ctx.moveTo(0, h / 2 + 0.5);
-        ctx.lineTo(w, h / 2 + 0.5);
-        ctx.globalAlpha = 0.18;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.beginPath();
-        const center = h / 2,
-          halfHeight = Math.max(2, center - 4),
-          barStep = 1.1,
-          audioClips = mainAudioClips().filter(
-            (item) => !state.mainAudioTrackMap?.[item.id],
-          );
-        for (let x = 0.5; x <= w; x += barStep) {
-          const displayTime = (viewLeft + x) / state.zoom,
-            clip = audioClips.find(
-              (item) =>
-                displayTime >= item.start - 0.002 &&
-                displayTime <= item.end + 0.002,
-            );
-          if (!clip) continue;
-          const sourceTime = Number.isFinite(Number(clip.sourceStart))
-              ? Number(clip.sourceStart) +
-                (displayTime - clip.start) *
-                  Math.max(0.05, Number(state.audio.speed || 1))
-              : timelineToSource(displayTime),
-            waveformIndex = clamp(
-              Math.round(
-                (sourceTime / state.sourceDuration) *
-                  Math.max(0, state.waveform.length - 1),
-              ),
-              0,
-              Math.max(0, state.waveform.length - 1),
-            ),
-            peakPair = state.waveform[waveformIndex] || [0, 0],
-            rawPeak = Math.max(
-              Math.abs(Number(peakPair[0] || 0)),
-              Math.abs(Number(peakPair[1] || 0)),
-            ),
-            peak = rawPeak < 0.004 ? 0 : Math.pow(rawPeak, 0.66),
-            settings = mainAudioSettings(clip, false),
-            muted =
-              settings?.muted ||
-              state.audioMutes.some(
-                (range) => displayTime >= range.start && displayTime <= range.end,
-              ),
-            volume = muted
-              ? 0
-              : clamp(
-                  Number(state.audio.volume ?? 1) *
-                    Number(settings?.volume ?? 1),
-                  0,
-                  2.5,
-                );
-          const amplitude = Math.min(halfHeight, peak * halfHeight * volume);
-          ctx.moveTo(x, center - amplitude);
-          ctx.lineTo(x, center + amplitude);
+        ctx.strokeStyle = "rgba(66, 239, 188, 0.95)";
+        for (let channel = 0; channel < channels; channel += 1) {
+          const bandHeight = height / channels,
+            center = bandHeight * channel + bandHeight / 2,
+            half = Math.max(2, bandHeight / 2 - 4);
+          ctx.globalAlpha = 0.18;
+          ctx.beginPath(); ctx.moveTo(0, center + .5); ctx.lineTo(width, center + .5); ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          for (let x = .5; x < width; x += 1) {
+            const displayTime = timelineStart + x * secondsPerPixel;
+            const clip = clips.find((item) => displayTime >= item.start - .002 && displayTime <= item.end + .002);
+            if (!clip) continue;
+            const sourceStart = Number(clip.sourceStart || 0) + (displayTime - clip.start) * speed;
+            const sourceEnd = sourceStart + secondsPerPixel * speed;
+            const from = sourceStart / sourceDuration * waveform.length;
+            const to = sourceEnd / sourceDuration * waveform.length;
+            const [low, high] = waveformPeakRange(waveform, from, to, channel * 2);
+            const gain = Number(options.volumeForClip?.(clip, displayTime) ?? 1);
+            const shapedLow = Math.sign(low) * Math.pow(Math.abs(low), .72) * half * gain;
+            const shapedHigh = Math.sign(high) * Math.pow(Math.abs(high), .72) * half * gain;
+            ctx.moveTo(x, center - shapedHigh);
+            ctx.lineTo(x, center - shapedLow);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
+      }
+      function showTrimAudioDetail({ waveform, sourceDuration, sourceTime, delta = 0, mode = "修剪" } = {}) {
+        const panel = $("trimAudioDetail"), canvas = $("trimAudioCanvas");
+        if (!panel || !canvas || !Array.isArray(waveform) || !waveform.length) return;
+        panel.classList.add("on");
+        $("trimAudioMode").textContent = mode;
+        const frameDelta = Math.round(Number(delta || 0) * sourceFrameRate());
+        $("trimAudioValue").textContent = `${formatTimecode(sourceTime)} · ${frameDelta >= 0 ? "+" : ""}${frameDelta} 帧`;
+        const width = Math.max(1, canvas.clientWidth), height = Math.max(1, canvas.clientHeight), dpr = devicePixelRatio || 1;
+        canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+        const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, width, height);
+        const duration = Math.max(.001, Number(sourceDuration || 0)), span = 5;
+        const stereo = (waveform[0]?.length || 0) >= 4, channels = stereo ? 2 : 1;
+        ctx.strokeStyle = "rgba(66,239,188,.96)"; ctx.lineWidth = 1;
+        for (let channel = 0; channel < channels; channel += 1) {
+          const band = height / channels, center = channel * band + band / 2, half = Math.max(2, band / 2 - 3);
+          ctx.beginPath();
+          for (let x = .5; x < width; x += 1) {
+            const time = Number(sourceTime || 0) + (x / width - .5) * span;
+            const next = time + span / width;
+            const [low, high] = waveformPeakRange(waveform, time / duration * waveform.length, next / duration * waveform.length, channel * 2);
+            ctx.moveTo(x, center - Math.sign(high) * Math.pow(Math.abs(high), .72) * half);
+            ctx.lineTo(x, center - Math.sign(low) * Math.pow(Math.abs(low), .72) * half);
+          }
+          ctx.stroke();
+        }
+      }
+      function hideTrimAudioDetail() {
+        $("trimAudioDetail")?.classList.remove("on");
       }
       function drawAssetWaveforms() {
         for (const canvas of document.querySelectorAll("[data-asset-waveform]")) {
@@ -9887,41 +10166,23 @@
           const ctx = canvas.getContext("2d");
           ctx.scale(dpr, dpr);
           ctx.clearRect(0, 0, width, height);
-          ctx.strokeStyle = "rgba(66, 239, 188, 0.95)";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          const center = height / 2;
-          const half = Math.max(2, center - 3);
           const sourceDuration = Math.max(
             0.04,
             Number(asset.sourceDuration || asset.duration || asset.end - asset.start),
           );
           const clipDuration = Math.max(0.04, asset.end - asset.start);
-          for (let x = 0.5; x < width; x += 1.35) {
-            const sourceTime = Number(asset.sourceStart || 0) +
-              (x / width) * clipDuration *
-                Math.max(0.05, Number(state.audio.speed || 1));
-            const index = clamp(
-              Math.round(
-                (sourceTime / sourceDuration) * (asset.waveform.length - 1),
-              ),
-              0,
-              asset.waveform.length - 1,
-            );
-            const pair = asset.waveform[index] || [0, 0];
-            const raw = Math.max(
-              Math.abs(Number(pair[0] || 0)),
-              Math.abs(Number(pair[1] || 0)),
-            );
-            const peak = raw < 0.006 ? 0 : Math.pow(raw, 0.72);
-            const amplitude = Math.min(
-              half,
-              peak * half * clamp(Number(asset.volume ?? 1), 0, 2.5),
-            );
-            ctx.moveTo(x, center - amplitude);
-            ctx.lineTo(x, center + amplitude);
-          }
-          ctx.stroke();
+          drawWaveformWindow(ctx, {
+            width,
+            height,
+            waveform: asset.waveform,
+            sourceDuration,
+            timelineStart: Number(asset.start || 0),
+            secondsPerPixel: clipDuration / width,
+            clips: [asset],
+            volumeForClip: () => asset.muted || !isTrackAudible(asset.trackId)
+              ? 0
+              : clamp(Number(asset.volume ?? 1), 0, 2.5),
+          });
         }
       }
       function renderIssues() {
@@ -10859,7 +11120,7 @@
         applyMediaPlaybackRate(player, Number(options.speed ?? 1));
         if (Math.abs(Number(player.currentTime || 0) - sourceTime) > 0.14)
           player.currentTime = Math.max(0, sourceTime);
-        if (state.playing) player.play().catch(() => {});
+        if (state.playing || rulerScrub) player.play().catch(() => {});
         else player.pause();
       }
       function clipFadeGain(settings, clip, time) {
@@ -10884,8 +11145,8 @@
           ),
           mainSettings = mainClip ? mainAudioSettings(mainClip) : null,
           mainTrackVisible = mainClip
-            ? state.trackVisibility[state.mainAudioTrackMap?.[mainClip.id] || "audio"] !== false
-            : state.trackVisibility.audio !== false,
+            ? isTrackAudible(state.mainAudioTrackMap?.[mainClip.id] || "audio")
+            : isTrackAudible("audio"),
           mainMuted =
             mainSettings?.muted ||
             state.audioMutes.some(
@@ -10897,13 +11158,13 @@
             Number(mainSettings?.volume ?? 1) *
             clipFadeGain(mainSettings, mainClip, state.currentTime);
         $("video").muted =
-          !mainTrackVisible || !state.avLinked || !!mainMuted || !!state.denoisedAudio;
+          !mainTrackVisible || !state.avLinked || !!mainMuted || !!state.denoisedAudio || !!rulerScrub;
         $("video").volume = clamp(mainGain, 0, 1);
         const main = previewAudioPlayer(
           "main",
           state.denoisedAudio?.url || state.video?.url || "",
         );
-        if (state.video && (!state.avLinked || state.denoisedAudio)) {
+        if (state.video && (!state.avLinked || state.denoisedAudio || rulerScrub)) {
           const active = !!mainClip && mainTrackVisible;
           const sourceTime = mainClip
             ? Number(mainClip.sourceStart || 0) +
@@ -10920,7 +11181,7 @@
           activeIds.add(asset.id);
           const player = previewAudioPlayer(asset.id, asset.url);
           const active =
-            state.trackVisibility[asset.trackId] !== false &&
+            isTrackAudible(asset.trackId) &&
             state.currentTime >= asset.start &&
             state.currentTime <= asset.end;
           const sourceTime =
@@ -11480,6 +11741,15 @@
         cleanupEmptyDynamicTracks();
       }
       function deleteSelected(ripple = false) {
+        if (ripple && timelineGapSelection) {
+          const selectedGap = selectedTimelineGapAt(
+            timelineGapSelection.trackId,
+            (timelineGapSelection.start + timelineGapSelection.end) / 2,
+          );
+          if (selectedGap)
+            return rippleDeleteTimelineGap(timelineGapSelection.trackId, selectedGap);
+          timelineGapSelection = null;
+        }
         if (state.timelineRange) materializeTimelineRangeSelection();
         const requested = resolveWorkingSelection(
           (state.selectedItems || []).length
@@ -11492,23 +11762,8 @@
           requested.filter((item) => !selectionIsLocked(item.type, item.id)),
         );
         if (!selected.length) {
-          // Check if playhead is situated inside an empty gap between video clips (DaVinci Gap Ripple Delete)
-          const time = state.currentTime;
-          const clips = mainClips().sort((a, b) => a.start - b.start);
-          for (let i = 0; i < clips.length; i++) {
-            const prevEnd = i === 0 ? 0 : clips[i - 1].end;
-            const nextStart = clips[i].start;
-            if (nextStart > prevEnd + 0.04 && time >= prevEnd && time <= nextStart) {
-              const gapLen = nextStart - prevEnd;
-              snapshot();
-              shiftTracks(prevEnd, gapLen);
-              recomputeContentDuration();
-              seekTimeline(prevEnd);
-              renderAll();
-              toast(`已波纹闭合空白间隙 (${gapLen.toFixed(2)}s)`);
-              return;
-            }
-          }
+          const gap = findTimelineGap(timelineGapItems("video"), state.currentTime);
+          if (ripple && gap) return rippleDeleteTimelineGap("video", gap);
           toast(requested.length ? "所选轨道已锁定" : "请先选择一个或多个片段");
           return;
         }
@@ -13742,7 +13997,7 @@
         queueAutosave();
         toast("已还原为原始音频");
       }
-      function compactWaveform(value, limit = 4000) {
+      function compactWaveform(value, limit = 180000) {
         if (!Array.isArray(value) || !value.length) return [];
         if (value.length <= limit) return value;
         const result = [];
@@ -13818,6 +14073,8 @@
           mainAudioTrackMap: state.mainAudioTrackMap,
           trackVisibility: state.trackVisibility,
           trackLocks: state.trackLocks,
+          trackHeights: state.trackHeights,
+          trackSolo: state.trackSolo,
           avLinked: state.avLinked,
           snapping: state.snapping,
           captionLines: state.captionLines,
@@ -14428,7 +14685,7 @@
               ...settings,
               trackId,
               muted:
-                !!settings.muted || state.trackVisibility[trackId] === false,
+                !!settings.muted || !isTrackAudible(trackId),
             };
           });
           const config = {
@@ -14490,7 +14747,7 @@
             audioProcessingEnabled: state.audioProcessingEnabled,
             trackOrder: state.trackOrder,
             trackDefinitions: state.trackDefinitions,
-            trackVisibility: state.trackVisibility,
+            trackVisibility: effectiveTrackVisibility(),
             mainAudioClipSettings: state.mainAudioClipSettings,
             mainVideoClips: exportMainVideoClips,
             mainAudioClips: exportMainAudioClips,
@@ -14892,6 +15149,26 @@
           ]);
           return;
         }
+        const row = event.target.closest(".trackrow[data-track-key]");
+        const bounds = $("timelineScroll").getBoundingClientRect();
+        const clickTime = clamp(
+          ($("timelineScroll").scrollLeft + event.clientX - bounds.left) / state.zoom,
+          0,
+          visibleTimelineDuration(),
+        );
+        const trackId = row?.dataset.trackKey || "";
+        const gap = trackId ? selectedTimelineGapAt(trackId, clickTime) : null;
+        seekTimeline(clickTime);
+        if (gap) {
+          showContextMenu(event, [
+            {
+              label: "波纹删除",
+              danger: true,
+              action: () => rippleDeleteTimelineGap(trackId, gap),
+            },
+          ]);
+          return;
+        }
         showContextMenu(event, [
           { label: "添加文字", action: () => addText() },
           { label: "新增视频轨道", action: () => addEmptyTrack("video") },
@@ -14930,6 +15207,27 @@
         event.preventDefault();
       });
       $("trackLabels").onclick = (event) => {
+        const soloButton = event.target.closest("[data-solo-track]");
+        if (soloButton) {
+          const key = soloButton.dataset.soloTrack;
+          snapshot();
+          state.trackSolo ||= {};
+          state.trackSolo[key] = !state.trackSolo[key];
+          syncPreviewAudio();
+          renderAll();
+          return;
+        }
+        const heightButton = event.target.closest("[data-height-track]");
+        if (heightButton) {
+          const key = heightButton.dataset.heightTrack;
+          const sizes = [34, 68, 120, 180];
+          const current = Number(state.trackHeights?.[key] || 34);
+          state.trackHeights ||= {};
+          state.trackHeights[key] = sizes[(sizes.indexOf(current) + 1) % sizes.length] || 34;
+          renderTimeline();
+          queueAutosave();
+          return;
+        }
         const button = event.target.closest("[data-toggle-track]");
         if (!button) return;
         const key = button.dataset.toggleTrack;
@@ -15097,14 +15395,17 @@
         [state.width, state.height] = e.target.value.split("x").map(Number);
         updateFrameSize();
       };
-      function setTimelineZoomAroundPlayhead(nextZoom) {
+      function setTimelineZoomAroundPlayhead(nextZoom, pointerClientX = null) {
         const scroll = $("timelineScroll"),
           oldZoom = Math.max(1, Number(state.zoom || 60)),
-          playheadTime = clamp(Number(state.currentTime || 0), 0, visibleTimelineDuration()),
+          bounds = scroll.getBoundingClientRect(),
+          pointerInside = Number.isFinite(pointerClientX) && pointerClientX >= bounds.left && pointerClientX <= bounds.right,
+          playheadTime = pointerInside
+            ? clamp((scroll.scrollLeft + pointerClientX - bounds.left) / oldZoom, 0, visibleTimelineDuration())
+            : clamp(Number(state.currentTime || 0), 0, visibleTimelineDuration()),
           oldScreenX = playheadTime * oldZoom - scroll.scrollLeft,
-          anchorX = oldScreenX >= 0 && oldScreenX <= scroll.clientWidth
-            ? oldScreenX
-            : scroll.clientWidth / 2;
+          anchorX = pointerInside ? pointerClientX - bounds.left :
+            (oldScreenX >= 0 && oldScreenX <= scroll.clientWidth ? oldScreenX : scroll.clientWidth / 2);
         state.zoom = clamp(Number(nextZoom) || oldZoom, 1, 300);
         $("timelineZoom").value = state.zoom;
         const ratio = state.zoom / oldZoom,
@@ -15271,6 +15572,7 @@
         if (!rulerScrub || rulerScrub.pointer !== event.pointerId) return;
         scheduleRulerScrub(event.clientX);
         rulerScrub = null;
+        syncPreviewAudio();
       });
       $("timelineContent").onpointerdown = (e) => {
         const insertReview = e.target.closest("[data-insert-review]");
@@ -15323,6 +15625,7 @@
         }
         const clip = e.target.closest(".clip");
         if (clip) {
+          timelineGapSelection = null;
           if (editTool === "blade") {
             const guided = Number($("bladeGuide")?.dataset.time);
             const time = Number.isFinite(guided)
@@ -15390,6 +15693,22 @@
             e.preventDefault();
             return;
           }
+          const volumeLine = e.target.closest("[data-volume-line]");
+          if (volumeLine && ["audio", "audioasset"].includes(clip.dataset.type)) {
+            const settings = audioSettingsFor(clip.dataset.type, clip.dataset.id);
+            if (settings) {
+              snapshot();
+              timelineDrag = {
+                pointer: e.pointerId,
+                volumeSettings: settings,
+                volumeRow: clip,
+                element: clip,
+              };
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           const trimHandle = e.target.closest("[data-trim]");
           if (trimHandle) {
             const object = timelineObjectFor(clip.dataset.type, clip.dataset.id);
@@ -15406,6 +15725,18 @@
               const trimSnapshot = clip.dataset.type === "audio" && !state.avLinked
                 ? baseMainAudioClips()
                 : mainClips();
+              const mainIndex = mainTrimClip
+                ? trimSnapshot.findIndex((item) => item.id === mainTrimClip.id || item.id === mainTrimClip.parentId)
+                : -1;
+              const rollLeft = trimHandle.dataset.trim === "end"
+                ? trimSnapshot[mainIndex]
+                : trimSnapshot[mainIndex - 1];
+              const rollRight = trimHandle.dataset.trim === "end"
+                ? trimSnapshot[mainIndex + 1]
+                : trimSnapshot[mainIndex];
+              const rollEdit = editTool === "trim" && e.shiftKey && rollLeft && rollRight
+                ? { left: { ...rollLeft }, right: { ...rollRight }, cutSource: Number(rollLeft.sourceEnd || 0) }
+                : null;
               timelineDrag = {
                 pointer: e.pointerId,
                 element: clip,
@@ -15414,6 +15745,7 @@
                 trimType: clip.dataset.type,
                 trimObject: object,
                 mainTrimClip,
+                rollEdit,
                 isRipple: editTool === "trim",
                 mainClipsSnapshot: trimSnapshot.map((c) => ({
                   id: c.id,
@@ -15457,6 +15789,9 @@
               startX: e.clientX,
               startY: e.clientY,
               moving: movable,
+              slip: editTool === "trim" && e.altKey && ["videolayer", "audioasset"].includes(clip.dataset.type),
+              slipOriginSourceStart: Number(obj.sourceStart || 0),
+              slipSourceDuration: Number(obj.sourceDuration || obj.duration || 0),
             };
           } else if (["video", "audio"].includes(clip.dataset.type)) {
             const sourceClip = (clip.dataset.type === "video"
@@ -15542,6 +15877,11 @@
           return;
         }
         const rect = $("timelineContent").getBoundingClientRect();
+        const row = e.target.closest(".trackrow[data-track-key]");
+        const gapTime = (e.clientX - rect.left) / Math.max(1e-6, state.zoom);
+        const gapCandidate = row
+          ? findTimelineGap(timelineGapItems(row.dataset.trackKey), gapTime)
+          : null;
         if (!(e.shiftKey || e.metaKey || e.ctrlKey)) {
           state.selectedItems = [];
           state.selected = { type: "video", id: "main" };
@@ -15554,6 +15894,9 @@
           startY: e.clientY,
           contentX: e.clientX - rect.left,
           contentY: e.clientY - rect.top,
+          gapCandidate: gapCandidate
+            ? { trackId: row.dataset.trackKey, ...gapCandidate }
+            : null,
           moved: false,
         };
         e.preventDefault();
@@ -15588,6 +15931,28 @@
             );
             scheduleWaveformRender();
             syncAudioControls();
+          } else if (timelineDrag.slip && timelineDrag.moving?.[0]?.obj) {
+            const moving = timelineDrag.moving[0];
+            const object = moving.obj;
+            const deltaSource = (e.clientX - timelineDrag.startX) / state.zoom * Math.max(.05, Number(state.audio.speed || 1));
+            const duration = Math.max(.04, Number(object.end || 0) - Number(object.start || 0)) * Math.max(.05, Number(state.audio.speed || 1));
+            const slipped = slipClipSource(
+              { sourceStart: timelineDrag.slipOriginSourceStart, sourceEnd: timelineDrag.slipOriginSourceStart + duration },
+              deltaSource,
+              0,
+              Math.max(duration, timelineDrag.slipSourceDuration || duration),
+            );
+            object.sourceStart = slipped.sourceStart;
+            timelineDrag.moved = Math.abs(deltaSource) > .001;
+            if (moving.type === "audioasset" && object.waveform?.length)
+              showTrimAudioDetail({
+                waveform: object.waveform,
+                sourceDuration: object.sourceDuration || object.duration,
+                sourceTime: object.sourceStart + duration / 2,
+                delta: object.sourceStart - timelineDrag.slipOriginSourceStart,
+                mode: "Slip 滑移片段内容",
+              });
+            drawAssetWaveforms();
           } else if (timelineDrag.trim) {
             const delta = (e.clientX - timelineDrag.startX) / state.zoom;
             const edge = timelineDrag.trimEdge;
@@ -15663,6 +16028,41 @@
                 object.id,
                 object,
               );
+              if (timelineDrag.trimType === "audioasset" && object.waveform?.length) {
+                const edgeTime = edge === "start" ? object.sourceStart :
+                  Number(object.sourceStart || 0) + (object.end - object.start) * Math.max(.05, Number(state.audio.speed || 1));
+                showTrimAudioDetail({
+                  waveform: object.waveform,
+                  sourceDuration: object.sourceDuration || object.duration,
+                  sourceTime: edgeTime,
+                  delta: (edge === "start" ? object.start - timelineDrag.originStart : object.end - timelineDrag.originEnd),
+                  mode: timelineDrag.isRipple ? "波纹修剪 · 音频" : "修剪 · 音频",
+                });
+              }
+            } else if (timelineDrag.rollEdit) {
+              const speed = Math.max(.05, Number(state.audio.speed || 1));
+              const roll = timelineDrag.rollEdit;
+              const deltaTimeline = (e.clientX - timelineDrag.startX) / state.zoom;
+              const minCut = Number(roll.left.sourceStart || 0) + frameDuration() * speed;
+              const maxCut = Number(roll.right.sourceEnd || 0) - frameDuration() * speed;
+              roll.targetSource = clamp(roll.cutSource + deltaTimeline * speed, minCut, maxCut);
+              const applied = (roll.targetSource - roll.cutSource) / speed;
+              const cutTime = Number(roll.left.end || 0) + applied;
+              const leftElement = $("timelineContent").querySelector(`.clip[data-type="${timelineDrag.trimType}"][data-id="${roll.left.id}"]`);
+              const rightElement = $("timelineContent").querySelector(`.clip[data-type="${timelineDrag.trimType}"][data-id="${roll.right.id}"]`);
+              if (leftElement) leftElement.style.width = `${Math.max(3, (cutTime - Number(roll.left.start || 0)) * state.zoom)}px`;
+              if (rightElement) {
+                const rightEnd = Number(roll.right.end || cutTime);
+                rightElement.style.left = `${cutTime * state.zoom}px`;
+                rightElement.style.width = `${Math.max(3, (rightEnd - cutTime) * state.zoom)}px`;
+              }
+              showTrimAudioDetail({
+                waveform: state.waveform,
+                sourceDuration: state.sourceDuration,
+                sourceTime: roll.targetSource,
+                delta: applied,
+                mode: "Roll 滾動編輯（總時長不變）",
+              });
             } else if (timelineDrag.mainTrimClip) {
               const clip = timelineDrag.mainTrimClip;
               const speed = Math.max(0.05, Number(state.audio.speed || 1));
@@ -15698,6 +16098,13 @@
                 minTimeline,
                 maxTimeline,
               );
+              showTrimAudioDetail({
+                waveform: state.waveform,
+                sourceDuration: state.sourceDuration,
+                sourceTime: originSource + (timelineDrag.mainTrimTime - originTimeline) * speed,
+                delta: timelineDrag.mainTrimTime - originTimeline,
+                mode: timelineDrag.isRipple ? "波纹修剪" : "选择修剪",
+              });
               const appliedDelta = timelineDrag.mainTrimTime - originTimeline;
               let start, end;
               if (timelineDrag.isRipple && edge === "start") {
@@ -15806,6 +16213,7 @@
       });
       document.addEventListener("pointerup", (e) => {
         if (timelineDrag?.pointer === e.pointerId) {
+          hideTrimAudioDetail();
           hideSnapGuide();
           if (timelineDrag.marquee) {
             $("timelineMarquee").classList.remove("on");
@@ -15838,8 +16246,35 @@
             } else {
               const rect = $("timelineContent").getBoundingClientRect();
               seekTimeline((e.clientX - rect.left) / state.zoom);
+              timelineGapSelection = timelineDrag.gapCandidate
+                ? { ...timelineDrag.gapCandidate }
+                : null;
               renderTimeline();
             }
+          }
+          if (timelineDrag.rollEdit && Number.isFinite(timelineDrag.rollEdit.targetSource)) {
+            const roll = timelineDrag.rollEdit;
+            const audioOnly = timelineDrag.trimType === "audio" && !state.avLinked;
+            const previous = audioOnly ? mainAudioClips() : mainClips();
+            const committed = rollingEditMainClips(
+              audioOnly ? state.mainAudioRemovals : state.removals,
+              audioOnly ? state.mainAudioManualCuts : state.manualCuts,
+              roll.left,
+              roll.right,
+              roll.targetSource,
+            );
+            if (audioOnly) {
+              state.mainAudioRemovals = committed.removals;
+              state.mainAudioManualCuts = committed.manualCuts;
+              adoptMainAudioMaps(previous);
+            } else {
+              state.removals = committed.removals;
+              state.manualCuts = committed.manualCuts;
+              normalizeRemovals();
+              adoptClipMaps(previous, mainClips());
+            }
+            recomputeContentDuration();
+            renderAll();
           }
           if (timelineDrag.trim && timelineDrag.trimObject && timelineDrag.isRipple) {
             const object = timelineDrag.trimObject;
@@ -15884,7 +16319,7 @@
               }
             }
           }
-          if (timelineDrag.trim && timelineDrag.mainTrimClip &&
+          if (timelineDrag.trim && timelineDrag.mainTrimClip && !timelineDrag.rollEdit &&
               Number.isFinite(timelineDrag.mainTrimTime)) {
             const clip = timelineDrag.mainTrimClip;
             const audioOnly = timelineDrag.trimType === "audio" && !state.avLinked;
@@ -16193,6 +16628,7 @@
           if (eventInTimelineZoomArea(e.target)) {
             setTimelineZoomAroundPlayhead(
               state.zoom * (e.deltaY > 0 ? 0.88 : 1.14),
+              e.clientX,
             );
           }
         },
@@ -17532,10 +17968,10 @@
           deleteSelected(!!e.shiftKey);
         } else if (code === "ArrowLeft") {
           e.preventDefault();
-          seekTimeline(state.currentTime - (e.shiftKey ? 1 : 1 / 30));
+          seekTimeline(state.currentTime - (e.shiftKey ? 1 : frameDuration()));
         } else if (code === "ArrowRight") {
           e.preventDefault();
-          seekTimeline(state.currentTime + (e.shiftKey ? 1 : 1 / 30));
+          seekTimeline(state.currentTime + (e.shiftKey ? 1 : frameDuration()));
         } else if (code === "ArrowUp") {
           e.preventDefault();
           jumpToCutPoint("prev");

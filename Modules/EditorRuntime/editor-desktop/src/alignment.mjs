@@ -63,6 +63,9 @@ const numberWords = new Map(
     eighty: "80",
     ninety: "90",
     hundred: "hundred",
+    thousand: "thousand",
+    million: "million",
+    billion: "billion",
   }),
 );
 const equivalents = new Map(
@@ -112,6 +115,7 @@ const equivalents = new Map(
     returns: "return",
     returned: "return",
     coming: "return",
+    about: "of",
   }),
 );
 const bibleBooks = new Set(
@@ -127,6 +131,7 @@ const harmlessFillers = new Set(
 const harmlessConnectors = new Set(
   "and but or so then also now still yet because though".split(" "),
 );
+const harmlessGrammarFillers = new Set("a an the".split(" "));
 const optionalSpeechAdditions = new Set(
   "you know see mean friend friends dear in fact of course as to be honest honestly truly really remember listen look amen god bless blessings everyone everybody today here please verse".split(" "),
 );
@@ -390,7 +395,143 @@ export function displayWords(text) {
     )
       current.keepWithPrevious = true;
   }
-  return numberMerged;
+  return collapseNumberPhrases(numberMerged);
+}
+
+const LARGE_NUMBER_SCALES = new Map([
+  ["thousand", 1_000],
+  ["million", 1_000_000],
+  ["billion", 1_000_000_000],
+]);
+
+function numberTokenValue(word) {
+  const norm = String(word?.norm || "");
+  return /^\d+$/.test(norm) ? Number(norm) : null;
+}
+
+function numberRunDisplay(words = []) {
+  return words
+    .map((word) => String(word?.display || ""))
+    .filter(Boolean)
+    .join(" ")
+    .replace(/,\s+(?=\d{3}(?:\D|$))/g, ",");
+}
+
+function mergedNumberWord(words, start, end, norm) {
+  const slice = words.slice(start, end);
+  const first = slice[0] || {};
+  const last = slice.at(-1) || first;
+  const merged = {
+    ...first,
+    display: numberRunDisplay(slice),
+    norm: String(norm),
+    numberPhrase: true,
+  };
+  if (Number.isFinite(Number(first.start))) merged.start = Number(first.start);
+  if (Number.isFinite(Number(last.end))) merged.end = Number(last.end);
+  if (slice.some((word) => word?.strict)) merged.strict = true;
+  if (slice.some((word) => word?.scripture)) merged.scripture = true;
+  if (slice.some((word) => word?.scriptureReference)) merged.scriptureReference = true;
+  if (slice.some((word) => word?.keepWithPrevious)) merged.keepWithPrevious = true;
+  return merged;
+}
+
+function digitGroupedNumber(words, start) {
+  const first = words[start];
+  if (!/^\d{1,3},$/.test(String(first?.display || ""))) return null;
+  const groups = [String(first.norm || "")];
+  let cursor = start + 1;
+  while (cursor < words.length && /^\d{3},?$/.test(String(words[cursor]?.display || ""))) {
+    groups.push(String(words[cursor].norm || ""));
+    const hasComma = /,$/.test(String(words[cursor].display || ""));
+    cursor += 1;
+    if (!hasComma) break;
+  }
+  if (groups.length < 2 || /,$/.test(String(words[cursor - 1]?.display || ""))) return null;
+  return { end: cursor, norm: groups.join("") };
+}
+
+function sectionValue(atoms = [], fallback = 0) {
+  if (atoms.length >= 2 && atoms.every((value) => value >= 0 && value <= 9)) {
+    return Number(atoms.join(""));
+  }
+  if (atoms.length === 2 && atoms[0] >= 1 && atoms[0] <= 9 && atoms[1] >= 10 && atoms[1] <= 99) {
+    return atoms[0] * 100 + atoms[1];
+  }
+  return fallback;
+}
+
+function scaledNumberPhrase(words, start) {
+  let cursor = start;
+  let total = 0;
+  let section = 0;
+  let sectionAtoms = [];
+  let sawNumber = false;
+  let sawScale = false;
+  let sawHundred = false;
+  while (cursor < words.length) {
+    const word = words[cursor];
+    const norm = String(word?.norm || "");
+    const value = numberTokenValue(word);
+    if (value !== null) {
+      section += value;
+      sectionAtoms.push(value);
+      sawNumber = true;
+      cursor += 1;
+      continue;
+    }
+    if (norm === "and" && sawNumber) {
+      const nextNorm = String(words[cursor + 1]?.norm || "");
+      if (numberTokenValue(words[cursor + 1]) !== null || nextNorm === "hundred" || LARGE_NUMBER_SCALES.has(nextNorm)) {
+        cursor += 1;
+        continue;
+      }
+      break;
+    }
+    if (norm === "hundred" && sawNumber) {
+      section = Math.max(1, sectionValue(sectionAtoms, section)) * 100;
+      sectionAtoms = [];
+      sawHundred = true;
+      sawScale = true;
+      cursor += 1;
+      continue;
+    }
+    const scale = LARGE_NUMBER_SCALES.get(norm);
+    if (scale && sawNumber) {
+      const base = sawHundred ? section : sectionValue(sectionAtoms, section);
+      total += Math.max(1, base) * scale;
+      section = 0;
+      sectionAtoms = [];
+      sawHundred = false;
+      sawScale = true;
+      cursor += 1;
+      continue;
+    }
+    break;
+  }
+  if (!sawScale || cursor - start < 2) return null;
+  const tail = sawHundred ? section : sectionValue(sectionAtoms, section);
+  return { end: cursor, norm: String(total + tail) };
+}
+
+function collapseNumberPhrases(words = []) {
+  const output = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const grouped = digitGroupedNumber(words, index);
+    if (grouped) {
+      output.push(mergedNumberWord(words, index, grouped.end, grouped.norm));
+      index = grouped.end - 1;
+      continue;
+    }
+    const scaled = scaledNumberPhrase(words, index);
+    if (scaled) {
+      output.push(mergedNumberWord(words, index, scaled.end, scaled.norm));
+      index = scaled.end - 1;
+      continue;
+    }
+    output.push(words[index]);
+  }
+  return output;
 }
 
 export function transcriptWords(segments) {
@@ -411,7 +552,7 @@ export function transcriptWords(segments) {
       }),
     );
   }
-  return words;
+  return collapseNumberPhrases(words);
 }
 
 function markStrictScriptWords(words = []) {
@@ -638,6 +779,7 @@ export function formatDisplayWords(words = [], options = {}) {
 
   text = normalizeLanguagePunctuation(text);
   text = formatPanguSpacing(text);
+  text = text.replace(/(\d),\s+(?=\d{3}\b)/g, "$1,");
 
   if (options && options.stripTrailingPunctuation) {
     text = stripTrailingCaptionPunctuation(text);
@@ -1426,27 +1568,6 @@ export function looksLikeAbandonedPrefix(phrase, after) {
   return false;
 }
 
-function sentenceContinues(display) {
-  return !/[.!?…]["'”’)]*$/.test(String(display || "").trim());
-}
-
-function isBreathLeadWord(word) {
-  return /^(here|there|now|so|and|but|or|not|just|the|a|an|this|that|these|those|we|i|you|it|he|she|they|if|when|then|for)$/i.test(
-    String(word?.norm || word?.display || "").replace(/[^\p{L}]/gu, ""),
-  );
-}
-
-function sameSentenceMatchCount(operations, index) {
-  let count = 0;
-  for (let cursor = index; cursor >= 0; cursor -= 1) {
-    const operation = operations[cursor];
-    if (!["match", "near"].includes(operation?.type) || !operation.expected) break;
-    count += 1;
-    if (!sentenceContinues(operations[cursor - 1]?.expected?.display || "")) break;
-  }
-  return count;
-}
-
 function extractFullManuscriptSentence(operations = [], targetOpIndex = 0) {
   let sStart = targetOpIndex;
   while (sStart > 0) {
@@ -1511,67 +1632,6 @@ function findRelevantManuscriptSentence(operations = [], start = 0, cursor = 0, 
     }
   }
   return "";
-}
-
-function collectFalseStartGapIssues(operations = []) {
-  const issues = [];
-  let last = -1;
-  for (let index = 0; index < operations.length; index += 1) {
-    const operation = operations[index];
-    if (
-      !["match", "near"].includes(operation.type) ||
-      !operation.spoken ||
-      !operation.expected
-    )
-      continue;
-    if (last >= 0) {
-      const previous = operations[last];
-      const between = operations.slice(last + 1, index).some(
-        (item) =>
-          item.type !== "filler" &&
-          (item.spoken || (item.expected && item.type !== "missing")),
-      );
-      const gap =
-        Number(operation.spoken.start || 0) - Number(previous.spoken.end || 0);
-      const startedAPhrase = sameSentenceMatchCount(operations, last) >= 2;
-      const clauseEnds = /[,;:!?…—–-]["'”’)]*$/.test(
-        String(previous.expected.display || "").trim(),
-      );
-      if (
-        !between &&
-        gap >= 1.15 &&
-        gap <= 3.2 &&
-        !clauseEnds &&
-        sentenceContinues(previous.expected.display) &&
-        startedAPhrase &&
-        !isBreathLeadWord(previous.expected)
-      ) {
-        const start = Number(previous.spoken.end || 0);
-        const end = Number(operation.spoken.start || start + 0.04);
-        issues.push({
-          id: crypto.randomUUID(),
-          type: "repeat",
-          label: "没读完又重来",
-          spokenText: "没读完又重读",
-          expectedText: formatDisplayWords([previous.expected, operation.expected]),
-          start,
-          end: Math.max(start + 0.08, end),
-          suggested: true,
-          severity: "high",
-          strict: !!(previous.expected.strict || operation.expected.strict),
-          scripture: !!(previous.expected.strict || operation.expected.strict),
-          confirmedCut: true,
-          confirmedError: false,
-          repeatKeepLater: false,
-          earlierOperationIndexes: [],
-          laterOperationIndexes: [],
-          falseStartGap: true,
-        });
-      }
-    }
-    last = index;
-  }
-  return issues;
 }
 
 function joinedNorm(words = []) {
@@ -1655,6 +1715,7 @@ export function alignScript({ segments, script, duration = 0 }) {
     if (
       !strictNearby &&
       (harmlessFillers.has(norm) ||
+        (harmlessGrammarFillers.has(norm) && acceptedBefore && acceptedAfter) ||
         (harmlessConnectors.has(norm) && acceptedBefore && acceptedAfter))
     ) operation.type = "filler";
   }
@@ -1869,18 +1930,10 @@ export function alignScript({ segments, script, duration = 0 }) {
       : [];
     const rangeStart = earlierWords[0]?.start ?? spokenGroup[0]?.start ?? previousTime ?? nextTime ?? 0;
     let rangeEnd = earlierWords.at(-1)?.end ?? spokenGroup.at(-1)?.end ?? rangeStart + 0.08;
-    // Word timestamps often end before the voice does. For a cut extra/reread,
-    // stretch to the next kept word so leftover "to you" audio is not left behind.
-    if (
-      confirmedCut &&
-      !repeatKeepLater &&
-      Number.isFinite(nextTime) &&
-      nextTime > rangeEnd &&
-      nextTime - rangeEnd <= 2.8
-    )
-      rangeEnd = nextTime;
-    else if (confirmedCut && !repeatKeepLater)
-      rangeEnd = Math.max(rangeEnd, rangeStart + 0.08) + 0.06;
+    // A removable take owns only its own spoken timestamps. Silence trimming is
+    // handled separately; never stretch a delete range into the next kept phrase.
+    if (confirmedCut && !repeatKeepLater)
+      rangeEnd = Math.max(rangeEnd, rangeStart + 0.08);
     let expectedDisplay = formatDisplayWords(expectedGroup);
     if (!expectedDisplay && spokenGroup.length) {
       expectedDisplay = findRelevantManuscriptSentence(operations, start, cursor, spokenGroup);
@@ -1924,7 +1977,6 @@ export function alignScript({ segments, script, duration = 0 }) {
     }
     issues.push(issue);
   }
-  issues.push(...collectFalseStartGapIssues(operations));
   snapMatchesAfterAbandonedPrefixes(operations, issues);
   return { spoken, expected, operations, issues };
 }
@@ -2072,6 +2124,31 @@ export function buildCaptions(expectedWords, options = {}) {
     else {
       captions.splice(index - 1, 2, merged);
       index -= 1;
+    }
+  }
+  for (let index = 0; index < captions.length - 1; index += 1) {
+    const current = captions[index];
+    const next = captions[index + 1];
+    const currentWord = current.words.at(-1);
+    const nextWord = next.words[0];
+    const gap = Number(next.start || 0) - Number(current.end || 0);
+    const safeBoundary = [currentWord, nextWord].every(
+      (word) =>
+        word &&
+        word.action !== "cut" &&
+        word.matchType !== "error" &&
+        !["repeat", "extra", "mismatch"].includes(String(word.issueType || "")),
+    );
+    if (
+      gap > 0.002 &&
+      gap <= 0.5 &&
+      safeBoundary &&
+      !endsCaptionSentence(currentWord?.display || "")
+    ) {
+      // A short breath inside one kept manuscript sentence must not flash the
+      // caption track off. Keep the earlier card visible until the next starts;
+      // word timings remain untouched for karaoke/highlight animation.
+      current.end = Number(next.start);
     }
   }
   return captions;

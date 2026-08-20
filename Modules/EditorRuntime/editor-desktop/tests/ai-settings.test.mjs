@@ -192,9 +192,9 @@ test("Vertex API keys are treated as Express and do not need a project", () => {
   assert.equal(saved.provider, "vertex");
   assert.equal(vertexAuthMode(), "express-key");
   assert.equal(reviewReady(), true);
-  assert.match(
-    buildVertexExpressGenerateContentUrl("gemini-3.7-flash", "AIzaSyTestQuickCutVertexKey12345"),
-    /^https:\/\/aiplatform\.googleapis\.com\/v1\/publishers\/google\/models\/gemini-3\.7-flash:generateContent\?key=/,
+  assert.equal(
+    buildVertexExpressGenerateContentUrl("gemini-3.7-flash"),
+    "https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.7-flash:generateContent",
   );
 });
 
@@ -219,6 +219,8 @@ test("Vertex API keys call Express generateContent and never hit project Interac
     assert.match(calls[0].url, /aiplatform\.googleapis\.com\/v1\/publishers\/google\/models\/gemini-3\.1-pro-preview:generateContent/);
     assert.doesNotMatch(calls[0].url, /interactions/);
     assert.doesNotMatch(calls[0].url, /projects\//);
+    assert.doesNotMatch(calls[0].url, /[?&]key=/);
+    assert.equal(calls[0].options.headers["x-goog-api-key"], "AIzaSyTestQuickCutVertexKey12345");
   } finally {
     globalThis.fetch = original;
   }

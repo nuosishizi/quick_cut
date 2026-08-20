@@ -41,8 +41,8 @@ test("bundle launcher resolves Contents/Resources and all runtime components exi
 test("packaged media binaries are complete, executable and exact", { skip: !fs.existsSync(launcherPath) }, () => {
   const expected = {
     "runtime/bun-arm64": [63096576, "e0c90ec15d33363e6b70713d56bc3b2c7585c17f40a0fe0f8fd9305901d4e233"],
-    "media/ffmpeg": [36766920, "a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214"],
-    "media/ffprobe": [18187448, "c846d5db9d3b5bc33f987725e21f3ea14953931221c191575918e907ad6c18ff"],
+    "media/ffmpeg": [489648, "c6519a9832802615008e0758235e0309983735308b682e580a52b0339c676409"],
+    "media/ffprobe": [286064, "195b1922069f9434ac97044c944492671d310a3d9ae93daff746d285bc12d045"],
   };
   for (const [relativePath, [size, hash]] of Object.entries(expected)) {
     const component = path.join(resourcesRoot, relativePath);
@@ -50,6 +50,28 @@ test("packaged media binaries are complete, executable and exact", { skip: !fs.e
     assert.equal(crypto.createHash("sha256").update(fs.readFileSync(component)).digest("hex"), hash);
     assert.notEqual(fs.statSync(component).mode & 0o111, 0);
   }
+  const mediaLib = path.join(resourcesRoot, "media", "lib");
+  const dylibs = fs.readdirSync(mediaLib).filter((name) => name.endsWith(".dylib"));
+  assert.ok(dylibs.length > 0, "portable FFmpeg dylibs must be bundled");
+});
+
+test("macOS build paths collect, rewrite, copy and sign portable FFmpeg dependencies", () => {
+  const bundleScript = fs.readFileSync(path.join(contentsRoot, "scripts", "bundle-media-deps.sh"), "utf8");
+  const appBuilder = fs.readFileSync(path.join(contentsRoot, "一键生成APP.command"), "utf8");
+  const packScript = fs.readFileSync(path.join(contentsRoot, "pack-macos.ps1"), "utf8");
+  const workflow = fs.readFileSync(path.join(contentsRoot, ".github", "workflows", "release.yml"), "utf8");
+
+  assert.match(bundleScript, /otool -L/);
+  assert.match(bundleScript, /install_name_tool -change/);
+  assert.match(bundleScript, /@loader_path\/lib/);
+  assert.match(bundleScript, /codesign --force --sign/);
+  assert.match(bundleScript, /DYLD_LIBRARY_PATH/);
+  assert.match(appBuilder, /RUNTIME_SRC\/media\/lib/);
+  assert.match(appBuilder, /RUNTIME_DST\/media\/lib/);
+  assert.match(packScript, /bundle-media-deps\.sh/);
+  assert.match(packScript, /Copy-Item -Recurse -Force \$MediaLib/);
+  assert.match(packScript, /Get-ChildItem -LiteralPath \$ffmpegLibDir/);
+  assert.match(workflow, /zsh scripts\/bundle-media-deps\.sh/);
 });
 
 test("installer and launcher validate the runtime bytes actually shipped", { skip: !fs.existsSync(launcherPath) }, () => {

@@ -281,10 +281,10 @@ function startMediaAnalysis(filePath, kind, initial = {}) {
         : await analyzeWaveform(
             filePath,
             Math.max(
-              2400,
+              6000,
               Math.min(
-                24000,
-                Math.ceil(Number(metadata.duration || 0) * 80),
+                180000,
+                Math.ceil(Number(metadata.duration || 0) * 300),
               ),
             ),
           ).catch(() => []);
@@ -399,7 +399,7 @@ function startAssetServer() {
       if (request.method === "GET" && requestUrl.pathname === "/health") {
         response.setHeader("Content-Type", "application/json");
         response.writeHead(200);
-        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.43" }));
+        response.end(JSON.stringify({ ok: true, port: serverPort, version: "2.7.44" }));
         return;
       }
       if (request.method === "POST" && requestUrl.pathname.startsWith("/rpc/")) {
@@ -600,14 +600,23 @@ function rehydrateMedia(
       previewPath: previewPath || "",
       previewUrl: previewPath ? registerAsset(previewPath).url : "",
     };
+    const waveformTooCoarse = requireWaveform && Array.isArray(hydrated.waveform) &&
+      hydrated.waveform.length > 0 && hydrated.waveform.length < Math.min(
+        6000,
+        Math.max(600, Math.ceil(Number(hydrated.duration || item.duration || 0) * 50)),
+      );
     if (
       analyzeMissing &&
       (!Number(hydrated.duration || 0) ||
         !previewPath ||
         (requireWaveform &&
-          (!Array.isArray(hydrated.waveform) || !hydrated.waveform.length)))
+          (!Array.isArray(hydrated.waveform) || !hydrated.waveform.length || waveformTooCoarse)))
     )
-      hydrated.analysisJobId = startMediaAnalysis(item.path, kind, hydrated);
+      hydrated.analysisJobId = startMediaAnalysis(
+        item.path,
+        kind,
+        waveformTooCoarse ? { ...hydrated, waveform: [] } : hydrated,
+      );
     return hydrated;
   }
   if (kind === "subtitle")
@@ -1315,7 +1324,7 @@ function smartFinishStartExport(input = {}) {
 nativeMethods = {
   ping: safe(() => ({
     ready: true,
-    version: "2.7.43",
+    version: "2.7.44",
     appName: "快剪 QuickCut",
   })),
   smartFinishAnalyze: safe((input = {}) => smartFinishAnalyze(input)),

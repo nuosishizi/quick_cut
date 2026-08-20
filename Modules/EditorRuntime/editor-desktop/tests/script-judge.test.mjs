@@ -250,6 +250,35 @@ test("natural mode can keep a reread if the model says keep", () => {
   assert.equal(aligned.issues[0].suppressReview, true);
 });
 
+test("an unsure reread stays visible for human review and is never auto-cut", () => {
+  const aligned = {
+    operations: [],
+    issues: [
+      {
+        id: "pause-or-reread",
+        type: "repeat",
+        spokenText: "standing with the Lamb",
+        expectedText: "standing with the Lamb",
+        confirmedCut: true,
+        action: "cut",
+      },
+    ],
+  };
+  const summary = applyJudgeDecisions(aligned, [
+    {
+      id: "pause-or-reread",
+      decision: "unsure",
+      confidence: "low",
+      reason: "segmentation may have created a false restart",
+    },
+  ], "natural");
+  assert.equal(summary.unsure, 1);
+  assert.equal(aligned.issues[0].confirmedCut, false);
+  assert.equal(aligned.issues[0].action, "unsure");
+  assert.equal(aligned.issues[0].suppressReview, false);
+  assert.equal(aligned.issues[0].aiConfidence, "low");
+});
+
 test("missing model ids leave the original alignment untouched", () => {
   const aligned = {
     operations: [{ type: "mismatch" }],

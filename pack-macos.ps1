@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 try { chcp 65001 > $null } catch {}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$Version = "2.7.43"
+$Version = "2.7.44"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-macOS-$Version"
 $tempBase = [System.IO.Path]::GetTempPath()
@@ -32,6 +32,8 @@ $RuntimeSrc = Join-Path $ProjectRoot "Modules/EditorRuntime"
 $Bun = Join-Path $RuntimeSrc "runtime/bun-arm64"
 $Ffmpeg = Join-Path $RuntimeSrc "media/ffmpeg"
 $Ffprobe = Join-Path $RuntimeSrc "media/ffprobe"
+$MediaLib = Join-Path $RuntimeSrc "media/lib"
+$BundleMediaDeps = Join-Path $ProjectRoot "scripts/bundle-media-deps.sh"
 
 $Cache = Join-Path $StageRoot "cache"
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
@@ -93,9 +95,28 @@ if (-not (Test-Path $Ffprobe)) {
   }
 }
 
+# Homebrew FFmpeg is dynamically linked. On Apple Silicon, make it portable by
+# collecting every non-system dylib and rewriting the load paths before staging.
+$isRunningOnMac = $false
+$uname = Get-Command uname -ErrorAction SilentlyContinue
+if ($uname) {
+  try { $isRunningOnMac = ((& $uname.Source -s).Trim() -eq "Darwin") } catch {}
+}
+$bundledDylibs = if (Test-Path $MediaLib) {
+  @(Get-ChildItem -LiteralPath $MediaLib -File -Filter "*.dylib")
+} else { @() }
+if ($isRunningOnMac -and $bundledDylibs.Count -eq 0) {
+  if (-not (Test-Path $BundleMediaDeps)) { Fail "Missing FFmpeg dependency bundler: $BundleMediaDeps" }
+  Info "Bundling portable Apple Silicon FFmpeg dependencies..."
+  & /bin/zsh $BundleMediaDeps
+  if ($LASTEXITCODE -ne 0) { Fail "Failed to bundle FFmpeg dynamic libraries." }
+  $bundledDylibs = @(Get-ChildItem -LiteralPath $MediaLib -File -Filter "*.dylib")
+}
+
 foreach ($required in @($Bun, $Ffmpeg, $Ffprobe)) {
   if (-not (Test-Path $required)) { Fail "Missing Mac runtime: $required" }
 }
+if ($bundledDylibs.Count -eq 0) { Fail "Missing portable FFmpeg dynamic libraries: $MediaLib" }
 
 Info "Copying Apple Silicon runtime and editor..."
 $EditorDst = Join-Path $Stage "Modules/EditorRuntime/editor-desktop"
@@ -108,11 +129,14 @@ Copy-Item -Recurse (Join-Path $RuntimeSrc "editor-desktop/assets") (Join-Path $E
 Copy-Item $Bun (Join-Path $BunDst "bun-arm64")
 Copy-Item $Ffmpeg (Join-Path $MediaDst "ffmpeg")
 Copy-Item $Ffprobe (Join-Path $MediaDst "ffprobe")
+Copy-Item -Recurse -Force $MediaLib (Join-Path $MediaDst "lib")
 $Deepfilter = Join-Path $RuntimeSrc "media/deepfilter"
 if (Test-Path $Deepfilter) { Copy-Item $Deepfilter (Join-Path $MediaDst "deepfilter") }
 
 Copy-Item (Join-Path $ProjectRoot "启动快剪.command") (Join-Path $Stage "启动快剪.command")
 Copy-Item (Join-Path $ProjectRoot "一键生成APP.command") (Join-Path $Stage "一键生成APP.command")
+$ScriptsSrc = Join-Path $ProjectRoot "scripts"
+if (Test-Path $ScriptsSrc) { Copy-Item -Recurse $ScriptsSrc (Join-Path $Stage "scripts") }
 Copy-Item -Recurse (Join-Path $ProjectRoot "QuickCut") (Join-Path $Stage "QuickCut")
 Copy-Item -Recurse (Join-Path $ProjectRoot "QuickCut.xcodeproj") (Join-Path $Stage "QuickCut.xcodeproj")
 
@@ -204,9 +228,16 @@ if ($xcodebuild -and $hdiutil) {
         $bunBin = Join-Path $runtimeDst "runtime/bun-arm64"
         $ffmpegBin = Join-Path $runtimeDst "media/ffmpeg"
         $ffprobeBin = Join-Path $runtimeDst "media/ffprobe"
+        $ffmpegLibDir = Join-Path $runtimeDst "media/lib"
         $mainBin = Join-Path $appDst "Contents/MacOS/QuickCut"
         
         if (Test-Path $bunBin) { & codesign --force --sign - $bunBin }
+        if (Test-Path $ffmpegLibDir) {
+          Get-ChildItem -LiteralPath $ffmpegLibDir -File -Filter "*.dylib" | ForEach-Object {
+            & codesign --force --sign - $_.FullName
+            if ($LASTEXITCODE -ne 0) { Fail "Failed to sign FFmpeg library: $($_.Name)" }
+          }
+        }
         if (Test-Path $ffmpegBin) { & codesign --force --sign - $ffmpegBin }
         if (Test-Path $ffprobeBin) { & codesign --force --sign - $ffprobeBin }
         if (Test-Path $mainBin) { & codesign --force --sign - $mainBin }

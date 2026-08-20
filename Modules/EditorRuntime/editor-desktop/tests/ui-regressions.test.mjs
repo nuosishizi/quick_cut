@@ -135,9 +135,10 @@ test("red review clips accept with Ctrl and reject with Shift", () => {
   );
 });
 
-test("timeline zoom stays anchored to the playhead", () => {
-  assert.match(ui, /function setTimelineZoomAroundPlayhead\(nextZoom\)/);
+test("timeline zoom stays anchored to the playhead or pointer", () => {
+  assert.match(ui, /function setTimelineZoomAroundPlayhead\(nextZoom, pointerClientX = null\)/);
   assert.match(ui, /playheadTime \* state\.zoom - anchorX/);
+  assert.match(ui, /setTimelineZoomAroundPlayhead\([\s\S]*?e\.clientX/);
   assert.match(ui, /scheduleTimelineZoomCommit\(\)/);
   assert.match(ui, /timelineZoom"\)\.oninput[\s\S]*?setTimelineZoomAroundPlayhead/);
   assert.match(ui, /id="zoomToFitTimeline"/);
@@ -699,6 +700,11 @@ test("timeline ruler stays pinned and blade shows a cut line", () => {
   assert.match(ui, /function previewBladeTime\(/);
   assert.match(ui, /tick\$\{major \? "" : minor \? " minor" : " micro"\}/);
   assert.match(ui, /function rulerTickPlan\(/);
+  assert.match(ui, /function findTimelineGap\(/);
+  assert.match(ui, /timeline-gap-selection/);
+  assert.match(ui, /function selectedTimelineGapAt\(/);
+  assert.match(ui, /label: "波纹删除"/);
+  assert.match(ui, /formatTimecode\(t\)\.slice\(3\)/);
   assert.match(ui, /trackLabels"\)\.scrollTop = \$\("timelineScroll"\)\.scrollTop/);
   assert.match(ui, /syncTimelineChrome\(\)/);
   assert.doesNotMatch(ui, /content\.insertBefore\(ruler, content\.firstChild\)/);

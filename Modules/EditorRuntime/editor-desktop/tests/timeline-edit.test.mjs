@@ -23,6 +23,7 @@ import {
   snapValue,
   collectSnapPoints,
   rulerTickPlan,
+  findTimelineGap,
   applyMainTrimEdge,
   rollingEditMainClips,
   slipClipSource,
@@ -285,6 +286,17 @@ test("default timeline zoom has sub-second ruler ticks", () => {
   assert.ok(plan.micro <= 0.1);
   const tight = rulerTickPlan(220);
   assert.ok(tight.minor <= 1 / 30 + 0.0001);
+  assert.ok(tight.major * 220 >= 100);
+});
+
+test("timeline gaps are hit only between adjacent clips", () => {
+  const clips = [
+    { id: "left", start: 0, end: 4 },
+    { id: "right", start: 7, end: 10 },
+  ];
+  assert.deepEqual(findTimelineGap(clips, 5), { start: 4, end: 7, duration: 3 });
+  assert.equal(findTimelineGap(clips, 3), null);
+  assert.equal(findTimelineGap(clips, 11), null);
 });
 
 test("non-destructive trimming recovers cut content when extending outwards", () => {

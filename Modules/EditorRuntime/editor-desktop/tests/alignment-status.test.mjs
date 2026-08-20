@@ -69,6 +69,31 @@ test("main captions use the exact manuscript and harmless connectors do not crea
   assert.ok(!textOf(aligned.operations).includes("but"));
 });
 
+test("spoken Bible references and large numbers normalize without a false reread or caption gap", () => {
+  const script = "Revelation 14:1 also speaks of 144,000 standing with the Lamb.";
+  const spoken = "revelation fourteen one also speaks about the one hundred and forty four thousand standing with the lamb".split(" ");
+  let time = 0;
+  const segments = spoken.map((text) => {
+    if (text === "standing") time += 0.36;
+    const start = time;
+    const end = start + 0.22;
+    time = end;
+    return { text, start, end };
+  });
+  const aligned = alignScript({ segments, script, duration: time });
+  assert.equal(aligned.issues.length, 0);
+  assert.ok(aligned.expected.some((word) => word.norm === "144000"));
+  assert.ok(aligned.spoken.some((word) => word.norm === "144000"));
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), {
+    maxWords: 7,
+    maxChars: 80,
+    maxLines: 2,
+  });
+  assert.equal(captions.map((caption) => caption.text).join(" "), script);
+  assert.equal(captions.length, 2);
+  assert.equal(captions[1].start - captions[0].end, 0);
+});
+
 test("one wrong phrase becomes one exact delete gap and later words re-anchor", () => {
   const script =
     "Two signs you stop and you do not brush them aside. The Lord welcomes every honest prayer and gives wisdom.";
@@ -95,7 +120,7 @@ test("one wrong phrase becomes one exact delete gap and later words re-anchor", 
   assert.ok(review[0].end - review[0].start < 4);
 });
 
-test("mid-sentence reread with a timestamp hole is marked for cutting", () => {
+test("a mid-sentence timestamp hole without repeated content is only a pause", () => {
   const script = "We're treating as ordinary something He calls holy.";
   const aligned = alignScript({
     segments: [
@@ -105,14 +130,11 @@ test("mid-sentence reread with a timestamp hole is marked for cutting", () => {
     script,
     duration: 5,
   });
-  const hole = aligned.issues.find(
-    (issue) => issue.falseStartGap || (issue.type === "repeat" && issue.confirmedCut && issue.start >= 0.5),
-  );
-  assert.ok(hole);
-  assert.equal(hole.confirmedCut, true);
-  assert.ok(hole.end - hole.start > 0.8);
+  assert.equal(aligned.issues.some((issue) => issue.type === "repeat"), false);
   const review = buildReviewCaptions(aligned.issues, aligned.expected, 5);
-  assert.ok(review.some((item) => item.action === "cut" && item.end - item.start > 0.8));
+  assert.equal(review.length, 0);
+  const captions = buildCaptions(manuscriptCaptionWords(aligned), { maxWords: 10, maxChars: 40 });
+  assert.equal(captions.map((caption) => caption.text).join(" "), script);
 });
 
 test("reread with stumble words (Save this for the next time he's ... Save this for the time He feels silent) is cut and captions match the complete take", () => {
@@ -227,7 +249,8 @@ test("abandoned prefix reread is cut and captions stay on the complete take", ()
   assert.equal(reread.confirmedCut, true);
   assert.ok(reread.start >= 161.5, `red started too early: ${reread.start}`);
   assert.ok(reread.start <= 161.9, `red started too late: ${reread.start}`);
-  assert.ok(reread.end >= 163.2, `red should reach the complete take: ${reread.end}`);
+  assert.ok(reread.end >= 162.5, `red should cover the abandoned take: ${reread.end}`);
+  assert.ok(reread.end < 163.3, `red must stop before the complete take: ${reread.end}`);
   const captions = buildCaptions(manuscriptCaptionWords(aligned), {
     maxWords: 10,
     maxChars: 40,
@@ -268,8 +291,8 @@ test("a trailing to you reread is a cut repeat not a scripture misread", () => {
   assert.match(String(reread.spokenText), /to you/i);
   assert.ok(reread.start >= 1.4);
   assert.ok(
-    reread.end >= 2.75,
-    `cut must reach the next sentence, not stop at short word times: ${reread.end}`,
+    reread.end >= 2.09 && reread.end < 2.2,
+    `cut must stop at the repeated phrase instead of consuming the next sentence: ${reread.end}`,
   );
   const captions = buildCaptions(manuscriptCaptionWords(aligned), {
     maxWords: 10,

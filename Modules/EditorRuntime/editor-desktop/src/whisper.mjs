@@ -1027,7 +1027,9 @@ async function deepgramTranscribeFile(filePath, { signal } = {}) {
   const type = String(filePath).toLowerCase().endsWith(".flac") ? "audio/flac" : "audio/wav";
   const url = new URL(DEEPGRAM_LISTEN_URL);
   url.searchParams.set("model", DEEPGRAM_STT_MODEL);
-  url.searchParams.set("smart_format", "true");
+  // Keep Deepgram's raw disfluencies and repetitions intact for the alignment
+  // engine. Formatting is done locally after word-level timestamps are secured.
+  url.searchParams.set("smart_format", "false");
   url.searchParams.set("punctuate", "true");
   url.searchParams.set("utterances", "true");
   url.searchParams.set("filler_words", "true");

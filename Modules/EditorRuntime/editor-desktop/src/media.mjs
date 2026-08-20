@@ -9,6 +9,7 @@ import {
   mergeRanges,
   samplesToFrames,
   waveformPeaks,
+  waveformChannelPeaks,
 } from "./pausecut.mjs";
 import { CAPTION_WORD_MARGIN_EM, estimatedWordWidth, normalizedFontWeight, paintedLineWidth, wordGap, wrapCaptionWordList } from "./text-layout.mjs";
 import {
@@ -787,6 +788,7 @@ export async function extractAudioSamples(
   inputPath,
   sampleRate = 8000,
   lowPriority = false,
+  channels = 1,
 ) {
   const bytes = await run(mediaBinary("ffmpeg"), [
     "-hide_banner",
@@ -797,7 +799,7 @@ export async function extractAudioSamples(
     inputPath,
     "-vn",
     "-ac",
-    "1",
+    String(Math.max(1, Math.min(2, Number(channels) || 1))),
     "-ar",
     String(sampleRate),
     "-f",
@@ -812,10 +814,11 @@ export async function extractAudioSamples(
 }
 
 export async function analyzeWaveform(inputPath, points = 1800) {
-  const samples = await extractAudioSamples(inputPath, 6000, true);
-  return waveformPeaks(
+  const samples = await extractAudioSamples(inputPath, 6000, true, 2);
+  return waveformChannelPeaks(
     samples,
-    Math.max(320, Math.min(24000, Number(points) || 1800)),
+    Math.max(600, Math.min(180000, Number(points) || 1800)),
+    2,
   );
 }
 

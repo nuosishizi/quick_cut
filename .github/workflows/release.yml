@@ -32,7 +32,9 @@ jobs:
 
       - name: Setup FFmpeg (macOS)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: |
+          brew install ffmpeg
+          zsh scripts/bundle-media-deps.sh
 
       - name: Setup Bun (macOS)
         if: runner.os == 'macOS'
@@ -42,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           cd Modules/EditorRuntime/editor-desktop
-          node --test tests/alignment-status.test.mjs tests/script-judge.test.mjs tests/resolve-export.test.mjs tests/resolve-link.test.mjs tests/export-captions.test.mjs tests/timeline-edit.test.mjs tests/text-layout.test.mjs tests/ui-regressions.test.mjs tests/punctuation-quotes.test.mjs tests/denoise-isolation.test.mjs
+          node --test tests/ai-settings.test.mjs tests/vertex-express.test.mjs tests/waveform-timeline.test.mjs tests/startup-package.test.mjs tests/alignment-status.test.mjs tests/script-judge.test.mjs tests/resolve-export.test.mjs tests/resolve-link.test.mjs tests/export-captions.test.mjs tests/timeline-edit.test.mjs tests/text-layout.test.mjs tests/ui-regressions.test.mjs tests/punctuation-quotes.test.mjs tests/denoise-isolation.test.mjs
 
       - name: Package Application
         shell: pwsh

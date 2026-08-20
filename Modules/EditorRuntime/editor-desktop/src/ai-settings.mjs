@@ -549,6 +549,9 @@ export function saveReviewSettings(input = {}) {
     const key = String(input.vertexKey || "").replace(/\s+/g, "").trim();
     if (key && key.length < 16) throw new Error("Vertex Key 看起来不完整。");
     writeSecret("vertex-api-key.txt", key);
+    // 保存新的 Express Key 代表显式切换到 Express 模式。若保留旧服务
+    // 账号，vertexAuthMode() 会继续优先选择 OAuth，导致新 Key 不生效。
+    if (key) writeSecret("vertex-sa.json", "");
   }
   if (input.vertexServiceAccountJson !== undefined) {
     const raw = String(input.vertexServiceAccountJson || "").trim();
@@ -561,6 +564,9 @@ export function saveReviewSettings(input = {}) {
       }
       if (!parsed.client_email || !parsed.private_key) throw new Error("服务账号 JSON 缺少 client_email 或 private_key。");
       writeSecret("vertex-sa.json", JSON.stringify(parsed, null, 2));
+      // 导入服务账号同样代表显式切换到项目 OAuth 模式，清除旧 Express Key，
+      // 避免两套凭证同时存在并造成模式判断歧义。
+      writeSecret("vertex-api-key.txt", "");
       if (!next.vertexProject && parsed.project_id) next.vertexProject = parsed.project_id;
       fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), { mode: 0o600, encoding: "utf8" });
     } else {
@@ -724,7 +730,7 @@ export function extractApiErrorMessage(data, raw = "", status = 0) {
 function apiErrorMessage(data, raw, status) {
   const message = extractApiErrorMessage(data, raw, status);
   if (/api keys are not supported|expected oauth|assert a principal/i.test(message)) {
-    return "这个接口不接受 API Key，需要 OAuth 服务账号。只用 Key 时请选 Gemini API，或在 Vertex 里走 Express（不要填项目接口）。";
+    return "Google 拒绝了当前凭证。若使用 Vertex Express Key，请确认 Key 仍有效、已启用 Vertex AI，并允许 aiplatform.googleapis.com；若使用 Vertex 项目接口，请改为导入服务账号 JSON。";
   }
   return message;
 }
@@ -737,12 +743,10 @@ export function shouldFallbackToGenerateContent(status, data, raw) {
   );
 }
 
-export function buildVertexExpressGenerateContentUrl(model, key) {
-  const url = new URL(
+export function buildVertexExpressGenerateContentUrl(model) {
+  return new URL(
     `https://aiplatform.googleapis.com/v1/publishers/google/models/${encodeURIComponent(normalizeModelId(model))}:generateContent`,
-  );
-  url.searchParams.set("key", key);
-  return url.toString();
+  ).toString();
 }
 
 async function readJsonResponse(response) {
@@ -907,7 +911,8 @@ async function completeViaGenerateContent({ settings, model, system, user, signa
   if (settings.provider === "vertex") {
     const mode = vertexAuthMode();
     if (mode === "express-key") {
-      url = buildVertexExpressGenerateContentUrl(model, vertexApiKey());
+      url = buildVertexExpressGenerateContentUrl(model);
+      headers["x-goog-api-key"] = vertexApiKey();
     } else if (mode === "service-account") {
       if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID，或导入带 project_id 的服务账号。");
       const location = settings.vertexLocation || "us-central1";
@@ -993,9 +998,10 @@ export async function completeGeminiMedia({
     const headers = { "Content-Type": "application/json" };
     let url = "";
     if (settings.provider === "vertex") {
-      if (vertexAuthMode() === "express-key")
-        url = buildVertexExpressGenerateContentUrl(model, vertexApiKey());
-      else if (vertexAuthMode() === "service-account") {
+      if (vertexAuthMode() === "express-key") {
+        url = buildVertexExpressGenerateContentUrl(model);
+        headers["x-goog-api-key"] = vertexApiKey();
+      } else if (vertexAuthMode() === "service-account") {
         if (!settings.vertexProject) throw new Error("请先填写 Vertex 项目 ID。");
         const location = settings.vertexLocation || "us-central1";
         url = `https://${location}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(settings.vertexProject)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;

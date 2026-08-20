@@ -89,6 +89,7 @@ RUNTIME_DST="$SRC_APP/Contents/Resources/EditorRuntime"
 [[ -f "$RUNTIME_SRC/runtime/bun-arm64" ]] || fail '缺少视频剪辑运行时：Modules/EditorRuntime/runtime/bun-arm64'
 [[ -f "$RUNTIME_SRC/media/ffmpeg" ]] || fail '缺少 FFmpeg：Modules/EditorRuntime/media/ffmpeg'
 [[ -f "$RUNTIME_SRC/media/ffprobe" ]] || fail '缺少 FFprobe：Modules/EditorRuntime/media/ffprobe'
+[[ -d "$RUNTIME_SRC/media/lib" ]] || fail '缺少 FFmpeg 动态库：请先运行 scripts/bundle-media-deps.sh'
 [[ -f "$RUNTIME_SRC/editor-desktop/src/main.mjs" ]] || fail '缺少视频剪辑后端：editor-desktop/src/main.mjs'
 [[ -f "$RUNTIME_SRC/editor-desktop/src/ui.html" ]] || fail '缺少视频剪辑界面：editor-desktop/src/ui.html'
 
@@ -102,6 +103,7 @@ rm -rf "$RUNTIME_DST"
 /bin/cp "$RUNTIME_SRC/runtime/bun-arm64" "$RUNTIME_DST/runtime/bun-arm64" || fail '打包 Bun 失败。'
 /bin/cp "$RUNTIME_SRC/media/ffmpeg" "$RUNTIME_DST/media/ffmpeg" || fail '打包 FFmpeg 失败。'
 /bin/cp "$RUNTIME_SRC/media/ffprobe" "$RUNTIME_DST/media/ffprobe" || fail '打包 FFprobe 失败。'
+/usr/bin/ditto "$RUNTIME_SRC/media/lib" "$RUNTIME_DST/media/lib" || fail '打包 FFmpeg 动态库失败。'
 /bin/chmod +x "$RUNTIME_DST/runtime/bun-arm64" "$RUNTIME_DST/media/ffmpeg" "$RUNTIME_DST/media/ffprobe" || fail '无法恢复视频剪辑运行组件执行权限。'
 
 [[ -x "$RUNTIME_DST/runtime/bun-arm64" && -x "$RUNTIME_DST/media/ffmpeg" && -x "$RUNTIME_DST/media/ffprobe" ]] || fail '视频剪辑运行组件权限修复失败。'
@@ -116,7 +118,7 @@ rm -rf "$DST_APP"
 
 printf '\n=============================================\n'
 printf '✅ 已生成：%s\n' "$DST_APP"
-printf '✅ 快剪 2.7.43 · 可发送字幕到达芬奇时间线（颜色/字号/描边/阴影/换行/背景）\n'
+printf '✅ 快剪 2.7.44 · 可发送字幕到达芬奇时间线（颜色/字号/描边/阴影/换行/背景）\n'
 printf '✅ 视频剪辑界面已嵌入快剪主窗口；Bun / FFmpeg 后台仍为独立进程\n'
 printf '✅ 使用 macOS 原生 WKWebView，不包含 Chromium / CEF\n'
 
