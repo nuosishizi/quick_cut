@@ -12,7 +12,7 @@ const testScratch = path.join(
 fs.mkdirSync(testScratch, { recursive: true });
 const temporaryRoot = fs.mkdtempSync(path.join(testScratch, "quickcut-248-"));
 process.env.QUICKCUT_SUPPORT_ROOT = path.join(temporaryRoot, "support");
-if (process.platform !== "win32" && fs.existsSync(ffmpeg))
+if (process.platform !== "win32" && fs.existsSync("/usr/bin/ffmpeg"))
   process.env.QUICKCUT_MEDIA_ROOT = "/usr/bin";
 else delete process.env.QUICKCUT_MEDIA_ROOT;
 const media = await import("../src/media.mjs");

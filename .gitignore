@@ -31,3 +31,5 @@ secrets/
 *.zip
 快剪-*
 QuickCut-*
+dist-local/
+发布*.ps1

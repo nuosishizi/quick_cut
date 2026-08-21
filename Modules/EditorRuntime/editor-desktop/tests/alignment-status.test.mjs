@@ -822,3 +822,25 @@ test("tail off-script spoken addition (together and follow Christ) generates gre
   const tailCaption = captions.find((c) => /together and follow Christ/i.test(c.text));
   assert.ok(tailCaption.start >= 419.5, "tail caption start timestamp must match spoken audio");
 });
+
+test("caption regrouping keeps Whoever visible across the recovered ASR boundary", () => {
+  const words = [
+    { display: "Corrected", start: 54.92, end: 55.628, matchType: "match" },
+    { display: "Proverbs", start: 55.64, end: 56.108, matchType: "match" },
+    { display: "12", start: 56.12, end: 56.444, matchType: "match" },
+    { display: ":1", start: 56.444, end: 56.768, matchType: "match" },
+    { display: "says,", start: 56.768, end: 57.239998, matchType: "near" },
+    { display: '"Whoever', start: 57.239998, end: 57.771998, matchType: "match" },
+    { display: "hates", start: 58.28, end: 58.72, matchType: "match" },
+    { display: "correction", start: 58.76, end: 59.46, matchType: "match" },
+    { display: "is", start: 59.48, end: 59.764, matchType: "match" },
+    { display: 'stupid."', start: 59.8, end: 60.492, matchType: "match" },
+  ];
+  const captions = regroupCaptions(words, { maxLines: 1, maxChars: 20 });
+  const whoever = captions.find((caption) => caption.text.includes("Whoever"));
+  const hates = captions.find((caption) => caption.text.startsWith("hates"));
+  assert.ok(whoever);
+  assert.ok(hates);
+  assert.equal(whoever.end, hates.start);
+  assert.equal(whoever.words.at(-1).end, 57.771998, "karaoke word timing must stay unchanged");
+});

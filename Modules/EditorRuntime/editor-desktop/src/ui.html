@@ -1034,6 +1034,89 @@
         border: 1px solid var(--line);
         display: none;
       }
+      .denoise-chain {
+        display: grid;
+        gap: 7px;
+        margin: 9px 0;
+      }
+      .denoise-stage {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.025);
+        padding: 8px;
+      }
+      .denoise-stage-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .denoise-stage-title span:first-child {
+        min-width: 0;
+      }
+      .denoise-stage-note {
+        color: var(--muted);
+        font-size: 10px;
+        margin-top: 3px;
+      }
+      .denoise-stage .field {
+        margin-top: 7px;
+        margin-bottom: 0;
+      }
+      .denoise-stage .row .select {
+        min-width: 0;
+      }
+      .audio-fx-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        margin: 8px 0;
+      }
+      .audio-fx-tabs .active {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: white;
+      }
+      .audio-fx-rack {
+        display: grid;
+        gap: 7px;
+        margin: 8px 0;
+      }
+      .audio-fx-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255,255,255,.025);
+        overflow: hidden;
+      }
+      .audio-fx-card.bypassed { opacity: .55; }
+      .audio-fx-head {
+        display: grid;
+        grid-template-columns: auto minmax(0,1fr) repeat(4,auto);
+        gap: 5px;
+        align-items: center;
+        padding: 7px;
+        background: rgba(255,255,255,.025);
+      }
+      .audio-fx-head strong { font-size: 11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .audio-fx-head button { min-width: 25px; padding: 4px 6px; }
+      .audio-fx-body { padding: 8px; border-top: 1px solid var(--line); }
+      .audio-fx-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+      .audio-fx-control { min-width:0; }
+      .audio-fx-control label { display:flex; justify-content:space-between; gap:6px; color:var(--muted); font-size:10px; margin-bottom:3px; }
+      .audio-fx-control input[type="number"], .audio-fx-control select { width:100%; }
+      .audio-fx-eq-band { display:grid; grid-template-columns:26px 1fr 1fr 1fr; gap:4px; margin-top:5px; align-items:center; }
+      .audio-fx-eq-band input, .audio-fx-eq-band select { width:100%; min-width:0; padding:5px 4px; }
+      .audio-fx-action { display:flex; flex-direction:column; align-items:stretch; gap:5px; }
+      .audio-fx-action .btn { white-space:normal; line-height:1.35; }
+      .audio-fx-action .small { min-width:0; overflow-wrap:anywhere; line-height:1.45; }
+      .audio-fx-empty { border:1px dashed var(--line); border-radius:8px; padding:14px 9px; color:var(--muted); font-size:10px; text-align:center; }
+      .audio-fx-learned { color:#65d6a5; }
+      .denoise-chain.disabled {
+        opacity: 0.48;
+        pointer-events: none;
+      }
       .timeline {
         background: #17191b;
         border-top: 1px solid var(--line);
@@ -4036,13 +4119,13 @@
               <div class="inspectsection">
                 <h3>AI 语音母带与降噪</h3>
                 <p class="small">
-                  提供 RNNoise/频谱降噪、外部 DeepFilterNet 或 Demucs 处理；缺少外部引擎时会明确使用稳定滤镜回退。
+                  恢复 2.7.39 达芬奇级 AI 语音隔离：使用 48 kHz 神经网络与克制的频谱净化，优先保留自然、清晰的人声。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="uvr5-master" selected>✨ 录音棚人声净化（RNNoise/频谱降噪 · 推荐）</option>
-                    <option value="demucs">🚀 Meta Demucs 人声分离（需要本地引擎）</option>
-                    <option value="ai-isolation">AI 语音隔离（检测到 DeepFilterNet 时启用）</option>
+                    <option value="ai-isolation" selected>AI 语音隔离 (达芬奇级 · 强力去杂音)</option>
+                    <option value="uvr5-master">✨ UVR5 级 · 录音棚人声母带</option>
+                    <option value="demucs">🚀 Meta Demucs 深度时域去噪（需要本地引擎）</option>
                     <option value="dereverb">房间回声抑制（频谱降噪与均衡）</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
                     <option value="strong">强力去底噪 (空调/风扇/风噪)</option>
@@ -4062,17 +4145,108 @@
                     value="85"
                   />
                 </div>
+                <div class="field" style="display:none">
+                  <div class="fieldhead"><span>噪声场景预设</span></div>
+                  <select class="select" id="denoisePreset">
+                    <option value="balanced">均衡人声（推荐）</option>
+                    <option value="wind">户外风声 / 麦克风低频震动</option>
+                    <option value="electrical">电流声 / 50–60 Hz 嗡声</option>
+                    <option value="aircraft">飞机 / 空调 / 持续机器声</option>
+                    <option value="insects">蛐蛐 / 高频虫鸣 / 嘶声</option>
+                    <option value="mixed-heavy">混合重噪声（谨慎）</option>
+                  </select>
+                </div>
+                <div class="denoise-chain" id="denoiseProfessionalControls" style="display:none">
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title">
+                      <span>1 · De-Hum 电流嗡声</span>
+                      <input id="denoiseHumEnabled" type="checkbox" checked />
+                    </div>
+                    <div class="denoise-stage-note">先精准削减 50/60 Hz 及其谐波，避免后级反复放大嗡声。</div>
+                    <div class="row field">
+                      <select class="select grow" id="denoiseHumFrequency">
+                        <option value="auto">自动检测 50/60 Hz</option>
+                        <option value="50">强制 50 Hz</option>
+                        <option value="60">强制 60 Hz</option>
+                      </select>
+                      <button class="btn" id="analyzeDenoiseNoise">分析</button>
+                    </div>
+                    <div class="field">
+                      <div class="fieldhead"><span>陷波深度</span><output id="denoiseHumDepthOut">62%</output></div>
+                      <input class="range" id="denoiseHumDepth" type="range" min="0" max="100" value="62" />
+                    </div>
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>2 · 风噪与低频轰鸣</span><output id="denoiseWindOut">45%</output></div>
+                    <div class="denoise-stage-note">高通削减风声、脚架震动和麦克风碰触低频。</div>
+                    <input class="range field" id="denoiseWind" type="range" min="0" max="100" value="45" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>3 · 持续环境声</span><output id="denoiseEnvironmentOut">58%</output></div>
+                    <div class="denoise-stage-note">自适应频谱处理飞机、空调、风扇和稳定背景底噪。</div>
+                    <input class="range field" id="denoiseEnvironment" type="range" min="0" max="100" value="58" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>4 · RNNoise 神经人声净化</span><output id="denoiseNeuralOut">62%</output></div>
+                    <div class="denoise-stage-note">针对口播的神经网络降噪；过强可能产生水声或金属感。</div>
+                    <input class="range field" id="denoiseNeural" type="range" min="0" max="100" value="62" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>5 · 高频虫鸣与嘶声</span><output id="denoiseInsectOut">18%</output></div>
+                    <div class="denoise-stage-note">抑制蛐蛐等持续高频；过强会同时减少齿音和空气感。</div>
+                    <input class="range field" id="denoiseInsect" type="range" min="0" max="100" value="18" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>6 · 残留噪声二次清理</span><output id="denoiseResidualOut">34%</output></div>
+                    <div class="denoise-stage-note">使用更温和、不同参数的第二次频谱清理，不盲目叠加同一效果。</div>
+                    <input class="range field" id="denoiseResidual" type="range" min="0" max="100" value="34" />
+                  </div>
+                  <div class="denoise-stage">
+                    <div class="denoise-stage-title"><span>7 · EQ 人声修复</span><output id="denoiseVoiceRestoreOut">50%</output></div>
+                    <div class="denoise-stage-note">最后恢复温暖度、清晰度并控制齿音与峰值。</div>
+                    <input class="range field" id="denoiseVoiceRestore" type="range" min="0" max="100" value="50" />
+                  </div>
+                </div>
                 <div class="row" style="flex-wrap: wrap; gap: 6px;">
                   <button class="btn grow" id="previewDenoise">试听当前片段</button>
                   <button class="btn primary grow" id="applyDenoiseTrack">应用整条音轨</button>
                   <button class="btn danger grow" id="revertDenoisedTrack" style="display:none">还原原始音频</button>
                 </div>
+                <div class="status" id="denoiseAnalysisState" style="display:none">尚未分析工频嗡声；选择“自动”时，试听或应用整轨也会自动检测。</div>
                 <div class="status" id="denoiseApplyState">导出时会自动应用当前降噪参数。</div>
                 <audio
                   class="denoisecompare"
                   id="denoiseCompare"
                   controls
                 ></audio>
+              </div>
+              <div class="inspectsection" id="audioFxSection">
+                <h3>高级音频修复</h3>
+                <p class="small">片段 FX 先处理，音轨 FX 后处理；最多 6 个插槽。可旁路、排序、复制、重置和 A/B 试听，导出使用同一效果链。</p>
+                <div class="audio-fx-tabs">
+                  <button class="btn" type="button" data-audio-fx-scope="clip">片段效果</button>
+                  <button class="btn active" type="button" data-audio-fx-scope="track">音轨效果</button>
+                </div>
+                <div class="row field">
+                  <select class="select grow" id="audioFxAddType">
+                    <option value="voice-isolation">人声隔离</option>
+                    <option value="noise-reduction">噪声降低 / Noise Learn</option>
+                    <option value="de-hummer">电流嗡声消除</option>
+                    <option value="dialogue-separator">对话分离</option>
+                    <option value="de-esser">去齿音</option>
+                    <option value="expander-gate">扩展器 / 噪声门</option>
+                    <option value="parametric-eq">六段参数均衡器</option>
+                    <option value="compressor-limiter">压缩器 / 限幅器</option>
+                  </select>
+                  <button class="btn" id="addAudioFx" type="button">＋添加</button>
+                </div>
+                <div class="audio-fx-rack" id="audioFxRackList"></div>
+                <div class="row" style="flex-wrap:wrap;gap:6px">
+                  <button class="btn grow" id="audioFxBypass" type="button">全部旁路</button>
+                  <button class="btn grow" id="audioFxAudition" type="button">A/B 试听</button>
+                  <button class="btn primary grow" id="applyAudioFxRack" type="button">应用音轨效果</button>
+                </div>
+                <div class="status" id="audioFxState">音轨效果在快速降噪之后处理；片段效果在音轨效果之前处理。</div>
               </div>
               <div class="inspectsection">
                 <h3>声音塑形</h3>
@@ -4343,7 +4517,7 @@
           </div>
         </div>
       </section>
-      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.45</footer>
+      <footer class="appfooter">© 2026 HX · 版权所有及最终解释权归 HX 所有 · 仅供本人及朋友非商业使用 · 快剪 QuickCut v2.7.47</footer>
     </div>
     <div class="context-menu" id="contextMenu"></div>
     <div class="dropveil" id="dropVeil">
@@ -4718,6 +4892,120 @@
           gap: 18,
         };
       }
+      const denoisePresetMap = Object.freeze({
+        balanced: { humEnabled: true, humDepth: 0.62, humHarmonics: 4, wind: 0.45, environment: 0.58, neural: 0.62, insect: 0.18, residual: 0.34, voiceRestore: 0.5 },
+        wind: { humEnabled: false, humDepth: 0.35, humHarmonics: 3, wind: 0.9, environment: 0.62, neural: 0.7, insect: 0.08, residual: 0.42, voiceRestore: 0.58 },
+        electrical: { humEnabled: true, humDepth: 0.92, humHarmonics: 6, wind: 0.28, environment: 0.54, neural: 0.55, insect: 0.12, residual: 0.34, voiceRestore: 0.52 },
+        aircraft: { humEnabled: true, humDepth: 0.68, humHarmonics: 4, wind: 0.66, environment: 0.86, neural: 0.76, insect: 0.1, residual: 0.48, voiceRestore: 0.62 },
+        insects: { humEnabled: false, humDepth: 0.35, humHarmonics: 3, wind: 0.32, environment: 0.66, neural: 0.68, insect: 0.82, residual: 0.56, voiceRestore: 0.64 },
+        "mixed-heavy": { humEnabled: true, humDepth: 0.82, humHarmonics: 5, wind: 0.72, environment: 0.82, neural: 0.8, insect: 0.52, residual: 0.58, voiceRestore: 0.68 },
+      });
+      function defaultDenoiseSettings() {
+        return {
+          mode: "ai-isolation",
+          strength: 0.85,
+          preset: "balanced",
+          humFrequency: "auto",
+          detectedHumFrequency: 0,
+          ...denoisePresetMap.balanced,
+        };
+      }
+      function normalizeDenoiseSettings(source = {}) {
+        const preset = denoisePresetMap[source?.preset] ? source.preset : "balanced";
+        const sourceMode = String(source?.mode || "ai-isolation").toLowerCase();
+        const mode = ["studio-chain", "professional", "pro"].includes(sourceMode)
+          ? "ai-isolation"
+          : sourceMode;
+        return {
+          ...defaultDenoiseSettings(),
+          ...denoisePresetMap[preset],
+          ...(source || {}),
+          preset,
+          mode,
+        };
+      }
+      function migrateDenoisedAudio(source) {
+        const mode = String(source?.mode || "").toLowerCase();
+        return ["studio-chain", "professional", "pro"].includes(mode)
+          ? null
+          : (source || null);
+      }
+      const audioFxLabels = Object.freeze({
+        "voice-isolation": "人声隔离",
+        "noise-reduction": "噪声降低",
+        "de-hummer": "电流嗡声消除",
+        "dialogue-separator": "对话分离",
+        "de-esser": "去齿音",
+        "expander-gate": "扩展器 / 噪声门",
+        "parametric-eq": "六段参数均衡器",
+        "compressor-limiter": "压缩器 / 限幅器",
+      });
+      const defaultAudioFxEqBands = Object.freeze([
+        { type: "lowshelf", frequency: 90, gain: 0, q: .7, enabled: true },
+        { type: "bell", frequency: 180, gain: 0, q: 1, enabled: true },
+        { type: "bell", frequency: 500, gain: 0, q: 1.1, enabled: true },
+        { type: "bell", frequency: 2500, gain: 0, q: 1, enabled: true },
+        { type: "bell", frequency: 6500, gain: 0, q: 1.2, enabled: true },
+        { type: "highshelf", frequency: 12000, gain: 0, q: .7, enabled: true },
+      ]);
+      function defaultAudioFxParams(type) {
+        const values = {
+          "voice-isolation": { amount: .82, voiceProtect: .68, artifactControl: .5 },
+          "noise-reduction": { mode: "auto", reductionDb: 12, noiseFloorDb: -48, sensitivity: .55, smoothing: 12, attackMs: 20, releaseMs: 180, learnedBands: [], learnedAt: 0, learnedDuration: 0 },
+          "de-hummer": { frequency: "auto", detectedFrequency: 0, reductionDb: 18, harmonics: 4, q: 28 },
+          "dialogue-separator": { voiceDb: 1.5, backgroundDb: -10, ambienceDb: -6, focus: .7 },
+          "de-esser": { frequency: .58, threshold: .38, reduction: .55, listen: false },
+          "expander-gate": { thresholdDb: -42, ratio: 2.2, rangeDb: -18, attackMs: 12, holdMs: 70, releaseMs: 220 },
+          "parametric-eq": { bands: defaultAudioFxEqBands.map((band) => ({ ...band })) },
+          "compressor-limiter": { thresholdDb: -18, ratio: 3, attackMs: 12, releaseMs: 180, makeupDb: 1.5, mix: 1, limiter: true, ceilingDb: -.8 },
+        };
+        return JSON.parse(JSON.stringify(values[type] || values["noise-reduction"]));
+      }
+      function makeAudioFx(type) {
+        const resolved = audioFxLabels[type] ? type : "noise-reduction";
+        return {
+          id: crypto.randomUUID(), type: resolved, name: audioFxLabels[resolved],
+          enabled: true, expanded: true, params: defaultAudioFxParams(resolved),
+        };
+      }
+      function normalizeAudioFxRack(rack = []) {
+        return (Array.isArray(rack) ? rack : []).slice(0, 6).map((effect) => {
+          const type = audioFxLabels[effect?.type] ? effect.type : "noise-reduction";
+          const params = { ...defaultAudioFxParams(type), ...(effect?.params || {}) };
+          if (type === "parametric-eq")
+            params.bands = defaultAudioFxEqBands.map((band, index) => ({ ...band, ...(effect?.params?.bands?.[index] || {}) }));
+          return {
+            id: String(effect?.id || crypto.randomUUID()), type,
+            name: String(effect?.name || audioFxLabels[type]),
+            enabled: effect?.enabled !== false, expanded: effect?.expanded !== false, params,
+          };
+        });
+      }
+      function audioFxSignature() {
+        return JSON.stringify({
+          track: normalizeAudioFxRack(state.audioFxRack),
+          bypass: !!state.audioFxBypass,
+        });
+      }
+      function denoiseSettingsSignature(source = state.denoise) {
+        const value = normalizeDenoiseSettings(source);
+        return JSON.stringify({
+          mode: value.mode,
+          strength: Number(value.strength || 0).toFixed(4),
+          preset: value.preset,
+          humEnabled: value.humEnabled !== false,
+          humFrequency: value.humFrequency,
+          detectedHumFrequency: Number(value.detectedHumFrequency || 0),
+          humDepth: Number(value.humDepth || 0).toFixed(4),
+          humHarmonics: Number(value.humHarmonics || 0),
+          wind: Number(value.wind || 0).toFixed(4),
+          environment: Number(value.environment || 0).toFixed(4),
+          neural: Number(value.neural || 0).toFixed(4),
+          insect: Number(value.insect || 0).toFixed(4),
+          residual: Number(value.residual || 0).toFixed(4),
+          voiceRestore: Number(value.voiceRestore || 0).toFixed(4),
+        });
+      }
       const state = {
         projectId: "",
         projectName: "未命名工程",
@@ -4842,9 +5130,12 @@
           fade: 0,
           vignette: 0,
         },
-        denoise: { mode: "uvr5-master", strength: 0.85 },
+        denoise: defaultDenoiseSettings(),
         denoiseEnabled: false,
         denoisedAudio: null,
+        audioFxRack: [],
+        audioFxBypass: false,
+        audioFxScope: "track",
         beauty: {
           smoothing: 0,
           blemish: 0,
@@ -5612,7 +5903,7 @@
             fade: 0,
             vignette: 0,
           },
-          denoise: { mode: "uvr5-master", strength: 0.85 },
+          denoise: defaultDenoiseSettings(),
           denoiseEnabled: false,
           denoisedAudio: null,
           beauty: {
@@ -5758,6 +6049,10 @@
             rosy: 0,
             ...(data.beauty || {}),
           },
+          denoise: normalizeDenoiseSettings(data.denoise),
+          audioFxRack: normalizeAudioFxRack(data.audioFxRack),
+          audioFxBypass: !!data.audioFxBypass,
+          audioFxScope: "track",
           audio: {
             speed: 1,
             volume: 1,
@@ -5779,7 +6074,7 @@
           audioProcessingEnabled: !!data.audioProcessingEnabled,
           mainAudioClipSettings: data.mainAudioClipSettings || {},
           denoiseEnabled: !!data.denoiseEnabled,
-          denoisedAudio: data.denoisedAudio || null,
+          denoisedAudio: migrateDenoisedAudio(data.denoisedAudio),
           selected: { type: "video", id: "main" },
           selectedItems: [],
           timelineDuration: Math.max(60, Number(data.timelineDuration || data.duration || 0) + 10),
@@ -8235,7 +8530,7 @@
           warmth: 0,
           rosy: 0,
         };
-        state.denoise = { mode: "uvr5-master", strength: 0.85 };
+        state.denoise = defaultDenoiseSettings();
         state.denoiseEnabled = false;
         state.denoisedAudio = null;
         state.audio = {
@@ -8494,6 +8789,7 @@
               waveform: asset.waveform || [],
               previewPath: asset.previewPath || "",
               previewUrl: asset.previewUrl || "",
+              analysisPending: !!asset.analysisJobId || !!asset.analysisPending,
             };
           state.audioAssets.push(item);
           recomputeContentDuration();
@@ -10215,6 +10511,347 @@
         if (type === "audioasset")
           return state.audioAssets.find((item) => item.id === id) || null;
         return null;
+      }
+      function currentAudioFxTarget(create = true) {
+        state.audioFxRack = normalizeAudioFxRack(state.audioFxRack);
+        if (state.audioFxScope !== "clip")
+          return { scope: "track", rack: state.audioFxRack, bypass: !!state.audioFxBypass };
+        const settings = audioSettingsFor(state.selected.type, state.selected.id, create);
+        if (!settings) return null;
+        if (create) settings.fxRack = normalizeAudioFxRack(settings.fxRack);
+        return {
+          scope: "clip",
+          rack: create ? settings.fxRack : normalizeAudioFxRack(settings.fxRack),
+          settings,
+          bypass: !!settings.fxBypass,
+        };
+      }
+      function setCurrentAudioFxRack(rack) {
+        const normalized = normalizeAudioFxRack(rack);
+        if (state.audioFxScope === "clip") {
+          const settings = audioSettingsFor(state.selected.type, state.selected.id, true);
+          if (!settings) return false;
+          settings.fxRack = normalized;
+        } else state.audioFxRack = normalized;
+        return true;
+      }
+      function audioFxControl(label, key, value, minimum, maximum, step = 1, unit = "", scale = 1) {
+        const shown = Number(value || 0) * scale;
+        return `<div class="audio-fx-control"><label><span>${label}</span><span data-fx-value="${key}">${Number(shown.toFixed(step < 1 ? 2 : 1))}${unit}</span></label><input class="range" type="range" min="${minimum}" max="${maximum}" step="${step}" value="${shown}" data-fx-param="${key}" data-fx-scale="${scale}"></div>`;
+      }
+      function audioFxBody(effect) {
+        const p = effect.params || {};
+        if (effect.type === "voice-isolation") return `<div class="audio-fx-grid">
+          ${audioFxControl("隔离强度", "amount", p.amount, 0, 100, 1, "%", 100)}
+          ${audioFxControl("人声保护", "voiceProtect", p.voiceProtect, 0, 100, 1, "%", 100)}
+          ${audioFxControl("伪影抑制", "artifactControl", p.artifactControl, 0, 100, 1, "%", 100)}
+        </div><div class="small">RNNoise 人声增强加轻量频谱残留清理；不会使用 Blackmagic 私有模型。</div>`;
+        if (effect.type === "noise-reduction") {
+          const learned = Array.isArray(p.learnedBands) && p.learnedBands.length === 15;
+          return `<div class="audio-fx-grid">
+            <div class="audio-fx-control"><label><span>检测模式</span></label><select class="select" data-fx-param="mode"><option value="auto" ${p.mode !== "learn" ? "selected" : ""}>自动检测</option><option value="learn" ${p.mode === "learn" ? "selected" : ""}>学习的噪声</option></select></div>
+            ${audioFxControl("降低量", "reductionDb", p.reductionDb, .1, 32, .5, " dB")}
+            ${audioFxControl("噪声底", "noiseFloorDb", p.noiseFloorDb, -80, -20, 1, " dB")}
+            ${audioFxControl("灵敏度", "sensitivity", p.sensitivity, 0, 100, 1, "%", 100)}
+            ${audioFxControl("频谱平滑", "smoothing", p.smoothing, 0, 50, 1)}
+            ${audioFxControl("起音", "attackMs", p.attackMs, 1, 500, 1, " ms")}
+            ${audioFxControl("释放", "releaseMs", p.releaseMs, 20, 2000, 10, " ms")}
+          </div><div class="field audio-fx-action"><button class="btn" type="button" data-fx-learn="${effect.id}">学习时间线选区噪声</button><span class="small ${learned ? "audio-fx-learned" : ""}">${learned ? `已学习 ${Number(p.learnedDuration || 0).toFixed(1)} 秒 · ${Number(p.noiseFloorDb || -50).toFixed(0)} dB` : "先框选一段只有噪声的区域；无选区时从播放头学习 2 秒"}</span></div>`;
+        }
+        if (effect.type === "de-hummer") return `<div class="audio-fx-grid">
+          <div class="audio-fx-control"><label><span>工频</span><span>${p.detectedFrequency ? `检测 ${p.detectedFrequency} Hz` : ""}</span></label><select class="select" data-fx-param="frequency"><option value="auto" ${p.frequency === "auto" ? "selected" : ""}>自动 50/60 Hz</option><option value="50" ${String(p.frequency) === "50" ? "selected" : ""}>50 Hz</option><option value="60" ${String(p.frequency) === "60" ? "selected" : ""}>60 Hz</option></select></div>
+          ${audioFxControl("削减", "reductionDb", p.reductionDb, 1, 36, 1, " dB")}
+          ${audioFxControl("谐波", "harmonics", p.harmonics, 1, 8, 1)}
+          ${audioFxControl("陷波 Q", "q", p.q, 4, 80, 1)}
+        </div><div class="field audio-fx-action"><button class="btn" type="button" data-fx-analyze-hum="${effect.id}">分析 50/60 Hz</button><span class="small">${p.autoAnalyzed ? (p.detectedFrequency ? `已检测到 ${p.detectedFrequency} Hz` : "未检测到可靠工频，自动模式将安全旁路") : "自动模式会在试听、整轨应用或导出前分析"}</span></div>`;
+        if (effect.type === "dialogue-separator") return `<div class="audio-fx-grid">
+          ${audioFxControl("人声", "voiceDb", p.voiceDb, -12, 12, .5, " dB")}
+          ${audioFxControl("背景", "backgroundDb", p.backgroundDb, -30, 6, .5, " dB")}
+          ${audioFxControl("环境", "ambienceDb", p.ambienceDb, -30, 6, .5, " dB")}
+          ${audioFxControl("对话聚焦", "focus", p.focus, 0, 100, 1, "%", 100)}
+        </div><div class="small">使用开放的中置/侧声道对话聚焦；本机安装分离模型后可升级为离线神经分离。</div>`;
+        if (effect.type === "de-esser") return `<div class="audio-fx-grid">
+          ${audioFxControl("目标频率", "frequency", p.frequency, 0, 100, 1, "%", 100)}
+          ${audioFxControl("阈值", "threshold", p.threshold, 0, 100, 1, "%", 100)}
+          ${audioFxControl("最大削减", "reduction", p.reduction, 0, 100, 1, "%", 100)}
+          <label class="switch"><span>只听齿音</span><input type="checkbox" data-fx-param="listen" ${p.listen ? "checked" : ""}></label>
+        </div>`;
+        if (effect.type === "expander-gate") return `<div class="audio-fx-grid">
+          ${audioFxControl("门限", "thresholdDb", p.thresholdDb, -80, -6, 1, " dB")}
+          ${audioFxControl("比例", "ratio", p.ratio, 1, 20, .1, ":1")}
+          ${audioFxControl("最大衰减", "rangeDb", p.rangeDb, -60, 0, 1, " dB")}
+          ${audioFxControl("起音", "attackMs", p.attackMs, .1, 500, 1, " ms")}
+          ${audioFxControl("保持", "holdMs", p.holdMs, 0, 1000, 5, " ms")}
+          ${audioFxControl("释放", "releaseMs", p.releaseMs, 1, 3000, 10, " ms")}
+        </div>`;
+        if (effect.type === "compressor-limiter") return `<div class="audio-fx-grid">
+          ${audioFxControl("压缩阈值", "thresholdDb", p.thresholdDb, -60, 0, 1, " dB")}
+          ${audioFxControl("比例", "ratio", p.ratio, 1, 20, .1, ":1")}
+          ${audioFxControl("起音", "attackMs", p.attackMs, .1, 500, 1, " ms")}
+          ${audioFxControl("释放", "releaseMs", p.releaseMs, 10, 3000, 10, " ms")}
+          ${audioFxControl("补偿增益", "makeupDb", p.makeupDb, 0, 18, .5, " dB")}
+          ${audioFxControl("混合", "mix", p.mix, 0, 100, 1, "%", 100)}
+          <label class="switch"><span>启用限幅</span><input type="checkbox" data-fx-param="limiter" ${p.limiter !== false ? "checked" : ""}></label>
+          ${audioFxControl("输出上限", "ceilingDb", p.ceilingDb, -6, 0, .1, " dB")}
+        </div>`;
+        if (effect.type === "parametric-eq") return `<div class="small">每段依次设置类型、频率、增益和 Q 值。</div>${(p.bands || []).map((band, index) => `<div class="audio-fx-eq-band"><input type="checkbox" data-fx-band="${index}" data-fx-band-field="enabled" ${band.enabled !== false ? "checked" : ""} title="启用第 ${index + 1} 段"><select class="select" data-fx-band="${index}" data-fx-band-field="type"><option value="highpass" ${band.type === "highpass" ? "selected" : ""}>HP</option><option value="lowshelf" ${band.type === "lowshelf" ? "selected" : ""}>低架</option><option value="bell" ${band.type === "bell" ? "selected" : ""}>钟形</option><option value="highshelf" ${band.type === "highshelf" ? "selected" : ""}>高架</option><option value="lowpass" ${band.type === "lowpass" ? "selected" : ""}>LP</option></select><input class="input" type="number" min="20" max="20000" step="10" value="${band.frequency}" data-fx-band="${index}" data-fx-band-field="frequency" title="频率 Hz"><div class="row"><input class="input" type="number" min="-18" max="18" step=".5" value="${band.gain}" data-fx-band="${index}" data-fx-band-field="gain" title="增益 dB"><input class="input" type="number" min=".1" max="20" step=".1" value="${band.q}" data-fx-band="${index}" data-fx-band-field="q" title="Q"></div></div>`).join("")}`;
+        return "";
+      }
+      function renderAudioFxRack() {
+        const target = currentAudioFxTarget(true);
+        document.querySelectorAll("[data-audio-fx-scope]").forEach((button) =>
+          button.classList.toggle("active", button.dataset.audioFxScope === state.audioFxScope),
+        );
+        $("applyAudioFxRack").disabled = state.audioFxScope !== "track" || !state.video;
+        $("applyAudioFxRack").textContent = state.audioFxScope === "track" ? "应用音轨效果" : "片段效果随导出应用";
+        if (!target) {
+          $("audioFxRackList").innerHTML = '<div class="audio-fx-empty">请先选择一个主音频或独立音频片段。</div>';
+          $("addAudioFx").disabled = true;
+          $("audioFxBypass").disabled = true;
+          return;
+        }
+        $("addAudioFx").disabled = target.rack.length >= 6;
+        $("audioFxBypass").disabled = false;
+        $("audioFxBypass").textContent = target.bypass ? "恢复全部效果" : "全部旁路";
+        $("audioFxRackList").innerHTML = target.rack.length
+          ? target.rack.map((effect, index) => `<div class="audio-fx-card ${effect.enabled ? "" : "bypassed"}" data-fx-id="${effect.id}"><div class="audio-fx-head"><input type="checkbox" data-fx-action="toggle" ${effect.enabled ? "checked" : ""}><strong>FX${index + 1} · ${escapeHtml(effect.name)}</strong><button class="btn" type="button" data-fx-action="up" title="上移">↑</button><button class="btn" type="button" data-fx-action="down" title="下移">↓</button><button class="btn" type="button" data-fx-action="copy" title="复制">⧉</button><button class="btn" type="button" data-fx-action="remove" title="删除">×</button></div><div class="audio-fx-body">${audioFxBody(effect)}<div class="row" style="margin-top:7px"><button class="btn" type="button" data-fx-action="reset">重置此效果</button></div></div></div>`).join("")
+          : '<div class="audio-fx-empty">没有效果。点击“＋添加”建立第一层处理。</div>';
+        installRangeSteppers($("audioFxRackList"));
+      }
+      function invalidateAudioFxCache(trackChanged = state.audioFxScope !== "clip") {
+        // The rendered cache only contains the main track rack. Clip FX stay
+        // live before concat, so editing a clip must not discard a valid track cache.
+        if (trackChanged && state.denoisedAudio?.includesAudioFx) state.denoisedAudio = null;
+        syncPreviewAudio();
+        queueAutosave();
+      }
+      function findAudioFx(id) {
+        const target = currentAudioFxTarget(true);
+        return { target, effect: target?.rack.find((item) => item.id === id) };
+      }
+      function audioFxSourceContext(atTimeline = state.currentTime) {
+        if (state.audioFxScope === "clip" && state.selected.type === "audioasset") {
+          const asset = state.audioAssets.find((item) => item.id === state.selected.id);
+          if (!asset?.path) return null;
+          const timelineTime = clamp(Number(atTimeline || 0), Number(asset.start || 0), Number(asset.end || asset.start || 0));
+          return {
+            path: asset.path,
+            time: Math.max(0, Number(asset.sourceStart || 0) + timelineTime - Number(asset.start || 0)),
+            maxDuration: Math.max(.25, Number(asset.end || timelineTime) - timelineTime),
+            external: true,
+            asset,
+          };
+        }
+        if (!state.video?.path) return null;
+        if (state.audioFxScope === "clip" && state.selected.type === "audio") {
+          const clip = mainAudioClips().find((item) => item.id === state.selected.id);
+          if (clip) {
+            const timelineTime = clamp(Number(atTimeline || 0), Number(clip.start || 0), Number(clip.end || clip.start || 0));
+            const timelineDuration = Math.max(.001, Number(clip.end || 0) - Number(clip.start || 0));
+            const sourceDuration = Math.max(.001, Number(clip.sourceEnd || 0) - Number(clip.sourceStart || 0));
+            return {
+              path: state.video.path,
+              time: Math.max(0, Number(clip.sourceStart || 0) + (timelineTime - Number(clip.start || 0)) * sourceDuration / timelineDuration),
+              maxDuration: Math.max(.25, Number(clip.end || timelineTime) - timelineTime),
+              external: false,
+              clip,
+            };
+          }
+        }
+        return {
+          path: state.video.path,
+          time: Math.max(0, timelineToSource(Number(atTimeline || 0))),
+          maxDuration: 10,
+          external: false,
+        };
+      }
+      async function learnSelectedNoise(effectId) {
+        const range = state.timelineRange && state.timelineRange.end > state.timelineRange.start
+          ? state.timelineRange
+          : { start: state.currentTime, end: state.currentTime + 2 };
+        const source = audioFxSourceContext(Number(range.start || 0));
+        if (!source?.path) return toast("请先导入或选择带声音的片段");
+        const { target, effect } = findAudioFx(effectId);
+        if (!effect || effect.type !== "noise-reduction") return;
+        const duration = Math.min(source.maxDuration, clamp(Number(range.end) - Number(range.start), .25, 10));
+        $("audioFxState").textContent = "正在学习选区中的纯噪声…";
+        try {
+          const profile = await nativeCall("learnAudioFxNoiseProfile", {
+            path: source.path,
+            time: source.time,
+            duration,
+          });
+          snapshot();
+          effect.params.mode = "learn";
+          effect.params.learnedBands = profile.bands;
+          effect.params.noiseFloorDb = profile.noiseFloorDb;
+          effect.params.learnedAt = Number(range.start || 0);
+          effect.params.learnedDuration = profile.duration;
+          for (const item of target?.rack || [])
+            if (item.type === "de-hummer" && item.params.frequency === "auto")
+              item.params.detectedFrequency = profile.humFrequency || 0;
+          setCurrentAudioFxRack(target.rack);
+          invalidateAudioFxCache();
+          renderAudioFxRack();
+          $("audioFxState").textContent = `噪声学习完成：${profile.duration.toFixed(1)} 秒、噪声底 ${profile.noiseFloorDb} dB${profile.humFrequency ? `、检测到 ${profile.humFrequency} Hz` : ""}。`;
+        } catch (error) {
+          $("audioFxState").textContent = error.message;
+          toast(error.message);
+        }
+      }
+      async function analyzeSelectedAudioFxHum(effectId) {
+        const source = audioFxSourceContext(state.currentTime);
+        if (!source?.path) return toast("请先导入或选择带声音的片段");
+        const { target, effect } = findAudioFx(effectId);
+        if (!effect || effect.type !== "de-hummer") return;
+        $("audioFxState").textContent = "正在分析 50/60 Hz 工频及谐波…";
+        try {
+          const profile = await nativeCall("analyzeNoiseProfile", {
+            path: source.path, time: source.time, duration: Math.min(10, source.maxDuration),
+          });
+          snapshot();
+          effect.params.detectedFrequency = Number(profile.humFrequency || 0);
+          effect.params.autoAnalyzed = true;
+          setCurrentAudioFxRack(target.rack);
+          invalidateAudioFxCache();
+          renderAudioFxRack();
+          $("audioFxState").textContent = profile.humFrequency
+            ? `检测到 ${profile.humFrequency} Hz 工频嗡声，自动模式已锁定。`
+            : "没有可靠检测到 50/60 Hz 工频；自动模式不会误伤人声，可手动指定频率。";
+        } catch (error) {
+          $("audioFxState").textContent = error.message;
+          toast(error.message);
+        }
+      }
+      async function ensureAudioFxHumAnalysis(includeAllClips = false) {
+        const groups = [];
+        if (state.video?.path) {
+          groups.push({ owner: state, key: "audioFxRack", path: state.video.path, time: 0 });
+          if (includeAllClips) {
+            for (const settings of Object.values(state.mainAudioClipSettings || {}))
+              groups.push({ owner: settings, key: "fxRack", path: state.video.path, time: 0 });
+          }
+        }
+        if (includeAllClips) {
+          for (const asset of state.audioAssets || [])
+            if (asset.path) groups.push({ owner: asset, key: "fxRack", path: asset.path, time: Number(asset.sourceStart || 0) });
+        }
+        const profileBySource = new Map();
+        let changed = false;
+        for (const group of groups) {
+          const rack = normalizeAudioFxRack(group.owner[group.key]);
+          group.owner[group.key] = rack;
+          const pending = rack.filter((effect) =>
+            effect.enabled && effect.type === "de-hummer" &&
+            String(effect.params?.frequency || "auto") === "auto" &&
+            !effect.params?.autoAnalyzed &&
+            ![50, 60].includes(Number(effect.params?.detectedFrequency || 0)),
+          );
+          if (!pending.length) continue;
+          let profile = profileBySource.get(group.path);
+          if (!profile) {
+            try {
+              profile = await nativeCall("analyzeNoiseProfile", {
+                path: group.path, time: group.time, duration: 8,
+              });
+            } catch (error) {
+              console.warn("自动工频分析失败，保持安全旁路", error);
+              profile = { humFrequency: 0 };
+            }
+            profileBySource.set(group.path, profile);
+          }
+          for (const effect of pending) {
+            effect.params.detectedFrequency = Number(profile.humFrequency || 0);
+            effect.params.autoAnalyzed = true;
+            changed = true;
+          }
+        }
+        if (changed) {
+          if (state.denoisedAudio?.includesAudioFx) state.denoisedAudio = null;
+          queueAutosave();
+          renderAudioFxRack();
+        }
+        return changed;
+      }
+      function currentClipFxRackForPreview() {
+        const clip = mainAudioClips().find((item) => state.currentTime >= item.start && state.currentTime < item.end);
+        return normalizeAudioFxRack(mainAudioSettings(clip, false)?.fxRack || []);
+      }
+      function audioFxPreviewSettings(source = audioFxSourceContext(state.currentTime)) {
+        const selectedTarget = state.audioFxScope === "clip" ? currentAudioFxTarget(false) : null;
+        return {
+          quickDenoise: { ...state.denoise, strength: state.denoiseEnabled ? state.denoise.strength : 0 },
+          clipFxRack: selectedTarget?.rack || currentClipFxRackForPreview(),
+          clipFxBypass: selectedTarget ? !!selectedTarget.bypass : !!mainAudioSettings(mainAudioClips().find((item) => state.currentTime >= item.start && state.currentTime < item.end), false)?.fxBypass,
+          trackFxRack: source?.external ? [] : normalizeAudioFxRack(state.audioFxRack),
+          trackFxBypass: source?.external || !!state.audioFxBypass,
+          detectedHumFrequency: Number(state.denoise?.detectedHumFrequency || 0),
+        };
+      }
+      async function auditionAudioFx() {
+        const source = audioFxSourceContext(state.currentTime);
+        if (!source?.path) return toast("请先导入或选择带声音的片段");
+        const button = $("audioFxAudition");
+        if (button.dataset.listening === "processed") {
+          $("denoiseCompare").pause();
+          $("denoiseCompare").style.display = "none";
+          $("video").muted = false;
+          if (!source.external) {
+            $("video").currentTime = source.time;
+            $("video").play().catch(() => {});
+          }
+          button.dataset.listening = "original";
+          button.textContent = "试听处理后";
+          return;
+        }
+        button.disabled = true;
+        button.textContent = "正在生成…";
+        try {
+          const result = await nativeCall("audioFxPreview", {
+            path: source.path, time: source.time, settings: audioFxPreviewSettings(source),
+          });
+          const compare = $("denoiseCompare");
+          compare.src = result.url;
+          compare.style.display = "block";
+          compare.currentTime = Math.max(0, Number(result.targetOffset || 0));
+          $("video").muted = true;
+          compare.onended = () => { button.dataset.listening = "original"; button.textContent = "试听处理后"; syncPreviewAudio(); };
+          await compare.play();
+          button.dataset.listening = "processed";
+          button.textContent = "切换到原声";
+        } catch (error) {
+          toast(error.message);
+          button.textContent = "A/B 试听";
+        } finally { button.disabled = false; }
+      }
+      async function applyAudioFxTrack() {
+        if (!state.video?.path || state.audioFxScope !== "track") return;
+        const button = $("applyAudioFxRack");
+        button.disabled = true;
+        button.textContent = "正在处理整轨…";
+        $("audioFxState").textContent = "正在按当前顺序生成高级音轨缓存…";
+        try {
+          await ensureAudioFxHumAnalysis(false);
+          const settings = audioFxPreviewSettings();
+          settings.clipFxRack = [];
+          settings.clipFxBypass = true;
+          const media = await nativeCall("applyAudioFxTrack", {
+            projectId: state.projectId, path: state.video.path, settings,
+          });
+          state.denoisedAudio = {
+            ...media, sourcePath: state.video.path, mode: "audio-fx-rack",
+            includesAudioFx: true, fxSignature: audioFxSignature(),
+            configSignature: denoiseSettingsSignature(),
+          };
+          syncPreviewAudio();
+          queueAutosave();
+          syncAudioControls();
+          $("audioFxState").textContent = "高级音轨缓存已应用；时间线播放和导出将复用该缓存。";
+          toast("高级音频修复已应用到整条音轨");
+        } catch (error) {
+          $("audioFxState").textContent = error.message;
+          toast(error.message);
+        } finally { button.disabled = false; button.textContent = "应用音轨效果"; }
       }
       function assignOverlapLanes(items = []) {
         const sorted = items
@@ -14237,7 +14874,39 @@
           .join("");
         installRangeSteppers($("beautyControls"));
       }
+      function syncDenoiseProfessionalControls() {
+        state.denoise = normalizeDenoiseSettings(state.denoise);
+        const config = state.denoise;
+        $("denoisePreset").value = config.preset;
+        $("denoiseHumEnabled").checked = config.humEnabled !== false;
+        $("denoiseHumFrequency").value = config.humFrequency || "auto";
+        const controls = {
+          denoiseHumDepth: ["humDepth", "denoiseHumDepthOut"],
+          denoiseWind: ["wind", "denoiseWindOut"],
+          denoiseEnvironment: ["environment", "denoiseEnvironmentOut"],
+          denoiseNeural: ["neural", "denoiseNeuralOut"],
+          denoiseInsect: ["insect", "denoiseInsectOut"],
+          denoiseResidual: ["residual", "denoiseResidualOut"],
+          denoiseVoiceRestore: ["voiceRestore", "denoiseVoiceRestoreOut"],
+        };
+        for (const [id, [key, outputId]] of Object.entries(controls)) {
+          const percent = Math.round(Number(config[key] || 0) * 100);
+          $(id).value = percent;
+          $(outputId).textContent = `${percent}%`;
+        }
+        const professional = ["studio-chain", "professional", "pro"].includes(config.mode);
+        $("denoiseProfessionalControls").classList.toggle("disabled", !professional);
+        $("denoisePreset").disabled = !professional;
+        if (config.humFrequency === "auto") {
+          $("denoiseAnalysisState").textContent = config.detectedHumFrequency
+            ? `已检测到 ${config.detectedHumFrequency} Hz 工频嗡声；De-Hum 会处理基频与 ${config.humHarmonics} 组谐波。`
+            : "尚未可靠检测到 50/60 Hz 工频嗡声；试听或应用整轨时会自动检测，不会强行陷波。";
+        } else {
+          $("denoiseAnalysisState").textContent = `已手动指定 ${config.humFrequency} Hz De-Hum；将处理基频与 ${config.humHarmonics} 组谐波。`;
+        }
+      }
       function syncAudioControls() {
+        syncDenoiseProfessionalControls();
         $("audioSpeed").value = Math.round(state.audio.speed * 100);
         $("speedOut").textContent = `${state.audio.speed.toFixed(2)}×`;
         $("audioVolume").value = Math.round(state.audio.volume * 100);
@@ -14267,7 +14936,7 @@
         $("audioLowCut").value = state.audio.lowCut || 60;
         $("audioHighCut").value = state.audio.highCut || 16500;
         $("audioChannelMode").value = state.audio.channelMode || "original";
-        $("denoiseMode").value = state.denoise.mode || "uvr5-master";
+        $("denoiseMode").value = state.denoise.mode || "ai-isolation";
         $("denoiseStrength").value = Math.round(
           (state.denoise.strength ?? 0.85) * 100,
         );
@@ -14279,10 +14948,14 @@
         }
         if (hasDenoised) {
           const modeLabel =
-            state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
+            state.denoisedAudio.mode === "audio-fx-rack"
+              ? "高级音频修复效果架"
+              : ["studio-chain", "professional", "pro"].includes(state.denoisedAudio.mode)
+              ? "专业多级降噪"
+              : state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
               ? "录音棚人声净化（RNNoise/频谱）"
               : state.denoisedAudio.mode === "ai-isolation"
-                ? "AI 语音隔离（DeepFilter/稳定回退）"
+                ? "达芬奇级 AI 语音隔离"
                 : state.denoisedAudio.mode === "dereverb"
                   ? "房间回声抑制（频谱）"
                   : state.denoisedAudio.mode === "gentle"
@@ -14327,6 +15000,7 @@
           $("clipFadeOut").value = Number(clipSettings.fadeOut || 0).toFixed(1);
           $("clipMute").checked = !!clipSettings.muted;
         }
+        renderAudioFxRack();
       }
       const syncAudioInspectors = syncAudioControls;
       window.syncAudioInspectors = syncAudioControls;
@@ -14347,6 +15021,45 @@
           "使用稳定回退",
         );
       }
+      async function analyzeDenoiseNoise() {
+        if (!state.video) {
+          toast("请先导入视频");
+          return;
+        }
+        const button = $("analyzeDenoiseNoise");
+        button.disabled = true;
+        button.textContent = "分析中…";
+        $("denoiseAnalysisState").textContent = "正在分析播放头附近最多 10 秒音频的 50/60 Hz 工频与谐波…";
+        try {
+          const profile = await nativeCall("analyzeNoiseProfile", {
+            path: state.video.path,
+            time: Math.max(0, timelineToSource(state.currentTime) - 2),
+            duration: 10,
+          });
+          state.denoise.detectedHumFrequency = Number(profile.humFrequency || 0);
+          state.denoise.humFrequency = "auto";
+          if (profile.humFrequency) {
+            state.denoise.humEnabled = true;
+            $("denoiseAnalysisState").textContent =
+              `${profile.message} 置信度 ${Math.round(Number(profile.confidence || 0) * 100)}%，分析 ${profile.sampleSeconds} 秒。`;
+            toast(`检测到 ${profile.humFrequency} Hz 电流嗡声`);
+          } else {
+            $("denoiseAnalysisState").textContent =
+              `${profile.message} 50 Hz 得分 ${profile.score50Db} dB，60 Hz 得分 ${profile.score60Db} dB。`;
+            toast("未检测到可靠的 50/60 Hz 工频嗡声");
+          }
+          state.denoisedAudio = null;
+          syncDenoiseProfessionalControls();
+          syncPreviewAudio();
+          queueAutosave();
+        } catch (error) {
+          $("denoiseAnalysisState").textContent = error.message;
+          toast(error.message);
+        } finally {
+          button.disabled = false;
+          button.textContent = "分析";
+        }
+      }
       async function previewDenoise() {
         if (!state.video) {
           toast("请先导入视频");
@@ -14360,8 +15073,9 @@
             const result = await nativeCall("denoisePreview", {
               path: state.video.path,
               time: timelineToSource(state.currentTime),
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
+              config: { ...state.denoise },
             });
             $("denoiseCompare").src = result.url;
             $("denoiseCompare").style.display = "block";
@@ -14386,19 +15100,21 @@
           const button = $("applyDenoiseTrack");
           button.disabled = true;
           button.textContent = "正在处理整轨…";
-          $("denoiseApplyState").textContent = "正在通过 AI 深度神经网络生成整条音轨的高清降噪缓存…";
+          $("denoiseApplyState").textContent = "正在按 De-Hum → 风噪 → 环境声 → RNNoise → 残留 → EQ 的顺序生成整轨降噪…";
           try {
             const media = await nativeCall("applyDenoiseTrack", {
               projectId: state.projectId,
               path: state.video.path,
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
+              config: { ...state.denoise },
             });
             state.denoisedAudio = {
               ...media,
               sourcePath: state.video.path,
-              mode: state.denoise.mode || "uvr5-master",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
+              configSignature: denoiseSettingsSignature(),
             };
             state.denoiseEnabled = true;
             syncAudioControls();
@@ -14512,6 +15228,8 @@
           denoise: state.denoise,
           denoiseEnabled: state.denoiseEnabled,
           denoisedAudio: persistedMediaItem(state.denoisedAudio),
+          audioFxRack: normalizeAudioFxRack(state.audioFxRack),
+          audioFxBypass: !!state.audioFxBypass,
           beauty: state.beauty,
           audio: state.audio,
           audioProcessingEnabled: state.audioProcessingEnabled,
@@ -14572,6 +15290,10 @@
               brighten: 0, warmth: 0, rosy: 0,
               ...(d.beauty || {}),
             },
+            denoise: normalizeDenoiseSettings(d.denoise),
+            audioFxRack: normalizeAudioFxRack(d.audioFxRack),
+            audioFxBypass: !!d.audioFxBypass,
+            audioFxScope: "track",
             projectPath: opened.projectPath,
             selected: { type: "video", id: "main" },
             selectedItems: [],
@@ -15077,6 +15799,8 @@
           $("exportModal").classList.add("on");
           $("cancelExport").textContent = "取消导出";
           $("exportBar").style.width = "0";
+          $("exportStatus").textContent = "正在检查音频修复参数…";
+          await ensureAudioFxHumAnalysis(true);
           $("exportStatus").textContent = "正在按预览渲染字幕…";
           let captionRasters = [];
           let captionRasterDirectory = "";
@@ -15089,15 +15813,27 @@
           }
           $("revealExport").style.display = "none";
           let mainAudioPath = "";
+          let mainAudioFxPreRendered = false;
           const isDenoiseActive = !!(state.denoiseEnabled && Number(state.denoise?.strength || 0) > 0.01);
-          if (isDenoiseActive && state.video?.path) {
-            const currentMode = state.denoise?.mode || "uvr5-master";
+          const advancedCacheValid = !!(
+            state.denoisedAudio?.includesAudioFx && state.denoisedAudio.path &&
+            state.denoisedAudio.sourcePath === state.video?.path &&
+            state.denoisedAudio.fxSignature === audioFxSignature() &&
+            state.denoisedAudio.configSignature === denoiseSettingsSignature()
+          );
+          if (advancedCacheValid) {
+            mainAudioPath = state.denoisedAudio.path;
+            mainAudioFxPreRendered = true;
+          } else if (isDenoiseActive && state.video?.path) {
+            const currentMode = state.denoise?.mode || "ai-isolation";
             const currentStrength = state.denoise?.strength ?? 0.85;
+            const currentConfigSignature = denoiseSettingsSignature();
             const isCacheValid = state.denoisedAudio &&
               state.denoisedAudio.path &&
               state.denoisedAudio.sourcePath === state.video.path &&
               state.denoisedAudio.mode === currentMode &&
-              Math.abs(Number(state.denoisedAudio.strength ?? 0.85) - Number(currentStrength)) < 0.01;
+              Math.abs(Number(state.denoisedAudio.strength ?? 0.85) - Number(currentStrength)) < 0.01 &&
+              state.denoisedAudio.configSignature === currentConfigSignature;
 
             if (isCacheValid) {
               mainAudioPath = state.denoisedAudio.path;
@@ -15109,12 +15845,14 @@
                   path: state.video.path,
                   mode: currentMode,
                   strength: currentStrength,
+                  config: { ...state.denoise },
                 });
                 state.denoisedAudio = {
                   ...media,
                   sourcePath: state.video.path,
                   mode: currentMode,
                   strength: currentStrength,
+                  configSignature: currentConfigSignature,
                 };
                 state.denoiseEnabled = true;
                 mainAudioPath = state.denoisedAudio.path;
@@ -15167,6 +15905,8 @@
               fadeIn: x.fadeIn || 0,
               fadeOut: x.fadeOut || 0,
               muted: !!x.muted,
+              fxRack: normalizeAudioFxRack(x.fxRack),
+              fxBypass: !!x.fxBypass,
               trackId: x.trackId,
             })),
             videoLayers: state.videoLayers.map((x) => ({
@@ -15196,6 +15936,9 @@
               ...state.denoise,
               strength: state.denoiseEnabled ? state.denoise.strength : 0,
             },
+            audioFxRack: normalizeAudioFxRack(state.audioFxRack),
+            audioFxBypass: !!state.audioFxBypass,
+            mainAudioFxPreRendered,
             beauty: state.beauty,
             audio: state.audio,
             audioProcessingEnabled: state.audioProcessingEnabled,
@@ -15822,6 +16565,7 @@
       };
       $("previewDenoise").onclick = previewDenoise;
       $("applyDenoiseTrack").onclick = applyDenoiseToTrack;
+      $("analyzeDenoiseNoise").onclick = analyzeDenoiseNoise;
       if ($("revertDenoisedTrack")) $("revertDenoisedTrack").onclick = revertDenoisedTrack;
       $("trimLeft").onclick = () => trimAtPlayhead("left");
       $("trimRight").onclick = () => trimAtPlayhead("right");
@@ -18248,6 +18992,7 @@
       $("denoiseMode").onchange = (e) => {
         state.denoise.mode = e.target.value;
         state.denoiseEnabled = Number(state.denoise.strength || 0) > 0.01;
+        syncDenoiseProfessionalControls();
         scheduleDenoiseMonitor();
       };
       $("denoiseStrength").oninput = (e) => {
@@ -18255,6 +19000,136 @@
         state.denoiseEnabled = state.denoise.strength > 0.01;
         $("denoiseOut").textContent = `${e.target.value}%`;
         scheduleDenoiseMonitor();
+      };
+      $("denoisePreset").onchange = (event) => {
+        const preset = denoisePresetMap[event.target.value] ? event.target.value : "balanced";
+        Object.assign(state.denoise, denoisePresetMap[preset], {
+          preset,
+          mode: "ai-isolation",
+        });
+        state.denoiseEnabled = Number(state.denoise.strength || 0) > 0.01;
+        syncAudioControls();
+        scheduleDenoiseMonitor();
+      };
+      $("denoiseHumEnabled").onchange = (event) => {
+        state.denoise.humEnabled = event.target.checked;
+        scheduleDenoiseMonitor();
+      };
+      $("denoiseHumFrequency").onchange = (event) => {
+        state.denoise.humFrequency = event.target.value;
+        syncDenoiseProfessionalControls();
+        scheduleDenoiseMonitor();
+      };
+      const denoiseStageControls = {
+        denoiseHumDepth: ["humDepth", "denoiseHumDepthOut"],
+        denoiseWind: ["wind", "denoiseWindOut"],
+        denoiseEnvironment: ["environment", "denoiseEnvironmentOut"],
+        denoiseNeural: ["neural", "denoiseNeuralOut"],
+        denoiseInsect: ["insect", "denoiseInsectOut"],
+        denoiseResidual: ["residual", "denoiseResidualOut"],
+        denoiseVoiceRestore: ["voiceRestore", "denoiseVoiceRestoreOut"],
+      };
+      for (const [id, [key, outputId]] of Object.entries(denoiseStageControls)) {
+        $(id).oninput = (event) => {
+          state.denoise[key] = Number(event.target.value) / 100;
+          $(outputId).textContent = `${event.target.value}%`;
+          scheduleDenoiseMonitor();
+        };
+      }
+      document.querySelectorAll("[data-audio-fx-scope]").forEach((button) => {
+        button.onclick = () => {
+          state.audioFxScope = button.dataset.audioFxScope === "clip" ? "clip" : "track";
+          renderAudioFxRack();
+        };
+      });
+      $("addAudioFx").onclick = () => {
+        const target = currentAudioFxTarget(true);
+        if (!target) return toast("请先选择音频片段");
+        if (target.rack.length >= 6) return toast("每个片段或音轨最多 6 个效果插槽");
+        snapshot();
+        target.rack.push(makeAudioFx($("audioFxAddType").value));
+        setCurrentAudioFxRack(target.rack);
+        invalidateAudioFxCache();
+        renderAudioFxRack();
+      };
+      $("audioFxBypass").onclick = () => {
+        const target = currentAudioFxTarget(true);
+        if (!target) return;
+        snapshot();
+        if (target.scope === "track") state.audioFxBypass = !state.audioFxBypass;
+        else target.settings.fxBypass = !target.settings.fxBypass;
+        invalidateAudioFxCache();
+        renderAudioFxRack();
+      };
+      $("audioFxAudition").onclick = auditionAudioFx;
+      $("applyAudioFxRack").onclick = applyAudioFxTrack;
+      $("audioFxRackList").onpointerdown = (event) => {
+        const control = event.target.closest?.("[data-fx-param],[data-fx-band-field]");
+        if (control && !control.dataset.fxUndoReady) {
+          snapshot();
+          control.dataset.fxUndoReady = "1";
+        }
+      };
+      $("audioFxRackList").oninput = (event) => {
+        const card = event.target.closest?.("[data-fx-id]");
+        if (!card) return;
+        const { target, effect } = findAudioFx(card.dataset.fxId);
+        if (!effect) return;
+        if (event.target.dataset.fxParam) {
+          const key = event.target.dataset.fxParam;
+          const scale = Number(event.target.dataset.fxScale || 1);
+          effect.params[key] = event.target.type === "checkbox"
+            ? event.target.checked
+            : event.target.tagName === "SELECT"
+              ? event.target.value
+              : Number(event.target.value) / scale;
+          const value = card.querySelector(`[data-fx-value="${key}"]`);
+          if (value) value.textContent = event.target.value + (value.textContent.match(/\s*dB|\s*ms|%|:1/)?.[0] || "");
+        }
+        if (event.target.dataset.fxBandField) {
+          const band = effect.params.bands?.[Number(event.target.dataset.fxBand)];
+          const key = event.target.dataset.fxBandField;
+          if (band) band[key] = event.target.type === "checkbox"
+            ? event.target.checked
+            : event.target.tagName === "SELECT" ? event.target.value : Number(event.target.value);
+        }
+        setCurrentAudioFxRack(target.rack);
+        invalidateAudioFxCache();
+      };
+      $("audioFxRackList").onchange = (event) => {
+        if (event.target.matches("[data-fx-param],[data-fx-band-field]")) {
+          delete event.target.dataset.fxUndoReady;
+          renderAudioFxRack();
+        }
+      };
+      $("audioFxRackList").onclick = (event) => {
+        const learn = event.target.closest?.("[data-fx-learn]");
+        if (learn) return learnSelectedNoise(learn.dataset.fxLearn);
+        const analyzeHum = event.target.closest?.("[data-fx-analyze-hum]");
+        if (analyzeHum) return analyzeSelectedAudioFxHum(analyzeHum.dataset.fxAnalyzeHum);
+        const actionButton = event.target.closest?.("[data-fx-action]");
+        const card = event.target.closest?.("[data-fx-id]");
+        if (!actionButton || !card) return;
+        const { target, effect } = findAudioFx(card.dataset.fxId);
+        if (!effect) return;
+        snapshot();
+        const index = target.rack.findIndex((item) => item.id === effect.id);
+        const action = actionButton.dataset.fxAction;
+        if (action === "toggle") effect.enabled = actionButton.checked;
+        if (action === "up" && index > 0) [target.rack[index - 1], target.rack[index]] = [target.rack[index], target.rack[index - 1]];
+        if (action === "down" && index < target.rack.length - 1) [target.rack[index + 1], target.rack[index]] = [target.rack[index], target.rack[index + 1]];
+        if (action === "copy") {
+          if (target.rack.length >= 6) return toast("已达到 6 个效果插槽上限");
+          const copy = JSON.parse(JSON.stringify(effect));
+          copy.id = crypto.randomUUID();
+          copy.name = `${effect.name} 副本`;
+          target.rack.splice(index + 1, 0, copy);
+        }
+        if (action === "remove") target.rack.splice(index, 1);
+        if (action === "reset") effect.params = defaultAudioFxParams(effect.type);
+        setCurrentAudioFxRack(target.rack);
+        invalidateAudioFxCache();
+        renderAudioFxRack();
       };
       $("beautyControls").oninput = (event) => {
         const key = event.target.dataset.beauty;

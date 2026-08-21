@@ -700,6 +700,38 @@ function captionFromGroup(group, style, maxWidth, scale) {
   };
 }
 
+const SAFE_CAPTION_BRIDGE_SECONDS = 0.62;
+
+function bridgeSafeCaptionGaps(captions = []) {
+  for (let index = 0; index < captions.length - 1; index += 1) {
+    const current = captions[index];
+    const next = captions[index + 1];
+    const currentWord = current.words?.at(-1);
+    const nextWord = next.words?.[0];
+    const gap = Number(next.start || 0) - Number(current.end || 0);
+    const safeBoundary = [currentWord, nextWord].every(
+      (word) =>
+        word &&
+        word.action !== "cut" &&
+        word.matchType !== "error" &&
+        !["repeat", "extra", "mismatch"].includes(String(word.issueType || "")),
+    );
+    if (
+      gap > 0.002 &&
+      gap <= SAFE_CAPTION_BRIDGE_SECONDS &&
+      safeBoundary &&
+      !endsCaptionSentence(currentWord?.display || "")
+    ) {
+      // Word timestamps from cloud ASR can finish a few frames before the next
+      // reliable word, especially after manuscript-first recovery. Keep the
+      // earlier card visible across that short in-sentence interval. This is
+      // deliberately a caption-span repair: karaoke word timing stays intact.
+      current.end = Number(next.start);
+    }
+  }
+  return captions;
+}
+
 export function regroupCaptions(words, options = {}) {
   const style = options.style || {};
   const scale = Math.max(0.2, Number(options.scale || 1));
@@ -755,7 +787,7 @@ export function regroupCaptions(words, options = {}) {
       captions[index].end = nextStart;
     }
   }
-  return captions;
+  return bridgeSafeCaptionGaps(captions);
 }
 
 export function regroupProjectCaptions(captions = [], options = {}) {
@@ -2126,32 +2158,7 @@ export function buildCaptions(expectedWords, options = {}) {
       index -= 1;
     }
   }
-  for (let index = 0; index < captions.length - 1; index += 1) {
-    const current = captions[index];
-    const next = captions[index + 1];
-    const currentWord = current.words.at(-1);
-    const nextWord = next.words[0];
-    const gap = Number(next.start || 0) - Number(current.end || 0);
-    const safeBoundary = [currentWord, nextWord].every(
-      (word) =>
-        word &&
-        word.action !== "cut" &&
-        word.matchType !== "error" &&
-        !["repeat", "extra", "mismatch"].includes(String(word.issueType || "")),
-    );
-    if (
-      gap > 0.002 &&
-      gap <= 0.5 &&
-      safeBoundary &&
-      !endsCaptionSentence(currentWord?.display || "")
-    ) {
-      // A short breath inside one kept manuscript sentence must not flash the
-      // caption track off. Keep the earlier card visible until the next starts;
-      // word timings remain untouched for karaoke/highlight animation.
-      current.end = Number(next.start);
-    }
-  }
-  return captions;
+  return bridgeSafeCaptionGaps(captions);
 }
 
 export function buildReviewCaptions(
