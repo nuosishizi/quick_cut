@@ -40,10 +40,7 @@ test("audioDenoiseFilter maps all modes and strengths correctly", () => {
   const aiFilter = audioDenoiseFilter("ai-isolation", 0.8);
   assert.ok(aiFilter.includes("highpass=f=55"), "AI isolation should include highpass 55Hz");
   assert.ok(aiFilter.includes("lowpass=f=17500"), "AI isolation should include lowpass 17.5kHz");
-  if (process.platform === "win32")
-    assert.ok(!aiFilter.includes("anlmdn"), "Windows must avoid the FFmpeg anlmdn crash path");
-  else
-    assert.ok(aiFilter.includes("anlmdn"), "Non-Windows AI isolation may include non-local means denoiser");
+  assert.ok(aiFilter.includes("anlmdn"), "2.7.39 AI isolation includes its light non-local means pass");
   assert.ok(aiFilter.includes("afftdn"), "AI isolation should include FFT denoiser");
 
   // Gentle mode

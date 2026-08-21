@@ -9,8 +9,7 @@ try { chcp 65001 > $null } catch {}
 $Version = "2.7.46"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppName = "QuickCut-Windows-$Version"
-$tempBase = [System.IO.Path]::GetTempPath()
-$StageRoot = if (Test-Path "D:\") { "D:\QuickCut-win-pack" } else { Join-Path $tempBase "QuickCut-win-pack" }
+$StageRoot = Join-Path $ProjectRoot "dist-local\pack-stage-windows"
 $Stage = Join-Path $StageRoot $AppName
 $Cache = Join-Path $StageRoot "cache"
 $desktop = [Environment]::GetFolderPath("Desktop")

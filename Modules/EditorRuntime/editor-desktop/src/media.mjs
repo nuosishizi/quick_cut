@@ -922,8 +922,8 @@ export function normalizeDenoiseConfig(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   const preset = DENOISE_PRESETS[source.preset] ? source.preset : "balanced";
   const merged = {
-    mode: "studio-chain",
-    strength: 0.82,
+    mode: "ai-isolation",
+    strength: 0.85,
     preset,
     humFrequency: "auto",
     detectedHumFrequency: 0,
@@ -938,8 +938,8 @@ export function normalizeDenoiseConfig(input = {}) {
     : 0;
   return {
     ...merged,
-    mode: String(merged.mode || "studio-chain").toLowerCase(),
-    strength: clampDenoise(merged.strength, 0.82),
+    mode: String(merged.mode || "ai-isolation").toLowerCase(),
+    strength: clampDenoise(merged.strength, 0.85),
     preset,
     humEnabled: merged.humEnabled !== false,
     humFrequency,
@@ -1212,7 +1212,7 @@ export function audioDenoiseFilter(mode, strength = 0.8, settings = {}) {
       "lowpass=f=17500",
       neural,
       `afftdn=nr=${Math.max(8, Math.round(10 + amount * 14))}:nf=-42:tn=1`,
-      nlmeans(0.0006 + amount * 0.0012),
+      `anlmdn=s=${(0.0006 + amount * 0.0012).toFixed(4)}:p=0.002:r=0.006`,
       "alimiter=limit=0.96",
     ]
       .filter(Boolean)

@@ -4072,16 +4072,15 @@
                 <div class="switch"><span>片段静音</span><input id="clipMute" type="checkbox" /></div>
               </div>
               <div class="inspectsection">
-                <h3>专业多级人声降噪</h3>
+                <h3>AI 语音母带与降噪</h3>
                 <p class="small">
-                  按顺序处理电流嗡声、风噪、飞机等持续环境声、虫鸣残留，最后修复人声。预览、整轨应用和导出使用同一组参数。
+                  恢复 2.7.39 达芬奇级 AI 语音隔离：使用 48 kHz 神经网络与克制的频谱净化，优先保留自然、清晰的人声。
                 </p>
                 <div class="field">
                   <select class="select" id="denoiseMode">
-                    <option value="studio-chain" selected>专业多级降噪（推荐）</option>
-                    <option value="uvr5-master">兼容：录音棚人声净化</option>
-                    <option value="ai-isolation">兼容：DeepFilterNet 语音隔离</option>
-                    <option value="demucs">兼容：Demucs 人声分离（需要本地引擎）</option>
+                    <option value="ai-isolation" selected>AI 语音隔离 (达芬奇级 · 强力去杂音)</option>
+                    <option value="uvr5-master">✨ UVR5 级 · 录音棚人声母带</option>
+                    <option value="demucs">🚀 Meta Demucs 深度时域去噪（需要本地引擎）</option>
                     <option value="dereverb">房间回声抑制（频谱降噪与均衡）</option>
                     <option value="gentle">温和人声去噪 (保留自然环境音)</option>
                     <option value="strong">强力去底噪 (空调/风扇/风噪)</option>
@@ -4101,7 +4100,7 @@
                     value="85"
                   />
                 </div>
-                <div class="field">
+                <div class="field" style="display:none">
                   <div class="fieldhead"><span>噪声场景预设</span></div>
                   <select class="select" id="denoisePreset">
                     <option value="balanced">均衡人声（推荐）</option>
@@ -4112,7 +4111,7 @@
                     <option value="mixed-heavy">混合重噪声（谨慎）</option>
                   </select>
                 </div>
-                <div class="denoise-chain" id="denoiseProfessionalControls">
+                <div class="denoise-chain" id="denoiseProfessionalControls" style="display:none">
                   <div class="denoise-stage">
                     <div class="denoise-stage-title">
                       <span>1 · De-Hum 电流嗡声</span>
@@ -4168,7 +4167,7 @@
                   <button class="btn primary grow" id="applyDenoiseTrack">应用整条音轨</button>
                   <button class="btn danger grow" id="revertDenoisedTrack" style="display:none">还原原始音频</button>
                 </div>
-                <div class="status" id="denoiseAnalysisState">尚未分析工频嗡声；选择“自动”时，试听或应用整轨也会自动检测。</div>
+                <div class="status" id="denoiseAnalysisState" style="display:none">尚未分析工频嗡声；选择“自动”时，试听或应用整轨也会自动检测。</div>
                 <div class="status" id="denoiseApplyState">导出时会自动应用当前降噪参数。</div>
                 <audio
                   class="denoisecompare"
@@ -4830,8 +4829,8 @@
       });
       function defaultDenoiseSettings() {
         return {
-          mode: "studio-chain",
-          strength: 0.82,
+          mode: "ai-isolation",
+          strength: 0.85,
           preset: "balanced",
           humFrequency: "auto",
           detectedHumFrequency: 0,
@@ -4840,12 +4839,23 @@
       }
       function normalizeDenoiseSettings(source = {}) {
         const preset = denoisePresetMap[source?.preset] ? source.preset : "balanced";
+        const sourceMode = String(source?.mode || "ai-isolation").toLowerCase();
+        const mode = ["studio-chain", "professional", "pro"].includes(sourceMode)
+          ? "ai-isolation"
+          : sourceMode;
         return {
           ...defaultDenoiseSettings(),
           ...denoisePresetMap[preset],
           ...(source || {}),
           preset,
+          mode,
         };
+      }
+      function migrateDenoisedAudio(source) {
+        const mode = String(source?.mode || "").toLowerCase();
+        return ["studio-chain", "professional", "pro"].includes(mode)
+          ? null
+          : (source || null);
       }
       function denoiseSettingsSignature(source = state.denoise) {
         const value = normalizeDenoiseSettings(source);
@@ -5928,7 +5938,7 @@
           audioProcessingEnabled: !!data.audioProcessingEnabled,
           mainAudioClipSettings: data.mainAudioClipSettings || {},
           denoiseEnabled: !!data.denoiseEnabled,
-          denoisedAudio: data.denoisedAudio || null,
+          denoisedAudio: migrateDenoisedAudio(data.denoisedAudio),
           selected: { type: "video", id: "main" },
           selectedItems: [],
           timelineDuration: Math.max(60, Number(data.timelineDuration || data.duration || 0) + 10),
@@ -14448,7 +14458,7 @@
         $("audioLowCut").value = state.audio.lowCut || 60;
         $("audioHighCut").value = state.audio.highCut || 16500;
         $("audioChannelMode").value = state.audio.channelMode || "original";
-        $("denoiseMode").value = state.denoise.mode || "studio-chain";
+        $("denoiseMode").value = state.denoise.mode || "ai-isolation";
         $("denoiseStrength").value = Math.round(
           (state.denoise.strength ?? 0.85) * 100,
         );
@@ -14465,7 +14475,7 @@
               : state.denoisedAudio.mode === "uvr5-master" || state.denoisedAudio.mode === "uvr5"
               ? "录音棚人声净化（RNNoise/频谱）"
               : state.denoisedAudio.mode === "ai-isolation"
-                ? "AI 语音隔离（DeepFilter/稳定回退）"
+                ? "达芬奇级 AI 语音隔离"
                 : state.denoisedAudio.mode === "dereverb"
                   ? "房间回声抑制（频谱）"
                   : state.denoisedAudio.mode === "gentle"
@@ -14582,7 +14592,7 @@
             const result = await nativeCall("denoisePreview", {
               path: state.video.path,
               time: timelineToSource(state.currentTime),
-              mode: state.denoise.mode || "studio-chain",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
               config: { ...state.denoise },
             });
@@ -14614,14 +14624,14 @@
             const media = await nativeCall("applyDenoiseTrack", {
               projectId: state.projectId,
               path: state.video.path,
-              mode: state.denoise.mode || "studio-chain",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
               config: { ...state.denoise },
             });
             state.denoisedAudio = {
               ...media,
               sourcePath: state.video.path,
-              mode: state.denoise.mode || "studio-chain",
+              mode: state.denoise.mode || "ai-isolation",
               strength: state.denoise.strength ?? 0.85,
               configSignature: denoiseSettingsSignature(),
             };
@@ -15317,7 +15327,7 @@
           let mainAudioPath = "";
           const isDenoiseActive = !!(state.denoiseEnabled && Number(state.denoise?.strength || 0) > 0.01);
           if (isDenoiseActive && state.video?.path) {
-            const currentMode = state.denoise?.mode || "studio-chain";
+            const currentMode = state.denoise?.mode || "ai-isolation";
             const currentStrength = state.denoise?.strength ?? 0.85;
             const currentConfigSignature = denoiseSettingsSignature();
             const isCacheValid = state.denoisedAudio &&
@@ -18492,7 +18502,7 @@
         const preset = denoisePresetMap[event.target.value] ? event.target.value : "balanced";
         Object.assign(state.denoise, denoisePresetMap[preset], {
           preset,
-          mode: "studio-chain",
+          mode: "ai-isolation",
         });
         state.denoiseEnabled = Number(state.denoise.strength || 0) > 0.01;
         syncAudioControls();
