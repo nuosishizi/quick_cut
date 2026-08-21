@@ -1440,7 +1440,9 @@ export function collectExportExtraInputs(config = {}) {
       continue;
     }
     if (viaMovie && image?._quickCutCaptionRaster) continue;
-    extraInputs.push("-loop", "1", "-i", image.path);
+    // Decode still images sparsely and let overlay repeat the processed frame.
+    // Animated images are promoted back to the output FPS after scaling below.
+    extraInputs.push("-framerate", "1", "-loop", "1", "-i", image.path);
   }
   for (const audio of config.audioAssets || []) extraInputs.push("-i", audio.path);
   return { extraInputs, captionRastersViaMovie: viaMovie };
@@ -2883,6 +2885,8 @@ export function buildExportGraph(config, info) {
       "format=rgba",
       `colorchannelmixer=aa=${Math.max(0, Math.min(1, Number(image.opacity ?? 1))).toFixed(3)}`,
     );
+    if (image.enterAnimation || image.exitAnimation)
+      imageFilters.push(`fps=${Math.max(1, Number(config.fps || info.frameRate || 30)).toFixed(3)}`);
     if (image.enterAnimation) {
       const duration = Math.max(0.15, Number(image.enterDuration || 0.45));
       imageFilters.push(
@@ -3938,7 +3942,13 @@ function beginExportJob(config, info, job) {
     const workerThreads = Math.max(2, Math.min(6, Number(budget.workerThreads || Math.ceil(logical / 2))));
     const filterThreads = Math.max(
       1,
-      Math.min(6, Number(budget.filterThreads || (hardwareEncode ? 4 : isDarwin ? 4 : 2))),
+      Math.min(
+        6,
+        Number(
+          budget.filterThreads ||
+            (hardwareEncode ? Math.ceil(logical / 2) : isDarwin ? 4 : 2),
+        ),
+      ),
     );
     const decodeKindNow =
       decodeKind === undefined

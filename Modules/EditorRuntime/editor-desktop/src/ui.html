@@ -8789,6 +8789,7 @@
               waveform: asset.waveform || [],
               previewPath: asset.previewPath || "",
               previewUrl: asset.previewUrl || "",
+              analysisPending: !!asset.analysisJobId || !!asset.analysisPending,
             };
           state.audioAssets.push(item);
           recomputeContentDuration();

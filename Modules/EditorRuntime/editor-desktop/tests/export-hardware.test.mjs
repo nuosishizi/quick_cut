@@ -196,6 +196,8 @@ test("many caption rasters stay off the Windows command line", () => {
   assert.deepEqual(collected.extraInputs, [
     "-i",
     "C:\\clips\\broll.mp4",
+    "-framerate",
+    "1",
     "-loop",
     "1",
     "-i",
