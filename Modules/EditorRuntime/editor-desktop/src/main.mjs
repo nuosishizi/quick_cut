@@ -36,6 +36,9 @@ import {
   cancelDemucsInstall,
   renderDenoisePreview,
   renderDenoisedTrack,
+  learnAudioFxNoiseProfile,
+  renderAudioFxPreview,
+  renderAudioFxTrack,
   renderLutPreviewFrame,
   startExport,
   saveCaptionPreset,
@@ -1465,6 +1468,36 @@ nativeMethods = {
       duration: input.duration,
     }),
   ),
+  learnAudioFxNoiseProfile: safe((input = {}) =>
+    learnAudioFxNoiseProfile(input.path, {
+      time: input.time,
+      duration: input.duration,
+    }),
+  ),
+  audioFxPreview: safe(async (input = {}) => {
+    const preview = await renderAudioFxPreview(input.path, input.time, input.settings || {});
+    return { ...registerAsset(preview.path), ...preview, path: preview.path };
+  }),
+  applyAudioFxTrack: safe(async (input = {}) => {
+    const directory = path.join(projectStoragePath(input.projectId), "media");
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const output = path.join(
+      directory,
+      `audio-fx-track-${crypto.randomUUID().slice(0, 12)}.m4a`,
+    );
+    await renderAudioFxTrack(input.path, output, input.settings || {});
+    const stat = fs.statSync(output);
+    if (!stat.isFile() || stat.size < 256)
+      throw new Error("高级降噪音轨写入工程失败，请重试。");
+    return {
+      id: crypto.randomUUID(),
+      kind: "audio",
+      path: output,
+      name: path.basename(output),
+      size: stat.size,
+      ...registerAsset(output),
+    };
+  }),
   denoisePreview: safe(async (input) =>
     registerAsset(
       await renderDenoisePreview(

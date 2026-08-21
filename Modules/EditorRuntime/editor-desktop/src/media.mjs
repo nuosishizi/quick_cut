@@ -13,6 +13,11 @@ import {
 } from "./pausecut.mjs";
 import { CAPTION_WORD_MARGIN_EM, estimatedWordWidth, normalizedFontWeight, paintedLineWidth, wordGap, wrapCaptionWordList } from "./text-layout.mjs";
 import {
+  buildAudioFxFilterChain,
+  learnNoiseBandProfile,
+  normalizeAudioFxRack,
+} from "./audio-fx.mjs";
+import {
   defaultSupportRoot,
   fallbackFontFiles,
   fontSearchRoots,
@@ -26,6 +31,21 @@ import {
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const jobs = new Map();
 let encoderCatalog = null;
+let audioFilterCatalog = null;
+
+function hasAudioFilter(name) {
+  if (!audioFilterCatalog) {
+    const result = spawnSync(mediaBinary("ffmpeg"), ["-hide_banner", "-filters"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 10000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    audioFilterCatalog = String(result.stdout || result.stderr || "");
+  }
+  const safeName = String(name).replace(/[^a-z0-9_]/gi, "");
+  return new RegExp(`\\b${safeName}\\b`, "i").test(audioFilterCatalog);
+}
 
 export function supportRoot() {
   const overridden = process.env.QUICKCUT_SUPPORT_ROOT;
@@ -1264,9 +1284,11 @@ function stableDenoiseFallbackFilter(strength = 0.8) {
 function audioMasterFilter(config, info) {
   const audio = config.audio || {};
   const filters = [];
+  const trackFxRack = normalizeAudioFxRack(config.audioFxRack || []);
   if (
     !config.audioProcessingEnabled &&
-    Number(config.denoise?.strength || 0) <= 0.01
+    Number(config.denoise?.strength || 0) <= 0.01 &&
+    !trackFxRack.some((effect) => effect.enabled)
   ) return "";
   const offset = Math.max(
     -Number(config.outputDuration || info.duration),
@@ -1297,6 +1319,15 @@ function audioMasterFilter(config, info) {
     config.denoise,
   );
   if (denoise) filters.push(denoise);
+  if (!config.mainAudioFxPreRendered) {
+    const audioFx = buildAudioFxFilterChain(trackFxRack, {
+      bypass: !!config.audioFxBypass,
+      rnnoiseModel: rnnoiseModelPath(),
+      detectedHumFrequency: Number(config.denoise?.detectedHumFrequency || 0),
+      dialogueEnhance: hasAudioFilter("dialoguenhance"),
+    });
+    if (audioFx) filters.push(audioFx);
+  }
   const volume = Math.max(0, Math.min(4, Number(audio.volume ?? 1)));
   if (Math.abs(volume - 1) > 0.001) filters.push(`volume=${volume.toFixed(3)}`);
   const bass = Math.max(-12, Math.min(12, Number(audio.bass || 0)));
@@ -2330,6 +2361,13 @@ function appendExternalAudio(
     ];
     if (Math.abs(speed - 1) > 0.001)
       itemFilters.push(`atempo=${speed.toFixed(4)}`);
+    const itemFx = buildAudioFxFilterChain(audio.fxRack || [], {
+      bypass: !!audio.fxBypass,
+      rnnoiseModel: rnnoiseModelPath(),
+      detectedHumFrequency: Number(audio.detectedHumFrequency || 0),
+      dialogueEnhance: hasAudioFilter("dialoguenhance"),
+    });
+    if (itemFx) itemFilters.push(itemFx);
     itemFilters.push(`volume=${volume.toFixed(3)}`);
     if (Math.abs(pan) > 0.001)
       itemFilters.push(`stereotools=balance_out=${pan.toFixed(3)}`);
@@ -2385,11 +2423,18 @@ function buildMainAudioClipsGraph(graph, clips, speed, outputDuration, labelPref
     }
 
     const clipLabel = `[${labelPrefix}clip${index}]`;
+    const clipFx = buildAudioFxFilterChain(clip.fxRack || [], {
+      bypass: !!clip.fxBypass,
+      rnnoiseModel: rnnoiseModelPath(),
+      detectedHumFrequency: Number(clip.detectedHumFrequency || 0),
+      dialogueEnhance: hasAudioFilter("dialoguenhance"),
+    });
+    const clipFxFilter = clipFx ? `,${clipFx}` : "";
     const fadeFilters = edgeFade > 0.001
       ? `,afade=t=in:st=0:d=${edgeFade.toFixed(5)},afade=t=out:st=${Math.max(0, clipDuration - edgeFade).toFixed(5)}:d=${edgeFade.toFixed(5)}`
       : "";
     graph.push(
-      `[${mainAudioInputIndex}:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)}${fadeFilters}${clipLabel}`,
+      `[${mainAudioInputIndex}:a]atrim=start=${sourceStart.toFixed(5)}:end=${sourceEnd.toFixed(5)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(4)}${clipFxFilter}${fadeFilters}${clipLabel}`,
     );
     audioSegments.push(clipLabel);
     timelineCursor = start + clipDuration;
@@ -3535,6 +3580,132 @@ export async function renderDenoisedTrack(
   return outputPath;
 }
 
+function combinedAudioFxFilter(input = {}) {
+  const filters = [];
+  const quick = input.quickDenoise || input.denoise || {};
+  if (Number(quick.strength || 0) > 0.01) {
+    const quickFilter = audioDenoiseFilter(quick);
+    if (quickFilter) filters.push(quickFilter);
+  }
+  const clipFilter = buildAudioFxFilterChain(input.clipFxRack || [], {
+    bypass: !!input.clipFxBypass,
+    rnnoiseModel: rnnoiseModelPath(),
+    detectedHumFrequency: Number(input.detectedHumFrequency || 0),
+    dialogueEnhance: hasAudioFilter("dialoguenhance"),
+  });
+  if (clipFilter) filters.push(clipFilter);
+  const trackFilter = buildAudioFxFilterChain(input.trackFxRack || input.audioFxRack || [], {
+    bypass: !!input.trackFxBypass || !!input.audioFxBypass,
+    rnnoiseModel: rnnoiseModelPath(),
+    detectedHumFrequency: Number(input.detectedHumFrequency || 0),
+    dialogueEnhance: hasAudioFilter("dialoguenhance"),
+  });
+  if (trackFilter) filters.push(trackFilter);
+  return filters.join(",") || "anull";
+}
+
+function rackNeedsAutomaticHum(rack = [], bypass = false) {
+  if (bypass) return false;
+  return normalizeAudioFxRack(rack).some((effect) =>
+    effect.enabled && effect.type === "de-hummer" &&
+    String(effect.params?.frequency || "auto") === "auto" &&
+    ![50, 60].includes(Number(effect.params?.detectedFrequency || 0)),
+  );
+}
+
+async function resolveAutomaticAudioFxHum(inputPath, time, settings = {}) {
+  const alreadyDetected = Number(settings.detectedHumFrequency || 0);
+  if ([50, 60].includes(alreadyDetected)) return settings;
+  const needsAnalysis =
+    rackNeedsAutomaticHum(settings.clipFxRack, settings.clipFxBypass) ||
+    rackNeedsAutomaticHum(settings.trackFxRack || settings.audioFxRack, settings.trackFxBypass || settings.audioFxBypass);
+  if (!needsAnalysis) return settings;
+  const profile = await analyzeNoiseProfile(inputPath, {
+    time: Math.max(0, Number(time || 0) - 1),
+    duration: 6,
+  });
+  return { ...settings, detectedHumFrequency: Number(profile.humFrequency || 0) };
+}
+
+export async function learnAudioFxNoiseProfile(inputPath, options = {}) {
+  if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要学习噪声的音频。");
+  const sampleRate = 24000;
+  const time = Math.max(0, Number(options.time || 0));
+  const duration = Math.max(0.25, Math.min(10, Number(options.duration || 2)));
+  const bytes = await run(mediaBinary("ffmpeg"), [
+    "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-ss", time.toFixed(4), "-t", duration.toFixed(4),
+    "-i", inputPath, "-vn", "-ac", "1", "-ar", String(sampleRate),
+    "-f", "f32le", "pipe:1",
+  ], { lowPriority: true });
+  const samples = new Float32Array(
+    bytes.buffer,
+    bytes.byteOffset,
+    Math.floor(bytes.byteLength / 4),
+  );
+  const profile = learnNoiseBandProfile(samples, sampleRate);
+  const hum = analyzeHumSamples(samples, sampleRate);
+  return {
+    ...profile,
+    humFrequency: hum.humFrequency,
+    humConfidence: hum.confidence,
+    time,
+    duration: Number((samples.length / sampleRate).toFixed(3)),
+  };
+}
+
+export async function renderAudioFxPreview(inputPath, time = 0, settings = {}) {
+  if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要试听的音频。");
+  const directory = settings.previewDirectory
+    ? path.resolve(settings.previewDirectory)
+    : path.join(supportRoot(), "previews");
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const outputPath = path.join(directory, `audio-fx-${crypto.randomUUID()}.m4a`);
+  const mediaDuration = Math.max(0, Number(probeMedia(inputPath).duration || 0));
+  const requestedTime = Math.max(0, Math.min(mediaDuration || Number(time || 0), Number(time || 0)));
+  // Keep enough material after the listening point. Near the source tail we
+  // move the audition point back instead of seeking straight to the file end.
+  const auditionTime = mediaDuration > 0
+    ? Math.min(requestedTime, Math.max(0, mediaDuration - Math.min(4, mediaDuration)))
+    : requestedTime;
+  const previewDuration = mediaDuration > 0 ? Math.min(8, mediaDuration) : 8;
+  const startTime = Math.max(0, Math.min(auditionTime - 2, Math.max(0, mediaDuration - previewDuration)));
+  const targetOffset = Math.max(0, auditionTime - startTime);
+  const resolvedSettings = await resolveAutomaticAudioFxHum(inputPath, auditionTime, settings);
+  await run(mediaBinary("ffmpeg"), [
+    "-y", "-hide_banner", "-loglevel", "error",
+    "-ss", startTime.toFixed(4), "-t", previewDuration.toFixed(4), "-i", inputPath, "-vn",
+    "-af", combinedAudioFxFilter(resolvedSettings),
+    "-c:a", "aac", "-b:a", "192k", "-ar", "48000", outputPath,
+  ], { lowPriority: true });
+  const stat = await fs.promises.stat(outputPath).catch(() => null);
+  if (!stat?.isFile() || stat.size < 256) throw new Error("高级降噪试听文件生成失败。");
+  return { path: outputPath, startTime, targetOffset, duration: previewDuration };
+}
+
+export async function renderAudioFxTrack(inputPath, destination, settings = {}) {
+  if (!inputPath || !fs.existsSync(inputPath)) throw new Error("找不到需要处理的音频。");
+  if (!destination) throw new Error("高级降噪音轨保存位置无效。");
+  const outputPath = path.resolve(destination);
+  const directory = path.dirname(outputPath);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const temporary = path.join(directory, `.${path.basename(outputPath)}.${crypto.randomUUID()}.partial.m4a`);
+  try {
+    const resolvedSettings = await resolveAutomaticAudioFxHum(inputPath, 0, settings);
+    await run(mediaBinary("ffmpeg"), [
+      "-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-vn",
+      "-af", combinedAudioFxFilter(resolvedSettings),
+      "-c:a", "aac", "-b:a", "224k", "-ar", "48000", temporary,
+    ]);
+    const stat = await fs.promises.stat(temporary).catch(() => null);
+    if (!stat?.isFile() || stat.size < 256) throw new Error("高级降噪整轨没有正确生成。");
+    await fs.promises.rename(temporary, outputPath);
+    return outputPath;
+  } finally {
+    await fs.promises.unlink(temporary).catch(() => {});
+  }
+}
+
 function visualTransformIsDefault(value = {}) {
   return Math.abs(Number(value.x || 0)) < 0.001 &&
     Math.abs(Number(value.y || 0)) < 0.001 &&
@@ -3596,7 +3767,11 @@ function canSmartCopy(config, info, format) {
     !(config.titles || []).length && !(config.captions || []).length &&
     !(config.audioAssets || []).length && config.includeVideo !== false &&
     config.includeAudio !== false && !config.audioProcessingEnabled &&
-    Number(config.denoise?.strength || 0) <= 0.01;
+    Number(config.denoise?.strength || 0) <= 0.01 &&
+    !normalizeAudioFxRack(config.audioFxRack || []).some((effect) => effect.enabled) &&
+    !(config.mainAudioClips || []).some((item) =>
+      normalizeAudioFxRack(item.fxRack || []).some((effect) => effect.enabled),
+    );
 }
 
 export function startExport(config) {
