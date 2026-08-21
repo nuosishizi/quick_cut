@@ -68,18 +68,12 @@ if (Test-Path (Join-Path $LocalFfmpegBin "ffmpeg.exe")) {
     Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
   }
   $foundFfmpeg = $true
-} else {
-  $cmdObj = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
-  $cmdFfmpeg = if ($cmdObj) { $cmdObj.Source } else { $null }
-  if ($cmdFfmpeg) {
-    $cmdDir = Split-Path $cmdFfmpeg
-    Get-ChildItem $cmdDir -File | Where-Object { $_.Name -match "ffmpeg|ffprobe|.*\.dll" -and $_.Name -ne "ffplay.exe" } | ForEach-Object {
-      Copy-Item $_.FullName (Join-Path $MediaDst $_.Name)
-    }
-    $foundFfmpeg = $true
-  }
 }
 if (-not $foundFfmpeg) {
+  # Do not copy `Get-Command ffmpeg.exe` here. Chocolatey exposes a small
+  # machine-local shim that works on the CI runner but becomes an unusable
+  # 392 KB executable after it is copied to another computer. Always fetch a
+  # self-contained build when the verified local bundle is unavailable.
   Info "Fetching Gyan Windows FFmpeg essentials build..."
   $ffmpegZip = Join-Path $Cache "ffmpeg-release-essentials.zip"
   Download-File "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" $ffmpegZip
@@ -92,9 +86,35 @@ if (-not $foundFfmpeg) {
     $foundFfmpeg = $true
   }
 }
-if (-not (Test-Path (Join-Path $MediaDst "ffmpeg.exe"))) {
+if (-not (Test-Path (Join-Path $MediaDst "ffmpeg.exe")) -or -not (Test-Path (Join-Path $MediaDst "ffprobe.exe"))) {
   Fail "Could not locate or obtain FFmpeg binaries for Windows."
 }
+
+# Test the exact bytes that will be shipped, not the FFmpeg available on PATH.
+# A dynamic build is valid only when its DLLs are beside it; a tiny executable
+# with no DLLs is almost certainly a package-manager shim.
+$PackagedFfmpeg = Join-Path $MediaDst "ffmpeg.exe"
+$PackagedFfprobe = Join-Path $MediaDst "ffprobe.exe"
+$PackagedDlls = @(Get-ChildItem -LiteralPath $MediaDst -File -Filter "*.dll")
+if ((Get-Item -LiteralPath $PackagedFfmpeg).Length -lt 1MB -and $PackagedDlls.Count -eq 0) {
+  Fail "Packaged FFmpeg is an incomplete shim: $PackagedFfmpeg"
+}
+& $PackagedFfmpeg -hide_banner -version *> $null
+if ($LASTEXITCODE -ne 0) { Fail "Packaged FFmpeg cannot start outside the build environment." }
+& $PackagedFfprobe -hide_banner -version *> $null
+if ($LASTEXITCODE -ne 0) { Fail "Packaged FFprobe cannot start outside the build environment." }
+$PackagedFilters = (& $PackagedFfmpeg -hide_banner -filters 2>&1) -join "`n"
+foreach ($RequiredFilter in @("afftdn", "arnndn", "crystalizer", "deesser")) {
+  if ($PackagedFilters -notmatch "\b$RequiredFilter\b") {
+    Fail "Packaged FFmpeg is missing required audio filter: $RequiredFilter"
+  }
+}
+$MediaSmoke = Join-Path $StageRoot "packaged-ffmpeg-smoke.m4a"
+& $PackagedFfmpeg -y -hide_banner -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=0.4" -af "afftdn=nr=10:nf=-42,alimiter=limit=0.97" -c:a aac -b:a 128k $MediaSmoke
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $MediaSmoke) -or (Get-Item $MediaSmoke).Length -lt 1024) {
+  Fail "Packaged FFmpeg failed the real audio render smoke test."
+}
+Remove-Item -LiteralPath $MediaSmoke -Force
 $LocalMedia = Join-Path $ProjectRoot "Modules\EditorRuntime\media"
 if (Test-Path $LocalMedia) {
   Get-ChildItem $LocalMedia -File | Where-Object {

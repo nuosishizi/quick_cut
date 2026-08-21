@@ -74,6 +74,16 @@ test("macOS build paths collect, rewrite, copy and sign portable FFmpeg dependen
   assert.match(workflow, /zsh scripts\/bundle-media-deps\.sh/);
 });
 
+test("Windows packaging rejects Chocolatey shims and smoke-tests the shipped FFmpeg", () => {
+  const packWindows = fs.readFileSync(path.join(contentsRoot, "pack-windows.ps1"), "utf8");
+  assert.doesNotMatch(packWindows, /\$cmdFfmpeg|\$cmdObj\s*=\s*Get-Command ffmpeg\.exe/);
+  assert.match(packWindows, /Packaged FFmpeg is an incomplete shim/);
+  assert.match(packWindows, /PackagedFfmpeg -hide_banner -version/);
+  assert.match(packWindows, /RequiredFilter in @\("afftdn", "arnndn", "crystalizer", "deesser"\)/);
+  assert.match(packWindows, /packaged-ffmpeg-smoke\.m4a/);
+  assert.match(packWindows, /-f lavfi -i "sine=frequency=440/);
+});
+
 test("installer and launcher validate the runtime bytes actually shipped", { skip: !fs.existsSync(launcherPath) }, () => {
   const runtime = path.join(resourcesRoot, "runtime", "bun-arm64");
   const size = fs.statSync(runtime).size;
